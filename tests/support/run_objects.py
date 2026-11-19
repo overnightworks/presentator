@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from presentator.contracts.decks import BuildStoreUnavailableError
+
 # Room for every talk a test lays down; the bound is proven on its own.
 A_CACHE_BOUND: Final = 1024**3
 _ARCHIVE: Final = "talk.tar"
@@ -34,8 +36,10 @@ class DirectoryRunObjects:
         return True
 
     def fetch(self, run: str, *, archive: Path, pdf: Path) -> bool:
+        if not self.answering:
+            raise BuildStoreUnavailableError
         kept = self.directory / run
-        if not self.answering or not (kept / _ARCHIVE).is_file():
+        if not (kept / _ARCHIVE).is_file():
             return False
         shutil.copyfile(kept / _ARCHIVE, archive)
         shutil.copyfile(kept / _PDF, pdf)

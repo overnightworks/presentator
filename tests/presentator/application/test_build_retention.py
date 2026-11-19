@@ -7,10 +7,8 @@ from typing import Self
 import pytest
 
 from presentator.application.build_retention import REMOVED_DECK_KEPT
-from presentator.application.decks import (
-    Decks,
-    SourceRemovalStale,
-)
+from presentator.application.decks import Decks
+from presentator.application.source_removal import SourceRemovalStale
 from presentator.contracts.decks import (
     MANIFEST_FILE,
     BuildRun,

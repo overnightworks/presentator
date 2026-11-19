@@ -21,8 +21,8 @@ from presentator.api.source_api import (
 from presentator.application.decks import (
     RESERVED_SOURCE_NAME,
     Decks,
-    SourceRemovalRefusal,
 )
+from presentator.application.source_removal import SourceRemovalRefusal
 from presentator.contracts.decks import Build, BuildRun, Deck, DeckFolder, Source
 from tests.presentator.api.support.source_api_support import (
     ASKING_FOR_JSON,
@@ -624,14 +624,23 @@ def _a_run_will_not_go(shelf: Stocked) -> None:
     )
 
 
+def _the_store_is_down(shelf: Stocked) -> None:
+    shelf.builder.store_answers = False
+
+
 # 22, 23, 24, 26
 @pytest.mark.parametrize(
-    "stick",
-    [_the_mirror_will_not_go, _a_run_will_not_go],
-    ids=["mirror", "run-directory"],
+    ("stick", "reason"),
+    [
+        (_the_mirror_will_not_go, SourceRemovalRefusal.DISK_LEFTOVER),
+        (_a_run_will_not_go, SourceRemovalRefusal.DISK_LEFTOVER),
+        (_the_store_is_down, SourceRemovalRefusal.STORE_UNAVAILABLE),
+    ],
+    ids=["mirror", "run-directory", "store"],
 )
-def test_a_disk_leftover_is_a_problem_that_keeps_every_row_and_a_repeat_finishes(
+def test_what_stayed_is_a_problem_naming_why_and_a_repeat_finishes(
     stick: Callable[[Stocked], None],
+    reason: SourceRemovalRefusal,
 ) -> None:
     shelf = stocked()
     client = an_admin_over(shelf.decks).client
@@ -644,7 +653,7 @@ def test_a_disk_leftover_is_a_problem_that_keeps_every_row_and_a_repeat_finishes
     )
 
     assert_problem(refused, HTTPStatus.INTERNAL_SERVER_ERROR)
-    assert refused.json()["reason"] == SourceRemovalRefusal.DISK_LEFTOVER
+    assert refused.json()["reason"] == reason
     assert_nothing_returned(refused, str(shelf.builder.root))
     assert_rows_stand(shelf)
     assert shelf.preview() == confirmed
@@ -653,6 +662,7 @@ def test_a_disk_leftover_is_a_problem_that_keeps_every_row_and_a_repeat_finishes
 
     shelf.folders.stuck = frozenset()
     shelf.builder.stuck = frozenset()
+    shelf.builder.store_answers = True
     repeated = remove(
         client, shelf.name, deck_count=confirmed[0], run_count=confirmed[1]
     )

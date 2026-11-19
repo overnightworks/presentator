@@ -2301,7 +2301,8 @@
                     },
                     "reason": {
                       "enum": [
-                        "disk-leftover"
+                        "disk-leftover",
+                        "store-unavailable"
                       ],
                       "type": "string"
                     },

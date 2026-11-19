@@ -77,13 +77,16 @@ class LeftoverDirectory:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PersonDiskLeftover:
-    """Directories survived; their sources and the person remain.
+    """Directories or store runs survived; their sources and the person remain.
 
     `removed` counts what this attempt took away; a repeat run finishes it.
+    `leftovers` names only directories still on disk; a run the store did not
+    delete is no directory and says `store_unavailable` instead.
     """
 
     removed: tuple[KindCount, ...]
     leftovers: tuple[LeftoverDirectory, ...]
+    store_unavailable: bool
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

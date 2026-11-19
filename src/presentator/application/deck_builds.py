@@ -18,11 +18,13 @@ from presentator.contracts.decks import (
     BuildFailure,
     BuildFailureReason,
     BuildOutcome,
+    BuildRun,
     Deck,
     Source,
     SourceFetch,
     ToolchainIdentity,
     ToolchainUnavailable,
+    run_name_holding,
 )
 from presentator.ports.clock import Clock
 from presentator.ports.decks import BuildRunner, DeckStore
@@ -221,18 +223,11 @@ class DeckBuilds:
             return None
         if not isinstance(built, Artefacts):
             self._failed(deck, attempt, built)
-            return False
-        if not self.builder.holds(built):
-            self._failed(deck, attempt, BuildFailure.without_words())
-            return False
-        run = self.builder.deliver(built)
-        if run is None:
-            self._failed(deck, attempt, BuildFailure(reason=BuildFailureReason.STORE))
-            return None
+            return None if built.reason is BuildFailureReason.STORE else False
         self.store.put_build(
             deck.slug,
             Build(
-                run=run,
+                run=BuildRun(run_name_holding(built.directory)),
                 commit=deck.commit,
                 built_at=self.clock.now(),
                 toolchain=toolchain,

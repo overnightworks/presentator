@@ -1,9 +1,9 @@
 # Measured by `quality check --fix`. Entries only ever go down.
 
 [file_lines]
-"tests/presentator/adapters/test_builds.py" = 1046
+"tests/presentator/adapters/test_builds.py" = 1043
 "tests/presentator/adapters/test_decks.py" = 1212
-"tests/presentator/application/test_decks.py" = 1824
+"tests/presentator/application/test_decks.py" = 1822
 
 [function_lines."src/presentator/application/decks.py"]
 "Decks.add_source" = 76
