@@ -342,8 +342,9 @@ async function startServer() {
         return
       }
       if (state.answerMode === 'broken-stream') {
-        sendEvent(response, 'text', { text: 'The answer breaks off' })
-        response.destroy()
+        // The socket breaks only once the headers and the first event left it, so the answer begins and its read fails.
+        response.flushHeaders()
+        sendEvent(response, 'text', { text: 'The answer breaks off' }, () => response.destroy())
         return
       }
       if (state.answerMode === 'moves-slide') {
@@ -427,8 +428,8 @@ async function startServer() {
   state.origin = `http://127.0.0.1:${address.port}`
 }
 
-function sendEvent(response: ServerResponse, event: string, data: object) {
-  response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+function sendEvent(response: ServerResponse, event: string, data: object, written?: () => void) {
+  response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`, written)
 }
 
 async function readAskBody(request: import('node:http').IncomingMessage) {
