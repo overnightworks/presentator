@@ -1,0 +1,8 @@
+claim_id = "fbd10033d63645ca98c894dd77231db7"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "4b25b2fb41d2f614b8c7921abcb2459add6c845e"
+branch = "claude/issue-1244-branch-coverage-spans-every-test-layer-t"
+scope = [".github/workflows/ci.yml", "pyproject.toml", "scripts", "slidev", "tests/support"]
+opened_commit = "8b84b088df3069950eb058eb07a7df899b6bb9f9"
+whole_reason = "One measurement over every test layer; instrumenting one layer alone would leave the merged figure unproven"
