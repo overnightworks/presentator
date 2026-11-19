@@ -154,8 +154,14 @@ def test_importing_the_worker_reads_no_setting(
     assert imported.returncode == 0, imported.stderr
 
 
-def test_importing_the_worker_loads_no_web_framework() -> None:
-    web_frameworks = {"starlette", "uvicorn", "fastapi"}
+def test_importing_the_worker_loads_no_web_framework_and_no_database() -> None:
+    web_frameworks_and_database = {
+        "starlette",
+        "uvicorn",
+        "fastapi",
+        "sqlalchemy",
+        "psycopg",
+    }
 
     imported = subprocess.run(
         [
@@ -170,8 +176,14 @@ def test_importing_the_worker_loads_no_web_framework() -> None:
         check=True,
     )
 
-    loaded = {module.partition(".")[0] for module in imported.stdout.split()}
-    assert not loaded & web_frameworks
+    modules = imported.stdout.split()
+    loaded = {module.partition(".")[0] for module in modules}
+    assert not loaded & web_frameworks_and_database
+    assert not [
+        module
+        for module in modules
+        if module.startswith("presentator.adapters.postgres")
+    ]
 
 
 def test_the_worker_step_project_is_the_toolchain_path_of_the_image() -> None:

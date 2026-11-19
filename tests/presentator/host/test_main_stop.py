@@ -224,7 +224,7 @@ def test_a_sigint_before_any_serving_ends_the_process_in_its_stop_line_alone(
     assert process.returncode == -signal.SIGINT
     assert events[-1] == ServerEvent.PROCESS_STOPPED
     assert events.count(ServerEvent.PROCESS_STOPPED) == 1
-    assert "process.failed" not in events
+    assert ServerEvent.PROCESS_FAILED not in events
     assert "process.crashed" not in events
     assert errors == ""
 

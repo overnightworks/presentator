@@ -8,6 +8,7 @@ from threading import Barrier
 import pytest
 from sqlalchemy import text
 
+from presentator.host.lifecycle import ServerEvent
 from tests.presentator.host.support.app_processes import (
     KEY_DRAFT,
     App,
@@ -115,7 +116,9 @@ def test_an_admin_opening_add_at_both_processes_at_once_is_given_one_draft_key(
 
 def _start_failure(output: str) -> object:
     """The reason of the one line a refused start ends in; any other text fails."""
-    (line,) = [one for one in json_lines(output) if one["event"] == "process.failed"]
+    (line,) = [
+        one for one in json_lines(output) if one["event"] == ServerEvent.PROCESS_FAILED
+    ]
     return line["reason"]
 
 
