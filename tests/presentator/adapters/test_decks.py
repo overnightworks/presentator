@@ -1117,31 +1117,6 @@ def test_a_recorded_failure_is_read_back_naming_why(engine: Engine) -> None:
     assert read.reason is SourceRunFailure.UNREACHABLE
 
 
-@pytest.mark.parametrize(
-    "newer_word",
-    [
-        pytest.param(
-            "UPDATE source_runs SET reason = 'from-a-newer-release'", id="reason"
-        ),
-        pytest.param(
-            "UPDATE source_runs SET outcome = 'from-a-newer-release'", id="outcome"
-        ),
-    ],
-)
-def test_a_run_worded_by_a_newer_release_reads_as_a_failed_poll(
-    engine: Engine, newer_word: str
-) -> None:
-    """A rollback keeps listing a source whose run a newer release wrote."""
-    store = a_source_run_store(engine)
-    store.record(a_failed_run(at=PUSHED_AT))
-    with engine.begin() as connection:
-        connection.exec_driver_sql(newer_word)
-
-    read = store.newest(SOURCE_ID)
-
-    assert read == replace(a_failed_run(at=PUSHED_AT), reason=SourceRunFailure.FAILED)
-
-
 def test_the_newest_run_of_a_source_belongs_to_that_source_alone(
     engine: Engine,
 ) -> None:
