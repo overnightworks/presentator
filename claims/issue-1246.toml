@@ -1,0 +1,8 @@
+claim_id = "e781899507e54cbfae4cc6da3ca09050"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "c653b6ffb648770eaad838ab181b21297c6bd567"
+branch = "claude/issue-1246-each-release-shows-the-co-presenter-s-pa"
+scope = ["docs/co-presenter.md", "scripts", "src/presentator/adapters/speech.py", "src/presentator/api/copresenter.py", "tests/presentator"]
+opened_commit = "59d25c0894ebd6eaf17ae6a2daaaf5a0b8578e5a"
+whole_reason = "One figure: the field it needs on the existing lines, the command that reads it and its document."
