@@ -1,0 +1,8 @@
+claim_id = "0b1a6943ca9145c2a73aa92e95d533ba"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "ceba5becd5ff1ff373a097ad26cb6d6fef34bc82"
+branch = "claude/issue-1323-a-json-body-with-invalid-unicode-answers"
+scope = ["docs/co-presenter.md", "src/presentator/api", "tests/presentator/api"]
+opened_commit = "7307443d9e6f3661097dad12d01bc970360e7409"
+whole_reason = "validation errors are rendered once for every JSON route of the API package"
