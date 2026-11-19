@@ -5,6 +5,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from ruamel.yaml import YAML
 
 from tests.scripts.support.k3d_world import (
     BROKEN_FORMS,
@@ -15,6 +16,8 @@ from tests.scripts.support.k3d_world import (
     fixture_maker,
     issued_commands,
 )
+
+CI_WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
 
 
 @pytest.fixture
@@ -177,6 +180,21 @@ def test_a_probe_store_is_pulled_by_the_runner_and_imported_before_the_pod_exist
     assert all(found for found in positions)
     assert [found[0] for found in positions] == sorted(found[0] for found in positions)
     assert "@sha256:" in pinned
+
+
+@STORES
+def test_a_probe_store_runs_the_image_of_ci_s_service_container_of_that_store(
+    manifests_module: ModuleType, store: int
+) -> None:
+    pinned = pinned_store(manifests_module, store).rsplit("/", 1)[-1]
+    workflow = YAML(typ="safe").load(CI_WORKFLOW.read_text())
+    services = [
+        service["image"]
+        for job in workflow["jobs"].values()
+        for service in job.get("services", {}).values()
+        if service["image"].split(":")[0] == pinned.split(":")[0]
+    ]
+    assert services == [pinned]
 
 
 def test_a_store_pull_that_fails_names_the_image_and_creates_no_cluster(
