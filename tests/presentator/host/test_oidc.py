@@ -10,11 +10,8 @@ from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.adapters.shared_redis import SharedRedis
 from presentator.host import main
-from presentator.host.config import (
-    ConfigurationError,
-    load_settings,
-    read_secret_file,
-)
+from presentator.host.config import load_settings, read_secret_file
+from presentator.host.environment import ConfigurationError
 from presentator.host.oidc import (
     client_configs_of,
     oidc_client_config,

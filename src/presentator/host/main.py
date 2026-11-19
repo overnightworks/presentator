@@ -110,14 +110,8 @@ from presentator.host.command_line import (
     migrate_the_database,
     unpin_the_host,
 )
-from presentator.host.config import (
-    ConfigurationError,
-    Settings,
-    WhereBuildsRun,
-    cannot_start,
-    load_settings,
-    variable_of,
-)
+from presentator.host.config import Settings, WhereBuildsRun, load_settings
+from presentator.host.environment import ConfigurationError, cannot_start, variable_of
 from presentator.host.lifecycle import StopLine, interrupt_ends_as_a_stop
 from presentator.host.oidc import (
     admission_of,

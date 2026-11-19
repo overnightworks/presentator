@@ -2,9 +2,9 @@
 
 from collections.abc import Callable
 
-from presentator.host.config import WorkerSettings
 from presentator.host.worker import Boundary
 from presentator.host.worker_self_check import Snapshot
+from presentator.host.worker_settings import WorkerSettings
 
 SERVE = ["--port", "7100", "--key-file", "/run/secrets/key"]
 CHECK = ["--check"]

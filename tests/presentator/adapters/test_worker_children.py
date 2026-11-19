@@ -25,7 +25,6 @@ from presentator.adapters.worker_children import (
     spawn_gated,
 )
 from presentator.host import worker, worker_scratch, worker_self_check, worker_serving
-from presentator.host.config import WorkerSettings
 from presentator.host.lifecycle import StopLine
 from presentator.host.worker_serving import (
     HEADER_SECONDS,
@@ -34,6 +33,7 @@ from presentator.host.worker_serving import (
     StepEffects,
     WireChild,
 )
+from presentator.host.worker_settings import WorkerSettings
 from presentator.host.worker_termination import SWEEP_SECONDS
 from tests.presentator.adapters.support.worker_children_support import (
     PATH,

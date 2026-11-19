@@ -25,8 +25,8 @@ from presentator.adapters.build_wire import (
 from presentator.adapters.worker_children import ChildIdentity, ChildSurroundings
 from presentator.contracts.decks import StepKind
 from presentator.host import worker, worker_scratch, worker_self_check, worker_wire
-from presentator.host.config import WorkerSettings
 from presentator.host.worker import create_request_record
+from presentator.host.worker_settings import WorkerSettings
 from presentator.host.worker_wire import ReplyPlan, WireExit, WireRole
 from tests.support import worker_support as support
 from tests.support.log_lines import events_of, json_logged

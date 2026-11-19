@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from presentator.host.config import (
-    ConfigurationError,
-    Settings,
+from presentator.host.config import Settings
+from presentator.host.environment import ConfigurationError
+from presentator.host.worker_self_check import TOOLCHAIN_PROJECT
+from presentator.host.worker_settings import (
     WorkerSettings,
     load_worker_settings,
     worker_settings_variables,
 )
-from presentator.host.worker_self_check import TOOLCHAIN_PROJECT
 from tests.presentator.host.support.config_refusals import assert_refusal_never_quotes
 
 TIMEOUT_VARIABLE = "PRESENTATOR_BUILD_TIMEOUT_SECONDS"
@@ -152,6 +152,26 @@ def test_importing_the_worker_reads_no_setting(
     )
 
     assert imported.returncode == 0, imported.stderr
+
+
+def test_importing_the_worker_loads_no_web_framework() -> None:
+    web_frameworks = {"starlette", "uvicorn", "fastapi"}
+
+    imported = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            "import sys, presentator.host.worker; print(*sys.modules)",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=SUBPROCESS_SECONDS,
+        check=True,
+    )
+
+    loaded = {module.partition(".")[0] for module in imported.stdout.split()}
+    assert not loaded & web_frameworks
 
 
 def test_the_worker_step_project_is_the_toolchain_path_of_the_image() -> None:

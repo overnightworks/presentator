@@ -5,7 +5,7 @@ from collections.abc import Callable
 
 import pytest
 
-from presentator.host.config import ConfigurationError
+from presentator.host.environment import ConfigurationError
 
 
 def assert_refusal_names(load: Callable[[], object], field: str) -> None:

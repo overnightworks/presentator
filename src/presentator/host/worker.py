@@ -25,12 +25,7 @@ from presentator.adapters.worker_children import (
     readable_within,
     spawn_gated,
 )
-from presentator.host.config import (
-    MINIMUM_KEY_LENGTH,
-    ConfigurationError,
-    WorkerSettings,
-    load_worker_settings,
-)
+from presentator.host.environment import ConfigurationError
 from presentator.host.lifecycle import StopLine, interrupt_ends_as_a_stop
 from presentator.host.worker_scratch import (
     HOME_DIRECTORY,
@@ -62,6 +57,11 @@ from presentator.host.worker_serving import (
     Serving,
     StepEffects,
     accept_connections,
+)
+from presentator.host.worker_settings import (
+    MINIMUM_KEY_LENGTH,
+    WorkerSettings,
+    load_worker_settings,
 )
 from presentator.host.worker_termination import (
     FaultHandlerWatchdog,
@@ -339,16 +339,39 @@ def real_serving(settings: WorkerSettings) -> Serving:
     )
 
 
-def _serve_on_this_machine(
-    *, port: int, key_file: Path, settings: WorkerSettings, stop_line: StopLine
-) -> int:
-    try:
-        key = read_key(key_file, controller_uid=0)
-    except StartRefusedError as refused:
-        return _refuse(refused.refusal)
-    return serve(
-        port=port, key=key, serving=real_serving(settings), stop_line=stop_line
-    )
+class PortServer(Protocol):
+    """Serves the port to the peers that hold the key until the life's end."""
+
+    def __call__(
+        self, *, port: int, key: bytes, serving: Serving, stop_line: StopLine
+    ) -> int:
+        """Run until a refusal or the life's end."""
+        ...
+
+
+@dataclass(frozen=True)
+class ServingOnThisMachine:
+    """Serves the port with the key `read_key` reads, through `serve_port`."""
+
+    read_key: Callable[[Path], bytes]
+    serve_port: PortServer
+
+    def __call__(
+        self,
+        *,
+        port: int,
+        key_file: Path,
+        settings: WorkerSettings,
+        stop_line: StopLine,
+    ) -> int:
+        """Read the key, then serve the port bounded by the settings."""
+        try:
+            key = self.read_key(key_file)
+        except StartRefusedError as refused:
+            return _refuse(refused.refusal)
+        return self.serve_port(
+            port=port, key=key, serving=real_serving(settings), stop_line=stop_line
+        )
 
 
 REAL_BOUNDARY = Boundary(
@@ -365,7 +388,7 @@ REAL_BOUNDARY = Boundary(
     ),
     SOCKET_TABLE.read_text,
     load_worker_settings,
-    _serve_on_this_machine,
+    ServingOnThisMachine(partial(read_key, controller_uid=0), serve),
 )
 
 

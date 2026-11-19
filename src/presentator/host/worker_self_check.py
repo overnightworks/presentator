@@ -12,7 +12,6 @@ from enum import StrEnum
 from functools import partial
 from pathlib import Path, PurePosixPath
 
-from presentator.host.config import worker_settings_variables
 from presentator.host.worker_scratch import (
     OPEN_DIRECTORY_MODE,
     QUEUE_MOUNT,
@@ -25,6 +24,7 @@ from presentator.host.worker_scratch import (
     read_scratch,
     scratch_empty,
 )
+from presentator.host.worker_settings import worker_settings_variables
 from presentator.host.worker_termination import list_process_ids
 
 WORKER_CAPABILITIES = 0xE0
