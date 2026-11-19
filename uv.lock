@@ -610,39 +610,20 @@ mcp-server = [
 [[package]]
 name = "overnightworks-design"
 version = "0.37.0"
-source = { url = "https://github.com/overnightworks/design/releases/download/v0.37.0/overnightworks_design-0.37.0-py3-none-any.whl" }
-wheels = [
-    { url = "https://github.com/overnightworks/design/releases/download/v0.37.0/overnightworks_design-0.37.0-py3-none-any.whl", hash = "sha256:21f47850c76d247bf70d709eaf74975db1f268ee49e420f997aca94aeb0eb9f4" },
-]
+source = { git = "https://github.com/overnightworks/design?rev=v0.37.0#5014da6e824ee2cec440862fd8c4bcdf278bdfba" }
 
 [package.optional-dependencies]
 catalogs = [
     { name = "babel" },
 ]
 
-[package.metadata]
-requires-dist = [
-    { name = "babel", marker = "extra == 'po'", specifier = ">=2.18,<3" },
-    { name = "overnightworks-design", extras = ["po"], marker = "extra == 'catalogs'" },
-]
-provides-extras = ["catalogs", "po"]
-
 [[package]]
 name = "overnightworks-logline"
 version = "1.4.0"
-source = { url = "https://github.com/overnightworks/logline/releases/download/v1.4.0/overnightworks_logline-1.4.0-py3-none-any.whl" }
+source = { git = "https://github.com/overnightworks/logline?rev=v1.4.0#92d4fa45d39ec9d0b1ec949beba317502e5944a2" }
 dependencies = [
     { name = "opentelemetry-api" },
     { name = "structlog" },
-]
-wheels = [
-    { url = "https://github.com/overnightworks/logline/releases/download/v1.4.0/overnightworks_logline-1.4.0-py3-none-any.whl", hash = "sha256:a1f36da28f7f09080219b08438208c4dca5678c92fb2e9fb3a2bdd15fe31ac30" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "opentelemetry-api", specifier = ">=1.30" },
-    { name = "structlog", specifier = ">=25.1" },
 ]
 
 [[package]]
@@ -690,7 +671,7 @@ requires-dist = [
     { name = "fastapi", specifier = "==0.162.0" },
     { name = "httpx2", specifier = "==2.16.0" },
     { name = "overnightworks-agents", extras = ["backend", "mcp-server"], git = "https://github.com/overnightworks/agents?rev=v0.59.0" },
-    { name = "overnightworks-logline", url = "https://github.com/overnightworks/logline/releases/download/v1.4.0/overnightworks_logline-1.4.0-py3-none-any.whl" },
+    { name = "overnightworks-logline", git = "https://github.com/overnightworks/logline?rev=v1.4.0" },
     { name = "overnightworks-speech-client", git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.22.0" },
     { name = "overnightworks-webauth", extras = ["redis"], git = "https://github.com/overnightworks/webauth?rev=v0.41.1" },
     { name = "psycopg", extras = ["binary"], specifier = "==3.3.9" },
@@ -704,7 +685,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "coverage", specifier = "==7.16.0" },
-    { name = "overnightworks-design", extras = ["catalogs"], url = "https://github.com/overnightworks/design/releases/download/v0.37.0/overnightworks_design-0.37.0-py3-none-any.whl" },
+    { name = "overnightworks-design", extras = ["catalogs"], git = "https://github.com/overnightworks/design?rev=v0.37.0" },
     { name = "pypdf", specifier = "==7.0.1" },
     { name = "pyright", specifier = "==1.1.414" },
     { name = "pytest", specifier = "==9.2.0" },
