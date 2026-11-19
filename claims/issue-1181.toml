@@ -1,0 +1,8 @@
+claim_id = "44355f7ad9474b3ea8cf86b8a9ddff57"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "03735671f356557843d00f2d23f84f16a97a27da"
+branch = "claude/issue-1181-the-co-presenter-s-hearing-closes-its-ga"
+scope = ["src/presentator/adapters/speech.py", "src/presentator/api/copresenter.py", "tests/presentator/adapters/test_speech_hearing.py", "tests/presentator/api/test_copresenter_hearing.py"]
+opened_commit = "7d1d88ef0c404ba6b69ae4728003545db8a67622"
+whole_reason = "the hearing's adapter, its route and their two test modules"
