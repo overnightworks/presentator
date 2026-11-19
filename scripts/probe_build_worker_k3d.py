@@ -83,9 +83,11 @@ either user or a target; the replies of accepted connections passed in cell 11.
 A listener the cell opens in the worker pod on a port other than the worker's own
 must answer on the pod's loopback and, with a NetworkPolicy of the probe's own
 admitting the web's pods to every port, still drop a connection from a web pod:
-it times out. The connection is tried once a canary policy that admits nothing to
-the web's pods is enforced, which one web pod's connection to the other shows by
-timing out within the window. Both policies are deleted when the connection ended.
+it times out. The listener opens once the cluster enforces the probe's policy on the
+worker pods, which a web pod the cell relabels shows: its connection to the
+worker's build port, refused by the workers' own policy, times out and then
+connects within the window once the probe's policy admits it. The policy and the
+relabelled pod are deleted when the connection ended.
 
 With `--image REF` the drive runs on the image `release.yml` published instead
 of one it builds, and only on a CI runner. REF is exactly

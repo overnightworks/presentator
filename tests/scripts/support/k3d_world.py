@@ -128,9 +128,11 @@ class World:
     egress_loopback: str = "connected"
     egress_off_loopback: str = "EPERM"
     inbound_end: str = "timeout"
-    # How many connections between the web pods connect before the cluster
-    # enforces a policy that admits nothing to them; None when it never does.
-    connections_before_enforcement: int | None = 1
+    # How many connections of the relabelled web pod to a worker's build port
+    # connect before the cluster drops them, and how many time out after the
+    # probe's policy is applied before it admits them; None when it never does.
+    connects_before_the_drop: int | None = 1
+    timeouts_before_the_admission: int | None = 1
     # How a connection to the listener ends from inside the worker pod itself.
     listener_loopback_end: str = "connected"
     copy_exit: int = 0
@@ -246,20 +248,36 @@ class World:
             return self.listener_loopback_end
         if port == str(INBOUND_PORT):
             return self.inbound_end
-        tried = len(
-            [
-                command
-                for command, _, _ in self.commands
-                if command[2:4] == ("kubectl", "exec")
-                and command[-2] == "reach"
-                and command[-1].rpartition(":")[0] == host
-            ]
+        return self.witness_end(host)
+
+    def witness_end(self, host: str) -> str:
+        """How the relabelled web pod's connection to a worker's build port ends.
+
+        It connects until the cluster drops it for the relabel, and times out
+        until the cluster admits it once the probe's policy is applied.
+        """
+        issued = [command for command, _, _ in self.commands]
+        reaches = [
+            at
+            for at, command in enumerate(issued)
+            if command[2:4] == ("kubectl", "exec")
+            and command[-2] == "reach"
+            and command[-1].rpartition(":")[0] == host
+        ]
+        applied = [
+            at
+            for at, (command, _, stdin) in enumerate(self.commands)
+            if command[:2] == ("kubectl", "apply") and "probe-inbound" in (stdin or "")
+        ]
+        if applied and self.timeouts_before_the_admission is not None:
+            since = [at for at in reaches if at > applied[0]]
+            if len(since) > self.timeouts_before_the_admission:
+                return "connected"
+        if self.connects_before_the_drop is None:
+            return "connected"
+        return (
+            "timeout" if len(reaches) > self.connects_before_the_drop else "connected"
         )
-        enforced = (
-            self.connections_before_enforcement is not None
-            and tried > self.connections_before_enforcement
-        )
-        return "timeout" if enforced else "connected"
 
     def exec_answer(self, command: tuple[str, ...]) -> tuple[int, str, str]:
         """What a program sent into a pod prints, by its container and arguments."""

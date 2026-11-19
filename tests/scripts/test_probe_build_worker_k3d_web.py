@@ -11,6 +11,7 @@ import pytest
 
 from tests.scripts.support.k3d_render import (
     SCRATCH_MOUNT,
+    WORKER_PORT,
 )
 from tests.scripts.support.k3d_world import (
     GENERATED_VALUE,
@@ -24,6 +25,8 @@ from tests.scripts.support.k3d_world import (
     issued_commands,
 )
 from tests.scripts.support.web_client_output import client_output, delivered_outcome
+
+LABEL_POD = ("kubectl", "label", "pod")
 
 
 def cell_lines(output: str, number: int) -> list[str]:
@@ -377,7 +380,7 @@ def test_cell_13_connects_from_a_web_pod_to_a_port_a_worker_pod_listens_on(
     fixture = make_fixture()
     fixture.drive()
     inbound = web_module.INBOUND_PROGRAM.read_text(encoding="utf-8")
-    listening, inside, *between, reaching = [
+    *_, listening, inside, reaching = [
         command for command, stdin in execs(fixture.world) if stdin == inbound
     ]
     assert listening[5] in WORKER_POD_NAMES
@@ -389,47 +392,76 @@ def test_cell_13_connects_from_a_web_pod_to_a_port_a_worker_pod_listens_on(
     host, _, port = reaching[-1].rpartition(":")
     assert host in {pod["status"]["podIP"] for pod in fixture.world.worker_pods()}
     assert port == str(INBOUND_PORT)
-    assert all(command[5] in WEB_POD_NAMES for command in between)
     (line,) = cell_lines(capsys.readouterr().out, 13)
     assert "ended in a timeout" in line
 
 
-def test_cell_13_tries_the_connection_once_one_web_pod_cannot_reach_the_other(
+def test_cell_13_tries_the_connection_once_the_cluster_admits_a_relabelled_web_pod(
     make_fixture: Callable[..., Fixture], web_module: ModuleType
 ) -> None:
-    fixture = make_fixture(World(connections_before_enforcement=2))
+    lag = 2
+    fixture = make_fixture(
+        World(connects_before_the_drop=lag, timeouts_before_the_admission=lag)
+    )
     fixture.drive()
     inbound = web_module.INBOUND_PROGRAM.read_text(encoding="utf-8")
-    *_, canary, reaching = [
-        command for command, stdin in execs(fixture.world) if stdin == inbound
+    issued = issued_commands(fixture.world)
+    (relabelling,) = [
+        at for at, (command, _) in enumerate(issued) if command[:3] == LABEL_POD
     ]
-    web_ips = {pod["status"]["podIP"] for pod in fixture.world.web_pods()}
-    assert canary[-1].rpartition(":")[0] in web_ips
-    assert canary[5] in WEB_POD_NAMES
-    assert reaching[-1].rpartition(":")[0] not in web_ips
+    assert issued[relabelling][0][3] == WEB_POD_NAMES[1]
+    (applying,) = [
+        at
+        for at in apply_positions(fixture.world, "NetworkPolicy")
+        if "ingress" in issued[at][1]
+    ]
+    witnessed = [
+        at
+        for at, (command, stdin) in enumerate(issued)
+        if stdin == inbound
+        and command[-2] == "reach"
+        and command[-1].endswith(f":{WORKER_PORT}")
+    ]
+    (listening,) = [
+        at
+        for at, (command, stdin) in enumerate(issued)
+        if stdin == inbound and command[-1] == "listen"
+    ]
+    assert all(issued[at][0][5] == WEB_POD_NAMES[1] for at in witnessed)
+    assert relabelling < witnessed[0] < applying < witnessed[-1] < listening
+    assert len([at for at in witnessed if at > applying]) == lag + 1
 
 
-def test_a_cluster_that_enforces_no_policy_fails_cell_13_without_a_connection_tried(
+@pytest.mark.parametrize(
+    ("world", "complaint"),
+    [
+        (World(connects_before_the_drop=None), "did not drop the relabelled"),
+        (World(timeouts_before_the_admission=None), "did not admit the web pod"),
+    ],
+    ids=["no drop before", "no admission after"],
+)
+def test_a_cluster_that_takes_no_policy_fails_cell_13_without_a_listener_opened(
     make_fixture: Callable[..., Fixture],
     web_module: ModuleType,
     capsys: pytest.CaptureFixture[str],
+    world: World,
+    complaint: str,
 ) -> None:
-    fixture = make_fixture(World(connections_before_enforcement=None))
+    fixture = make_fixture(world)
     with pytest.raises(SystemExit):
         fixture.drive()
     output = capsys.readouterr()
     inbound = web_module.INBOUND_PROGRAM.read_text(encoding="utf-8")
-    reached = {
-        command[-1].rpartition(":")[2]
+    listened = [
+        command
         for command, stdin in execs(fixture.world)
-        if stdin == inbound
-        and command[-2] == "reach"
-        and not command[-1].startswith("127.0.0.1:")
-    }
-    assert "enforced no policy" in output.err
+        if stdin == inbound and command[-1] == "listen"
+    ]
+    assert complaint in output.err
     assert "cell 13: FAILED" in output.out
-    assert str(INBOUND_PORT) not in reached
+    assert listened == []
     assert fixture.world.issued("kubectl", "delete", "networkpolicy") != []
+    assert fixture.world.issued("kubectl", "delete", "pod") != []
 
 
 def test_cell_13_admits_every_worker_port_by_policy_only_while_the_web_pod_connects(
@@ -462,6 +494,7 @@ def test_cell_13_admits_every_worker_port_by_policy_only_while_the_web_pod_conne
     assert policy["spec"]["policyTypes"] == ["Ingress"]
     (rule,) = policy["spec"]["ingress"]
     assert "ports" not in rule
+    assert len(rule["from"]) == len(("web", "witness"))
 
 
 def test_a_listener_that_does_not_answer_on_the_pods_loopback_fails_cell_13(
