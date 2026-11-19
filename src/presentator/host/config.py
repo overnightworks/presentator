@@ -20,6 +20,11 @@ from pydantic import (
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from webauth.proxies import TrustedProxies
 
+from presentator.adapters.build_wire import (
+    MAXIMUM_KEY_BYTES,
+    MINIMUM_KEY_BYTES,
+    is_a_hello_key,
+)
 from presentator.adapters.postgres.engine import LONGEST_TIMEOUT
 from presentator.adapters.speech import VoiceId, voice_speaks
 from presentator.agent.settings import AgentSettings
@@ -33,7 +38,6 @@ from presentator.host.environment import (
 from presentator.host.worker_settings import (
     DEFAULT_BUILD_OUTPUT_MEGABYTES,
     DEFAULT_BUILD_TIMEOUT_SECONDS,
-    MINIMUM_KEY_LENGTH,
     BuildOutputMegabytes,
     BuildTimeoutSeconds,
 )
@@ -418,12 +422,20 @@ class Settings(
         return BuildWorkerLink(
             host=host,
             port=port,
-            key=read_secret_file(
-                self.build_worker_key_file,
-                setting="build_worker_key_file",
-                minimum_length=MINIMUM_KEY_LENGTH,
-            ),
+            key=self._build_worker_key(self.build_worker_key_file),
         )
+
+    @staticmethod
+    def _build_worker_key(key_file: Path) -> SecretStr:
+        setting = "build_worker_key_file"
+        key = read_secret_file(key_file, setting=setting)
+        if not is_a_hello_key(key.get_secret_value().encode()):
+            unusable = (
+                f"{setting}: is a file that holds "
+                f"{MINIMUM_KEY_BYTES} to {MAXIMUM_KEY_BYTES} bytes"
+            )
+            raise cannot_start(unusable, variables=(variable_of(setting),))
+        return key
 
     @cached_property
     def postgres(self) -> PostgresDatabase:

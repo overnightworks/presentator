@@ -47,6 +47,8 @@ MAXIMUM_ENTRIES = 100_000
 MEGABYTE = 1024 * 1024
 TOOLCHAIN_SCRATCH_NAME = TOOLCHAIN_SCRATCH_DIRECTORY.encode()
 HELLO_VERSION = 1
+MINIMUM_KEY_BYTES = 32
+MAXIMUM_KEY_BYTES = 4096
 NONCE_BYTES = 32
 TAG_BYTES = hashlib.sha256().digest_size
 CHALLENGE_BYTES = 1 + NONCE_BYTES
@@ -253,6 +255,11 @@ def verify_hello(connection: socket.socket, key: bytes, *, seconds: float) -> No
             hello_tag(key, HelloDirection.WORKER_TO_WEB, nonce, web_nonce)
         )
     connection.settimeout(None)
+
+
+def is_a_hello_key(key: bytes) -> bool:
+    """Whether the key's bytes are of a length the keyed hello accepts."""
+    return MINIMUM_KEY_BYTES <= len(key) <= MAXIMUM_KEY_BYTES
 
 
 def answer_hello(connection: socket.socket, key: bytes) -> None:

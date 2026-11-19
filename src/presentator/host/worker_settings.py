@@ -8,8 +8,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from presentator.host.environment import ENVIRONMENT_PREFIX, cannot_start, variable_of
 
-# The shortest key of the build worker's hello, the web's file and the worker's alike.
-MINIMUM_KEY_LENGTH: Final = 32
 # What the web and the build worker both bound one build step by.
 DEFAULT_BUILD_TIMEOUT_SECONDS: Final = 300.0
 # What the web and the build worker both bound one build's output by.
