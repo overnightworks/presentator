@@ -30,7 +30,6 @@ from gitmirror.model import (
     Change,
     Connection,
     ConnectionCheck,
-    ConnectionNextAction,
     ConnectionState,
     CredentialReference,
     CredentialResolver,
@@ -67,12 +66,11 @@ _LOOPBACK = "127.0.0.1"
 _AN_UNRESOLVABLE_HOST = "http://host.example.invalid/repo.git"
 
 
-def test_connection_next_action_package_root_provides_the_interim_contract() -> None:
+def test_package_root_exports_the_mirror_contract() -> None:
     assert set(gitmirror.__all__) == {
         "Change",
         "Connection",
         "ConnectionCheck",
-        "ConnectionNextAction",
         "ConnectionState",
         "CredentialReference",
         "CredentialResolver",
@@ -92,7 +90,6 @@ def test_connection_next_action_package_root_provides_the_interim_contract() -> 
         Change,
         Connection,
         ConnectionCheck,
-        ConnectionNextAction,
         ConnectionState,
         CredentialReference,
         CredentialResolver,

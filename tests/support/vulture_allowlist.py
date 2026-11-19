@@ -1,40 +1,28 @@
-"""Names that something other than a Python call site reaches.
+"""Production names that something other than a Python call site in `src` reaches.
 
-A Svelte page is not Python, so a field only a page reads looks unused; a
-standard-library base class's own dispatch is invisible the same
-way. Every entry names the site that reaches it; an entry without one is an
-excuse.
+vulture reads `src` and this file alone, so a test calling a name never keeps
+it alive. A Svelte page is not Python, so a field only a page reads looks
+unused; a library's or a standard-library base class's own dispatch is
+invisible the same way. Every entry names the site that reaches it; an entry
+without one is an excuse.
 """
 
 from importlib import import_module
 
+from presentator.adapters.postgres.accounts import PostgresSubjectUserStore
+from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
 from presentator.agent.settings import AgentSettings
 from presentator.api.copresenter import AskRequest
 from presentator.api.decks import TalkFiles
 from presentator.api.lobby_shell import _InlineScripts  # pyright: ignore[reportPrivateUsage] - HTMLParser.feed, not Python code, calls its hooks
 from presentator.api.problems import ValidationFault
+from presentator.api.session_api import SessionAddresses, SessionView
 from presentator.contracts import words
+from presentator.contracts.people import DeckExport
+from presentator.contracts.preferences import ThemeChoice
 from presentator.host import console
 from presentator.host.config import Settings
 from presentator.host.worker_settings import WorkerSettings
-from tests.conftest import redis_environment, served_database
-from tests.gitmirror.test_mirror import DumbHttpHandler, RespondingHandler
-from tests.presentator.host.conftest import (
-    clients_closed_with_the_test,
-    logging_undone_after_main,
-)
-from tests.presentator.host.support.held_start import sitecustomize
-from tests.presentator.host.test_main import every_tick_polls_every_source, pytestmark
-from tests.presentator.host.test_worker_settings import no_worker_variables
-from tests.support.lobby_drive import AdmitEveryRequest, DeckRecord
-
-# `BaseHTTPRequestHandler`'s own request dispatch calls this by name; nothing
-# in the test that stands the server up ever calls it itself.
-DumbHttpHandler.log_message
-RespondingHandler.log_message
-
-# webauth's `IpRateLimitMiddleware` reaches the backend through `config.rate_limits`.
-AdmitEveryRequest.is_allowed
 
 # `HTMLParser.feed` dispatches to these by name; nothing calls them directly.
 _InlineScripts.handle_starttag
@@ -62,29 +50,9 @@ Settings._worker_is_reached  # noqa: SLF001 - pydantic, not Python code, is the 
 Settings._voices_speak_their_language  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
 Settings._statement_bound_fits_postgres  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
 
-# pytest applies this autouse fixture to every host test by itself.
-logging_undone_after_main  # pyright: ignore[reportUnusedExpression]
-
-# pytest applies this autouse fixture to every composition-root test by itself.
-every_tick_polls_every_source  # pyright: ignore[reportUnusedExpression]
-
-# pytest reads `pytestmark` of each module and finds the fixture it names by its string.
-pytestmark  # pyright: ignore[reportUnusedExpression]
-redis_environment  # pyright: ignore[reportUnusedExpression]
-served_database  # pyright: ignore[reportUnusedExpression]
-
-# pytest applies this autouse fixture to every worker-settings test by itself.
-no_worker_variables  # pyright: ignore[reportUnusedExpression]
-
-# pytest applies this autouse fixture to every serving-loop test by itself.
-clients_closed_with_the_test  # pyright: ignore[reportUnusedExpression]
-
 # Pydantic reads these fields when it writes a validation answer.
 ValidationFault.loc
 ValidationFault.msg
-
-# Pydantic calls the drive's deck-record validator when a request is parsed.
-DeckRecord.builds_fit_the_state
 
 # The generated words module names the language its catalog is written in; the
 # server reads only its offered languages and texts.
@@ -99,5 +67,24 @@ import_module(
 console.presentator
 console.presentator_worker
 
-# The import system calls a finder on `sys.meta_path` by this name.
-sitecustomize._HoldBeforeImport.find_spec  # noqa: SLF001 - the import system, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
+# webauth's sign-in and session dependencies call these store-port methods
+# (`webauth.ports`) on the stores the composition root hands it.
+PostgresSubjectUserStore.create_for_subject
+PostgresSubjectUserStore.set_role
+PostgresSubjectUserStore.set_kind
+PostgresSessionRecordStore.load
+PostgresSessionRecordStore.touch
+PostgresSessionRecordStore.replace_refresh_token
+PostgresSessionRecordStore.prune_overflow
+
+# Pydantic writes these fields into `GET /api/session`; the lobby pages read them.
+SessionAddresses.logout
+SessionAddresses.talk_start
+SessionView.sign_in
+
+# `dataclasses.asdict` writes every field of a person's data export.
+DeckExport.built_commit
+
+# Pydantic and the preference store look a chosen theme up by its value.
+ThemeChoice.LIGHT
+ThemeChoice.DARK
