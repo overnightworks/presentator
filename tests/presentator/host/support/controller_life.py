@@ -27,6 +27,7 @@ from presentator.adapters.worker_children import (
     spawn_gated,
 )
 from presentator.host import worker, worker_scratch
+from presentator.host.lifecycle import StopLine
 from presentator.host.worker_serving import Serving, StepEffects
 from presentator.host.worker_termination import FaultHandlerWatchdog
 
@@ -81,6 +82,7 @@ sys.exit(
         port=int((Path(sys.argv[1]) / "port").read_text()),
         key=(Path(sys.argv[1]) / "key").read_bytes(),
         serving=serving,
+        stop_line=StopLine(),
     )
 )
 """
