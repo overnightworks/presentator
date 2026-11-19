@@ -4,7 +4,7 @@ import errno
 import socket
 import threading
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
 from typing import NoReturn
@@ -14,15 +14,11 @@ import pytest
 from presentator.adapters import build_wire
 from presentator.host import worker, worker_self_check, worker_serving
 from presentator.host.lifecycle import ServerEvent, StopLine
-from presentator.host.worker_serving import (
-    HEADER_SECONDS,
-    HelloRefusal,
-    LifeEnd,
-)
+from presentator.host.worker_serving import HEADER_SECONDS, LifeEnd
 from presentator.host.worker_termination import SWEEP_SECONDS, SweepEffects, sweep
 from presentator.host.worker_wire import WireExit
 from tests.presentator.host.support.sealed_snapshot import sealed_snapshot, with_fields
-from tests.support.log_lines import events_of, json_logged
+from tests.support.log_lines import LoggedText, events_of, json_logged
 from tests.support.step_support import ADMITTING_PATH, STEP_LEG
 from tests.support.worker_accept_support import (
     accept_from,
@@ -82,53 +78,90 @@ def a_reflected_hello(client: socket.socket) -> None:
     answer_under(client, build_wire.HelloDirection.WORKER_TO_WEB, KEY)
 
 
+def another_version_hello(client: socket.socket) -> None:
+    read_challenge(client)
+    client.sendall(
+        bytes([build_wire.HELLO_VERSION + 1]) + bytes(build_wire.ANSWER_BYTES - 1)
+    )
+
+
+def a_hung_up_hello(client: socket.socket) -> None:
+    read_challenge(client)
+    client.shutdown(socket.SHUT_WR)
+
+
 def a_silent_hello(client: socket.socket) -> None:
     read_challenge(client)
 
 
 REFUSED_HELLOS = {
-    "wrong key": a_wrong_key_hello,
-    "reflected direction": a_reflected_hello,
-    "no answer": a_silent_hello,
+    "wrong key": (a_wrong_key_hello, build_wire.HelloFault.KEY),
+    "reflected direction": (a_reflected_hello, build_wire.HelloFault.KEY),
+    "another version": (another_version_hello, build_wire.HelloFault.VERSION),
+    "hung up": (a_hung_up_hello, build_wire.HelloFault.CLOSE),
+    "no answer": (a_silent_hello, build_wire.HelloFault.TIMEOUT),
 }
 
 
-@pytest.mark.parametrize("hello", REFUSED_HELLOS.values(), ids=REFUSED_HELLOS.keys())
-def test_a_refused_hello_is_closed_and_never_spawns_a_child(
-    volume: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    hello: Callable[[socket.socket], None],
-) -> None:
-    monkeypatch.setattr(worker_serving, "HELLO_SECONDS", 0.2)
-    life = ScriptedLife()
-    with listening_with(volume, accepts=1) as listener:
-        client = helloing(volume, hello)
-        with pytest.raises(StopServingError):
-            accept_from(life, listener)
-        assert client.recv(1) == b""
+@dataclass(frozen=True)
+class RefusedHello:
+    """What the worker left after refusing one hello."""
 
-    assert life.spawned == []
+    life: ScriptedLife
+    after_the_refusal: bytes
+    logged: LoggedText
 
 
-@pytest.mark.parametrize("hello", REFUSED_HELLOS.values(), ids=REFUSED_HELLOS.keys())
-def test_a_refused_hello_writes_one_refused_connection_line_and_never_the_key(
+def refuse(
     volume: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     hello: Callable[[socket.socket], None],
-) -> None:
+) -> RefusedHello:
     monkeypatch.setattr(worker_serving, "HELLO_SECONDS", 0.2)
     life = ScriptedLife()
     with (
         json_logged(capsys) as logged,
         listening_with(volume, accepts=1) as listener,
     ):
-        helloing(volume, hello)
+        client = helloing(volume, hello)
         with pytest.raises(StopServingError):
             accept_from(life, listener)
+        after_the_refusal = client.recv(1)
+    return RefusedHello(life, after_the_refusal, logged)
+
+
+@pytest.mark.parametrize(
+    "hello",
+    [hello for hello, _fault in REFUSED_HELLOS.values()],
+    ids=REFUSED_HELLOS.keys(),
+)
+def test_a_refused_hello_is_closed_and_never_spawns_a_child(
+    volume: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    hello: Callable[[socket.socket], None],
+) -> None:
+    refused = refuse(volume, monkeypatch, capsys, hello)
+
+    assert refused.after_the_refusal == b""
+    assert refused.life.spawned == []
+
+
+@pytest.mark.parametrize(
+    ("hello", "fault"), REFUSED_HELLOS.values(), ids=REFUSED_HELLOS.keys()
+)
+def test_a_refused_hello_writes_one_line_naming_its_fault_and_never_the_key(
+    volume: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    hello: Callable[[socket.socket], None],
+    fault: build_wire.HelloFault,
+) -> None:
+    logged = refuse(volume, monkeypatch, capsys, hello).logged
 
     (line,) = events_of(logged, "connection.ended")
-    assert (line["outcome"], line["reason"]) == ("refused", HelloRefusal.NOT_PROVEN)
+    assert (line["outcome"], line["reason"]) == ("refused", fault)
     assert KEY.hex() not in logged.text
     assert repr(KEY) not in logged.text
 
