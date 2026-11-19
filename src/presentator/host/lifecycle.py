@@ -44,14 +44,6 @@ class StopLine:
         _log.info(ServerEvent.PROCESS_STOPPED)
 
 
-class _Termination(KeyboardInterrupt):
-    """A SIGTERM, raised wherever it lands, as Python raises a SIGINT."""
-
-
-def _raise_termination(_signal_number: int, _frame: FrameType | None) -> NoReturn:
-    raise _Termination
-
-
 def _end_by(stop_signal: signal.Signals, stop_line: StopLine) -> NoReturn:
     """Write the stop line, then end the process as `stop_signal` itself does.
 
@@ -80,16 +72,22 @@ def signals_end_as_a_stop() -> Generator[StopLine]:
     silent default action before its program's imports.
     """
     stop_line = StopLine()
+    stopped_by = signal.SIGINT
+
+    def interrupt(signal_number: int, _frame: FrameType | None) -> NoReturn:
+        """Raise either stop signal wherever it lands, as Python raises a SIGINT."""
+        nonlocal stopped_by
+        stopped_by = signal.Signals(signal_number)
+        raise KeyboardInterrupt
+
     handlers = {number: signal.getsignal(number) for number in _STOP_SIGNALS}
     try:
         try:
-            signal.signal(signal.SIGINT, signal.default_int_handler)
-            signal.signal(signal.SIGTERM, _raise_termination)
+            for number in _STOP_SIGNALS:
+                signal.signal(number, interrupt)
             yield stop_line
         finally:
             for number, handler in handlers.items():
                 signal.signal(number, handler)
-    except _Termination:
-        _end_by(signal.SIGTERM, stop_line)
     except KeyboardInterrupt:
-        _end_by(signal.SIGINT, stop_line)
+        _end_by(stopped_by, stop_line)
