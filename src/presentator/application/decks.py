@@ -31,6 +31,7 @@ from presentator.contracts.decks import (
     AccessKind,
     Artefacts,
     BuildAttempt,
+    BuildRun,
     ConnectionCheckResult,
     Deck,
     DeckPage,
@@ -204,6 +205,15 @@ def _connection_fingerprint(
         ),
     )
     return hmac.new(key, message, sha256).hexdigest()
+
+
+def _as_served(deck: Deck, listed: frozenset[BuildRun] | None) -> Deck:
+    """That deck as a view shows it: without a build whose run is listed nowhere.
+
+    `listed` is one `BuildRunner.runs` answer per view, so a list or a page
+    reads the store's names and fetches no run.
+    """
+    return replace(deck, build=build_retention.standing_build(deck, listed))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -579,6 +589,7 @@ class Decks:
         A page view costs a read, never a pull: what the source carries is the
         refresh's business.
         """
+        listed = self.builder.runs()
         newest_first = sorted(
             (deck for deck in self.store.all() if deck.is_owned_by(viewer)),
             key=lambda deck: (-deck.changed_at.timestamp(), deck.slug),
@@ -587,7 +598,7 @@ class Decks:
             ListedDeck(
                 slug=deck.slug,
                 title=deck.title,
-                state=deck_state_of(deck),
+                state=deck_state_of(_as_served(deck, listed)),
                 changed_at=deck.changed_at,
             )
             for deck in newest_first
@@ -606,13 +617,12 @@ class Decks:
         is in what is on the screen (line 7), and while nothing is built there
         is nothing on the screen but what the source last carried. A build
         whose run left the store and the disk delivers nothing, so the page
-        reads as if none had been built.
+        reads as if none had been built, as the list does.
         """
         owned = self._owned(slug, viewer)
         if owned is None:
             return None
-        served = self._artefacts_of(owned) is not None
-        deck = owned if served else replace(owned, build=None)
+        deck = _as_served(owned, self.builder.runs())
         built = deck.build
         return DeckPage(
             slug=deck.slug,
@@ -665,11 +675,9 @@ class Decks:
     def _kept(self, slug: str, viewer: str) -> Artefacts | None:
         """What the viewer's deck's build left, fetched from the store on first ask."""
         deck = self._owned(slug, viewer)
-        return None if deck is None else self._artefacts_of(deck)
-
-    def _artefacts_of(self, deck: Deck) -> Artefacts | None:
-        """What that deck's build left, fetched from the store on first ask."""
-        return None if deck.build is None else self.builder.kept(deck.build)
+        if deck is None or deck.build is None:
+            return None
+        return self.builder.kept(deck.build)
 
     def open_build_file(self, written: Path) -> BinaryIO | None:
         """A file a build wrote, opened to be delivered, or nothing if it is not one."""

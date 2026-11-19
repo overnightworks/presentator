@@ -112,7 +112,7 @@ class DeckBuilds:
             if stored.source_id != source.id:
                 continue
             deck = self._fail_an_orphaned_attempt(stored)
-            standing = build_retention.standing_build(self.builder, deck)
+            standing = build_retention.standing_build(deck, self.builder.runs())
             if standing is not None and _made_for(standing, deck, toolchain):
                 self._deliver_the_standing_talk_again(deck, standing)
                 continue

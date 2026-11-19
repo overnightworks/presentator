@@ -534,7 +534,10 @@ class DeckState(StrEnum):
 
     It is read off the talk that stands and the attempt beside it, never
     stored: two records that can each be written on their own would otherwise
-    disagree about one deck.
+    disagree about one deck. A talk whose run neither the store nor the disk
+    lists reads as no talk; one a listing that failed cannot vouch for still
+    stands. A known gap: during a store outage, a run that is listed but
+    cannot be fetched reads ready while its talk answers 404.
     """
 
     READY = "ready"
