@@ -679,10 +679,10 @@ def test_a_commit_the_mirror_cannot_read_the_deck_at_builds_nothing(
 )
 def test_a_build_that_leaves_a_link_on_the_way_to_an_artefact_is_not_held(
     remote: GitRemote,
-    source: Source,
     machine: pytest.MonkeyPatch,
     tmp_path: Path,
     planted: str,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A deck's own build may write links; none of them is ever adopted.
 
@@ -699,12 +699,15 @@ def test_a_build_that_leaves_a_link_on_the_way_to_an_artefact_is_not_held(
             planted.format(elsewhere=elsewhere),
         ),
     )
-    builds = builds_ready_for(tmp_path, source)
+    builds = builds_ready_for(tmp_path, source := a_source(remote))
 
-    built = builds.build(a_deck(remote), source=source)
+    with json_logged(capsys) as logged:
+        built = builds.build(a_deck(remote), source=source)
 
     assert built == BuildFailure.without_words()
     assert builds.cache.store.names() == frozenset()
+    (ended,) = lines_of(logged, "deck_build.ended")
+    assert (ended["outcome"], ended["level"]) == ("failed", "warning")
 
 
 def test_a_talk_larger_than_a_build_may_leave_is_refused_with_that_reason(

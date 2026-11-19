@@ -420,6 +420,8 @@ class SlidevBuilds:
     ) -> BuildFailure | None:
         """Hold the artefacts and keep their run in the store, or say why not."""
         if not self.holds(artefacts):
+            # What the deck's own build wrote is the deck's fault, not this host's.
+            line.handled()
             line.fail(BuildFault.NOT_AS_WRITTEN)
             return BuildFailure.without_words()
         if not self.cache.keep(run_name_holding(artefacts.directory)):
