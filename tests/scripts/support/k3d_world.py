@@ -107,7 +107,8 @@ class World:
     workers_keep_uids: bool = False
     # The workers write an ok line for the first build, and none for a later one.
     workers_log_only_the_first_build: bool = False
-    # The scheduler binds a replacement worker pod although the node is cordoned.
+    # The scheduler binds the last replacement worker pod although the node is
+    # cordoned; it is not Ready yet while the hold is read.
     hold_breaks: bool = False
     hello_spends_a_life: bool = False
     # What the programs sent into the pods print and how the copy ends: the web's
@@ -512,22 +513,22 @@ class World:
     def worker_pods(self) -> list[Document]:
         """The worker Pods: none before they are applied, new ones after each life.
 
-        A pod that replaced one while the node is cordoned stays unscheduled.
+        A pod that replaced one while the node is cordoned stays unscheduled and
+        not Ready, apart from the last one a broken hold binds.
         """
         if not self.workers_up():
             return []
         generation = 0 if self.workers_keep_uids else self.spent_lives()
         held_above = self.lives_at_cordon()
-        held = (
-            held_above is not None and generation > held_above and not self.hold_breaks
-        )
+        held = held_above is not None and generation > held_above
+        last = len(WORKER_POD_NAMES) - 1
         return [
             self.pod(
                 name,
                 f"{name}-generation-{generation}",
                 100 + 10 * generation + number,
-                ready=not self.workers_never_ready,
-                scheduled=not held,
+                ready=not self.workers_never_ready and not held,
+                scheduled=not held or (self.hold_breaks and number == last),
             )
             for number, name in enumerate(WORKER_POD_NAMES)
         ]

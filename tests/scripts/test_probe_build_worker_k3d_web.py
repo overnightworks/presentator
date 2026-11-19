@@ -190,7 +190,7 @@ def test_the_workers_apply_with_two_replicas_and_the_cells_before_with_one(
         (World(workers_keep_uids=True), "did not take both worker pods", 11),
         (
             World(hold_breaks=True),
-            f"the hold did not hold: {WORKER_POD_NAMES[0]}",
+            f"the hold did not hold: {WORKER_POD_NAMES[-1]}",
             11,
         ),
         (World(client_exit=1, client_stderr="boom"), "cell 10", 10),
