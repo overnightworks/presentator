@@ -325,10 +325,7 @@ def recording(
     recorded = tmp_path / "recorded"
     recorded.mkdir()
     with_the_program(
-        machine,
-        tmp_path,
-        program,
-        _A_TOOLCHAIN_THAT_RECORDS.format(recorded=recorded),
+        machine, tmp_path, program, _A_TOOLCHAIN_THAT_RECORDS.format(recorded=recorded)
     )
     return recorded
 
@@ -729,9 +726,7 @@ def test_a_talk_larger_than_a_build_may_leave_is_refused_with_that_reason(
         ),
     )
     builds = builds_ready_for(
-        tmp_path,
-        source,
-        output_megabytes=_ONLY_A_MEGABYTE_MAY_BE_LEFT,
+        tmp_path, source, output_megabytes=_ONLY_A_MEGABYTE_MAY_BE_LEFT
     )
 
     with json_logged(capsys) as logged:
@@ -799,9 +794,7 @@ def test_a_build_that_has_written_too_much_is_stopped_where_it_stands(
         ),
     )
     builds = builds_ready_for(
-        tmp_path,
-        source,
-        output_megabytes=_ONLY_A_MEGABYTE_MAY_BE_LEFT,
+        tmp_path, source, output_megabytes=_ONLY_A_MEGABYTE_MAY_BE_LEFT
     )
 
     began = time.monotonic()
@@ -891,9 +884,7 @@ def test_a_link_out_of_the_run_is_counted_as_the_name_it_is(
         _A_TOOLCHAIN_THAT_LEAVES_A_LINK_OUT.format(outside=outside),
     )
     builds = builds_ready_for(
-        tmp_path,
-        source,
-        output_megabytes=_ONLY_A_MEGABYTE_MAY_BE_LEFT,
+        tmp_path, source, output_megabytes=_ONLY_A_MEGABYTE_MAY_BE_LEFT
     )
 
     artefacts = what_it_built(builds.build(a_deck(remote), source=source))
@@ -972,9 +963,8 @@ def test_a_run_that_could_not_be_taken_away_is_logged_and_answered_as_its_volume
 
     assert isinstance(built, BuildFailure)
     assert [one["run_id"] for one in stayed] == [left.name]
-    assert named == RunLeft(
-        directory=PurePosixPath(builds.builds.name, left.name), in_store=False
-    )
+    left_at = PurePosixPath(builds.builds.name, left.name)
+    assert named == RunLeft(directory=left_at, in_store=False)
 
 
 @contextmanager
