@@ -26,7 +26,12 @@ from presentator.adapters.worker_children import (
     spawn_gated,
 )
 from presentator.host.environment import ConfigurationError
-from presentator.host.lifecycle import StopLine, signals_end_as_a_stop
+from presentator.host.lifecycle import (
+    StopLine,
+    read_command_line,
+    refuse_argument,
+    signals_end_as_a_stop,
+)
 from presentator.host.worker_scratch import (
     HOME_DIRECTORY,
     TEMPORARY_MOUNT,
@@ -76,6 +81,8 @@ logger = logging.getLogger(__name__)
 
 START_REFUSED_EVENT: Final = "start.refused"
 REFUSAL_EXIT_STATUS = 2
+_PORT: Final = "--port"
+_KEY_FILE: Final = "--key-file"
 NOT_READY_EXIT_STATUS = 1
 LISTEN_BACKLOG = 4
 ONLY_THE_OWNER = 0o077
@@ -442,8 +449,15 @@ def main(argv: Sequence[str] | None = None, boundary: Boundary = REAL_BOUNDARY) 
         return _start(argv, boundary, stop_line)
 
 
+def _refuse_unless_given(serving_needs: dict[str, object]) -> None:
+    """Refuse the start in one line naming each argument serving needs and lacks."""
+    missing = [name for name, value in serving_needs.items() if value is None]
+    if missing:
+        refuse_argument(",".join(missing))
+
+
 def _start(argv: Sequence[str] | None, boundary: Boundary, stop_line: StopLine) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, exit_on_error=False)
     parser.add_argument(
         "--check", action="store_true", help="exit after the self-check"
     )
@@ -452,16 +466,15 @@ def _start(argv: Sequence[str] | None, boundary: Boundary, stop_line: StopLine) 
         action="store_true",
         help="exit 0 when the worker listens on --port and serves no life",
     )
-    parser.add_argument("--port", type=int, help="the TCP port the worker serves")
-    parser.add_argument("--key-file", type=Path, help="the file holding the hello key")
-    arguments = parser.parse_args(argv)
+    parser.add_argument(_PORT, type=int, help="the TCP port the worker serves")
+    parser.add_argument(_KEY_FILE, type=Path, help="the file holding the hello key")
+    arguments = read_command_line(parser, argv)
     if arguments.ready:
         if arguments.port is None:
-            parser.error("--ready needs --port")
+            refuse_argument(_PORT)
         return _ready(arguments.port, boundary)
-    if not arguments.check and (arguments.port is None or arguments.key_file is None):
-        parser.error("serving needs --port and --key-file")
     if not arguments.check:
+        _refuse_unless_given({_PORT: arguments.port, _KEY_FILE: arguments.key_file})
         logger.info("process.started")
     try:
         boundary.set_non_dumpable()
