@@ -725,9 +725,12 @@ def main(
                 return
             _log.info("process.started")
             settings = load_settings()
-            instance = _instance_or_refused(
-                settings, relying_party_for, migrations_directory
-            )
+            try:
+                instance = build_instance(
+                    settings, relying_party_for, migrations_directory
+                )
+            except StoreFault as fault:
+                raise store_refusal(fault, settings.postgres.url) from None
         except DatabaseRefusedError as refused:
             driver_error = refused.driver_error
             codes = {} if driver_error is None else {"error_type": driver_error}
@@ -738,18 +741,6 @@ def main(
                 ServerReason.CONFIGURATION_REFUSED, setting=",".join(refused.variables)
             )
         asyncio.run(_serve(instance, settings))
-
-
-def _instance_or_refused(
-    settings: Settings,
-    relying_party_for: RelyingPartyFor,
-    migrations_directory: Path,
-) -> Instance:
-    """The instance, or the refusal a store fault while building it names."""
-    try:
-        return build_instance(settings, relying_party_for, migrations_directory)
-    except StoreFault as fault:
-        raise store_refusal(fault, settings.postgres.url) from None
 
 
 def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddleware:
