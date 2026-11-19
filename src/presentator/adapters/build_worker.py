@@ -10,7 +10,7 @@ from contextlib import closing
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Final
+from typing import Final, Protocol
 
 from presentator.adapters.build_wire import (
     MAXIMUM_ENTRIES,
@@ -68,6 +68,29 @@ class Fault(StrEnum):
     REPLY_GRAMMAR = "reply_grammar"
     STEP_CONTRACT = "step_contract"
     LOCAL = "local"
+
+
+class MonotonicTime(Protocol):
+    """The one time the client reads its deadlines on and waits out its backoff on."""
+
+    def now(self) -> float:
+        """Seconds on a clock that never goes back."""
+        ...
+
+    def wait(self, seconds: float) -> None:
+        """Let that many seconds of this time pass."""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class _SystemTime:
+    """The process's monotonic clock and a real sleep."""
+
+    def now(self) -> float:
+        return time.monotonic()
+
+    def wait(self, seconds: float) -> None:
+        time.sleep(seconds)
 
 
 class _NotYetError(Exception):
@@ -279,7 +302,7 @@ class WorkerToolchain:
     longest_retry_seconds: float = LONGEST_RETRY_SECONDS
     reply_margin_seconds: float = REPLY_MARGIN_SECONDS
     remove_staging: Callable[[Path], None] = shutil.rmtree
-    clock: Callable[[], float] = time.monotonic
+    time: MonotonicTime = field(default_factory=_SystemTime)
 
     def ran(self, step: BuildStep) -> BuildFailure | ToolchainUnavailable | None:
         """Send the deck to the worker for that step and admit what it built.
@@ -312,7 +335,7 @@ class WorkerToolchain:
     def _through_worker(
         self, deck: int, step: BuildStep
     ) -> BuildFailure | ToolchainUnavailable | None:
-        window_ends = self.clock() + self.connect_window_seconds
+        window_ends = self.time.now() + self.connect_window_seconds
         header = StepHeader(step=step.name, slug=step.slug)
         try:
             connection = self._at_status(header, window_ends)
@@ -360,16 +383,16 @@ class WorkerToolchain:
                     _ATTEMPT_EVENT,
                     extra={"error_type": type(error.__cause__ or error).__name__},
                 )
-                remaining = window_ends - self.clock()
-                time.sleep(max(0.0, min(wait, remaining)))
+                remaining = window_ends - self.time.now()
+                self.time.wait(max(0.0, min(wait, remaining)))
                 wait = min(2 * wait, self.longest_retry_seconds)
 
     def _attempt(self, window_ends: float) -> _DeadlineSocket:
         family, _type, _protocol, _name, address = socket.getaddrinfo(
             self.host, self.port, type=socket.SOCK_STREAM
         )[0]
-        connection = _DeadlineSocket(family, self.clock)
-        connection.until(min(window_ends, self.clock() + self.attempt_seconds))
+        connection = _DeadlineSocket(family, self.time.now)
+        connection.until(min(window_ends, self.time.now() + self.attempt_seconds))
         try:
             connection.connect(address)
             _begun_to_answer(connection)
@@ -382,7 +405,7 @@ class WorkerToolchain:
             raise _NotYetError from error
         except TimeoutError as error:
             connection.close()
-            if self.clock() >= window_ends:
+            if self.time.now() >= window_ends:
                 raise
             raise _NotYetError from error
         except BaseException:
