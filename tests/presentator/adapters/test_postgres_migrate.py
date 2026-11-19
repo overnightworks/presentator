@@ -1,6 +1,7 @@
 """`migrate` brings a database to head and leaves a newer one alone."""
 
 from collections.abc import Callable
+from datetime import timedelta
 
 import psycopg
 import pytest
@@ -185,7 +186,7 @@ def test_a_server_that_is_not_there_is_refused_as_not_answering(
     )
 
 
-def test_a_database_whose_revision_cannot_be_read_is_refused_as_not_answering(
+def test_a_database_whose_revision_cannot_be_read_is_refused_as_store_unavailable(
     unmigrated_database_url: str,
 ) -> None:
     engine = engine_on(unmigrated_database_url)
@@ -200,6 +201,27 @@ def test_a_database_whose_revision_cannot_be_read_is_refused_as_not_answering(
 
     assert refused is not None
     assert (refused.reason, refused.driver_error) == (
-        "not_answering",
+        "store_unavailable",
         psycopg.errors.UndefinedColumn.__name__,
+    )
+
+
+def test_a_revision_read_the_statement_timeout_cancels_is_refused_as_cancelled(
+    database_url: str, engine: Engine
+) -> None:
+    bounded = engine_on(database_url, statement_timeout=timedelta(milliseconds=200))
+    try:
+        with engine.connect() as another_session:
+            another_session.execute(
+                text("LOCK TABLE alembic_version IN ACCESS EXCLUSIVE MODE")
+            )
+            refused = _refusal_of_serving(bounded)
+            another_session.rollback()
+    finally:
+        bounded.dispose()
+
+    assert refused is not None
+    assert (refused.reason, refused.driver_error) == (
+        "statement_cancelled",
+        psycopg.errors.QueryCanceled.__name__,
     )

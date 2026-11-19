@@ -10,7 +10,8 @@ from alembic import command
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import URL, Connection, Engine, text
+from psycopg.errors import LockNotAvailable, QueryCanceled
+from sqlalchemy import URL, Connection, Engine, make_url, text
 from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError
 
 from presentator.adapters.postgres.engine import CONNECT_TIMEOUT_SECONDS
@@ -31,6 +32,8 @@ class RefusalReason(StrEnum):
 
     NOT_ANSWERING = "not_answering"
     LOGIN_REFUSED = "login_refused"
+    STATEMENT_CANCELLED = "statement_cancelled"
+    STORE_UNAVAILABLE = "store_unavailable"
     NO_REVISION = "no_revision"
     BEHIND_THIS_RELEASE = "behind_this_release"
     NEWER_THAN_THIS_RELEASE = "newer_than_this_release"
@@ -53,24 +56,29 @@ class DatabaseRefusedError(Exception):
         self.driver_error = driver_error
 
 
-def _not_answering(error: SQLAlchemyError) -> DatabaseRefusedError:
-    return DatabaseRefusedError(
-        RefusalReason.NOT_ANSWERING, driver_error=driver_error_name(error)
-    )
+def store_refusal(
+    error: SQLAlchemyError, database_url: URL | str
+) -> DatabaseRefusedError:
+    """The reason a store fault on the database at `database_url` names.
 
-
-def _refused_at_connect(engine: Engine, error: SQLAlchemyError) -> DatabaseRefusedError:
-    """A login the server refused, or a server that is not there to answer.
-
-    libpq gives a failed connect no SQLSTATE and words its message in the
+    A statement the server cancelled, past its statement or lock timeout, names
+    that. libpq gives a failed connect no SQLSTATE and words its message in the
     server's language, so whether the server's port accepts a plain connection
     tells a refused login (password, role or database) from no server at all.
+    Any other fault, a statement the server failed for another reason among
+    them, leaves the store unavailable.
     """
-    if isinstance(error, OperationalError) and _port_accepts(engine.url):
-        return DatabaseRefusedError(
-            RefusalReason.LOGIN_REFUSED, driver_error=driver_error_name(error)
-        )
-    return _not_answering(error)
+    driver_error = getattr(error, "orig", None)
+    server_answered = getattr(driver_error, "sqlstate", None) is not None
+    if isinstance(driver_error, (QueryCanceled, LockNotAvailable)):
+        reason = RefusalReason.STATEMENT_CANCELLED
+    elif server_answered or not isinstance(error, OperationalError):
+        reason = RefusalReason.STORE_UNAVAILABLE
+    elif _port_accepts(make_url(database_url)):
+        reason = RefusalReason.LOGIN_REFUSED
+    else:
+        reason = RefusalReason.NOT_ANSWERING
+    return DatabaseRefusedError(reason, driver_error=driver_error_name(error))
 
 
 def _port_accepts(url: URL) -> bool:
@@ -105,16 +113,19 @@ def migrate(engine: Engine) -> None:
     A database whose revision this release does not know was migrated by a
     newer release: it stays as it is. A migration drops a column only one
     release after its last reader, so a rollback by one release runs its
-    migration step and serves without harm. A database that does not answer,
-    or refuses the login, is refused.
+    migration step and serves without harm. A store fault is refused for the
+    reason `store_refusal` names.
     """
+    try:
+        _migrate(engine)
+    except SQLAlchemyError as error:
+        raise store_refusal(error, engine.url) from None
+
+
+def _migrate(engine: Engine) -> None:
     config = _config(MIGRATIONS_DIRECTORY)
     history = ScriptDirectory.from_config(config)
-    try:
-        connection = engine.connect()
-    except SQLAlchemyError as error:
-        raise _refused_at_connect(engine, error) from None
-    with connection:
+    with engine.connect() as connection:
         _hold(connection, MIGRATION_LOCK)
         try:
             if _is_from_a_newer_release(connection, history):
@@ -140,8 +151,8 @@ def serving_refusal(
 ) -> DatabaseRefusedError | None:
     """Why this release must not serve the database, or None when it may.
 
-    A database that does not answer, or refuses the login, is refused. So is
-    one with no revision row, which was never migrated, and one at a revision
+    A store fault is refused for the reason `store_refusal` names. So is a
+    database with no revision row, which was never migrated, and one at a revision
     of this release's own `history` other than its head, which an older
     release migrated: serving either would read tables or columns that may not
     exist. A revision this release does not know is a newer release's, which
@@ -150,14 +161,10 @@ def serving_refusal(
     says, which may quote the address the connection used.
     """
     try:
-        connection = engine.connect()
-    except SQLAlchemyError as error:
-        return _refused_at_connect(engine, error)
-    try:
-        with connection:
+        with engine.connect() as connection:
             held = set(MigrationContext.configure(connection).get_current_heads())
     except SQLAlchemyError as error:
-        return _not_answering(error)
+        return store_refusal(error, engine.url)
     if not held:
         return DatabaseRefusedError(RefusalReason.NO_REVISION)
     if history.get_current_head() in held or not held <= _known_revisions(history):

@@ -8,7 +8,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable, Generator, Mapping
+from collections.abc import Callable, Generator, Mapping, Sequence
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
 from http import HTTPStatus
@@ -375,3 +375,34 @@ def serving_presentator(
             yield app
         finally:
             app.stop()
+
+
+@dataclass(frozen=True, slots=True)
+class Ended:
+    """How one run of the installed `presentator` command ended."""
+
+    exit_code: int
+    output: str
+    errors: str
+
+
+def ended_presentator(
+    arguments: Sequence[str],
+    database_url: str,
+    directory: Path,
+    environment: Mapping[str, str] | None = None,
+) -> Ended:
+    """Run `presentator <arguments>` on `database_url` to its end, as deployed."""
+    finished = subprocess.run(  # noqa: S603 - the command is this repository's own
+        [str(_CONSOLE_ENTRY_POINT), *arguments],
+        env={
+            "PATH": os.environ["PATH"],
+            **_environment(database_url, directory, environment or {}),
+        },
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=_START_SECONDS,
+        check=False,
+    )
+    return Ended(finished.returncode, finished.stdout, finished.stderr)

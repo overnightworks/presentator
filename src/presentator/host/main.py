@@ -53,9 +53,9 @@ from presentator.adapters.postgres.migrate import (
     StoreFault,
     cap_alembic_logging,
     database_is_ready,
-    driver_error_name,
     migration_history,
     serving_refusal,
+    store_refusal,
 )
 from presentator.adapters.postgres.preferences import (
     PostgresInstanceSettingsStore,
@@ -129,6 +129,7 @@ from presentator.host.stopping_server import (
     StoppingServer,
     configure_logging,
     end_failed,
+    interrupt_ends_as_a_stop,
     served_config,
 )
 from presentator.host.store_connection import (
@@ -708,35 +709,47 @@ def main(
     """Migrate the database or unpin a host when asked to, else serve the lobby.
 
     Each runs on the configuration the environment carries. A refused
-    configuration ends any of them, a refused database a migration or a start,
-    and a statement the database fails any of them, in one line and exit
-    status 1.
+    configuration, or a store fault, ends any of them in one line and exit
+    status 1; a SIGINT ends it as a stop.
     """
     configure_logging(SERVICE_NAME)
     cap_alembic_logging()
+    with interrupt_ends_as_a_stop():
+        try:
+            asked = command_line().parse_args(arguments)
+            if asked.command == MIGRATE_COMMAND:
+                migrate_the_database()
+                return
+            if asked.command == UNPIN_HOST_COMMAND:
+                unpin_the_host(asked.host)
+                return
+            _log.info("process.started")
+            settings = load_settings()
+            instance = _instance_or_refused(
+                settings, relying_party_for, migrations_directory
+            )
+        except DatabaseRefusedError as refused:
+            driver_error = refused.driver_error
+            codes = {} if driver_error is None else {"error_type": driver_error}
+            end_failed(refused.reason, **codes)
+        except ConfigurationError as refused:
+            # The settings by their variables; the message may name a path.
+            end_failed(
+                ServerReason.CONFIGURATION_REFUSED, setting=",".join(refused.variables)
+            )
+        asyncio.run(_serve(instance, settings))
+
+
+def _instance_or_refused(
+    settings: Settings,
+    relying_party_for: RelyingPartyFor,
+    migrations_directory: Path,
+) -> Instance:
+    """The instance, or the refusal a store fault while building it names."""
     try:
-        asked = command_line().parse_args(arguments)
-        if asked.command == MIGRATE_COMMAND:
-            migrate_the_database()
-            return
-        if asked.command == UNPIN_HOST_COMMAND:
-            unpin_the_host(asked.host)
-            return
-        _log.info("process.started")
-        settings = load_settings()
-        instance = build_instance(settings, relying_party_for, migrations_directory)
-    except DatabaseRefusedError as refused:
-        driver_error = refused.driver_error
-        codes = {} if driver_error is None else {"error_type": driver_error}
-        end_failed(refused.reason, **codes)
-    except ConfigurationError as refused:
-        # The settings by their variables; the message may name a path.
-        end_failed(
-            ServerReason.CONFIGURATION_REFUSED, setting=",".join(refused.variables)
-        )
+        return build_instance(settings, relying_party_for, migrations_directory)
     except StoreFault as fault:
-        end_failed(ServerReason.STORE_UNAVAILABLE, error_type=driver_error_name(fault))
-    asyncio.run(_serve(instance, settings))
+        raise store_refusal(fault, settings.postgres.url) from None
 
 
 def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddleware:
