@@ -458,9 +458,9 @@ class RecordingLimiter(FakeAskLimiter):
         super().__init__()
         self.session_ids: list[str] = []
 
-    def admit(self, session_id: str) -> FakeAskTicket | RetryAfter:
+    async def admit(self, session_id: str) -> FakeAskTicket | RetryAfter:
         self.session_ids.append(session_id)
-        return super().admit(session_id)
+        return await super().admit(session_id)
 
 
 class RecordingLogs(logging.Handler):

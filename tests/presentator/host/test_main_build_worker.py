@@ -13,6 +13,7 @@ from presentator.adapters.toolchain_identity import toolchain_identity_of
 from presentator.contracts.models import Role, User
 from presentator.host import main
 from presentator.host.config import load_settings
+from presentator.host.deck_toolchain import build_bound_of, the_build_worker
 from presentator.host.environment import ConfigurationError
 from presentator.host.worker_serving import emergency_end
 from tests.support.git_remote import GitRemote
@@ -52,7 +53,7 @@ def test_an_instance_starts_with_no_worker_answering_and_holds_the_workers_bound
     settings = load_settings()
 
     main.build_instance(settings)
-    toolchain = main.the_build_worker(settings, bound=main.build_bound_of(settings))
+    toolchain = the_build_worker(settings, bound=build_bound_of(settings))
 
     assert (toolchain.host, toolchain.port) == ("build-worker", 7100)
     assert toolchain.key == KEY
@@ -66,7 +67,7 @@ def test_the_instances_worker_client_reads_and_waits_on_the_process_monotonic_cl
 ) -> None:
     a_worker_run(environment, key_file)
     settings = load_settings()
-    client = main.the_build_worker(settings, bound=main.build_bound_of(settings))
+    client = the_build_worker(settings, bound=build_bound_of(settings))
     client_time = client.time
     a_short_wait = 0.001
 
@@ -115,10 +116,10 @@ def test_an_address_that_is_not_a_host_and_a_port_refuses_to_start(
 @pytest.mark.usefixtures("environment")
 def test_a_host_run_that_names_no_worker_has_no_worker_link() -> None:
     settings = load_settings()
-    bound = main.build_bound_of(settings)
+    bound = build_bound_of(settings)
 
     with pytest.raises(ConfigurationError, match="build_worker_address"):
-        main.the_build_worker(settings, bound=bound)
+        the_build_worker(settings, bound=bound)
 
 
 @pytest.mark.usefixtures("served_database")

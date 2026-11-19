@@ -72,19 +72,23 @@ def test_leaving_the_lifespan_stops_the_chores_before_it_closes_the_instance() -
             interval=timedelta(0),
         )
 
+    async def an_aclose() -> None:
+        happened.append("aclosed")
+
     instance = Instance(
         lobby=FastAPI(),
         talk=FastAPI(),
         poller=a_schedule(ChoreCode.SOURCE_POLL),
         session_sweep=a_schedule(ChoreCode.SESSION_SWEEP),
         close=lambda: happened.append("closed"),
+        aclose=an_aclose,
     )
 
     with TestClient(served_by_host(instance, a_settings())):
         assert all(each.wait(PATIENCE.total_seconds()) for each in ran.values())
 
-    assert set(happened[:-1]) == set(ChoreCode)
-    assert happened[-1] == "closed"
+    assert set(happened[:-2]) == set(ChoreCode)
+    assert set(happened[-2:]) == {"aclosed", "closed"}
 
 
 def _wait_until_a_statement_waits(engine: Engine, waiting: TextClause) -> None:

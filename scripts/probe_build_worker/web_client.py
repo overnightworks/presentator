@@ -31,7 +31,8 @@ from presentator.contracts.decks import (
     StepKind,
 )
 from presentator.host.config import load_settings
-from presentator.host.main import SERVICE_NAME, build_bound_of, the_build_worker
+from presentator.host.deck_toolchain import build_bound_of, the_build_worker
+from presentator.host.main import SERVICE_NAME
 
 HELLO_DECK = "hello-deck"
 SLUG = "hello"

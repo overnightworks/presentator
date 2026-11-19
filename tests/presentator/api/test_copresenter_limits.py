@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from presentator.agent.backend import gateway_answerer
 from presentator.api.copresenter import (
@@ -18,7 +19,7 @@ from presentator.api.copresenter import (
     CoPresenterSurface,
     add_copresenter_routes,
 )
-from presentator.contracts.copresenter import DeckText, RetryAfter
+from presentator.contracts.copresenter import DeckText
 from presentator.contracts.models import Role, User
 from tests.presentator.agent.support.transports import HeldTransport
 from tests.presentator.application.support.ask_leases import (
@@ -27,6 +28,7 @@ from tests.presentator.application.support.ask_leases import (
     UnavailableAskLimiter,
 )
 from tests.presentator.application.support.fakes import (
+    FakeDeckStore,
     FakeSessionRecordStore,
     FakeUserStore,
     FrozenClock,
@@ -39,6 +41,7 @@ from tests.support.copresenter_support import (
     SPOKEN_QUESTION,
     TALK_ORIGIN,
     PrivateFakes,
+    RecordingLimiter,
     a_copresenter_talk_host,
     a_use,
     ask,
@@ -58,7 +61,8 @@ if TYPE_CHECKING:
     from httpx2 import Response
     from starlette.types import ASGIApp, Message, Scope
 
-    from presentator.ports.copresenter import AskLimiter, AskTicket
+    from presentator.contracts.decks import Deck
+    from presentator.ports.copresenter import AskLimiter
 
 
 @pytest.mark.parametrize(
@@ -217,7 +221,10 @@ def test_a_disconnect_before_the_answer_streams_still_frees_the_session() -> Non
     asyncio.run(_ask_and_disconnect_before_the_body_is_sent(app))
 
     assert private.answers.messages == []
-    assert isinstance(limiter.admit(FixedSession().session_id), FakeAskTicket)
+    assert limiter.freed == [FixedSession().session_id]
+    assert isinstance(
+        asyncio.run(limiter.admit(FixedSession().session_id)), FakeAskTicket
+    )
 
 
 async def _ask_and_disconnect_before_the_body_is_sent(app: ASGIApp) -> None:
@@ -257,15 +264,16 @@ async def _ask_and_disconnect_before_the_body_is_sent(app: ASGIApp) -> None:
 def _a_hanging_app(
     gateway: HeldTransport,
     limiter: AskLimiter,
-    admission: Callable[[object], FixedSession],
+    admission: Callable[[object], FixedSession | None],
     fakes: PrivateFakes | None = None,
+    decks: FakeDeckStore | None = None,
 ) -> FastAPI:
     app = FastAPI()
     add_copresenter_routes(
         app,
         surface=CoPresenterSurface(
             use=replace(
-                a_use(fakes or PrivateFakes(), the_admins_decks()),
+                a_use(fakes or PrivateFakes(), decks or the_admins_decks()),
                 answers=gateway_answerer(
                     an_agent_config(),
                     a_relying_party(FrozenClock(instant=NOW)),
@@ -294,11 +302,27 @@ def test_a_browser_that_leaves_mid_answer_closes_the_backend_and_calls_no_more()
 
     assert gateway.cancelled
     assert len(gateway.requests) == 1
-    assert isinstance(limiter.admit(FixedSession().session_id), FakeAskTicket)
+    assert limiter.freed == [FixedSession().session_id]
+    assert isinstance(
+        asyncio.run(limiter.admit(FixedSession().session_id)), FakeAskTicket
+    )
 
 
-def test_the_admission_runs_off_the_event_loop_thread() -> None:
-    """Decision 5: the session read of the admission belongs to the thread hop."""
+@dataclass
+class _DecksReadOnThreads(FakeDeckStore):
+    """The admin's decks, noting the thread each deck is read on."""
+
+    read_on: list[int] = field(default_factory=list[int])
+
+    def get(self, slug: str) -> Deck | None:
+        self.read_on.append(threading.get_ident())
+        return super().get(slug)
+
+
+def test_the_auth_and_deck_lookup_of_the_admission_run_off_the_event_loop_thread() -> (
+    None
+):
+    """The session and deck reads block on their stores, so they belong to the hop."""
     admitted_on: list[int] = []
 
     def admission(_connection: object) -> FixedSession:
@@ -306,59 +330,35 @@ def test_the_admission_runs_off_the_event_loop_thread() -> None:
         return FixedSession()
 
     gateway = HeldTransport()
-    app = _a_hanging_app(gateway, FakeAskLimiter(), admission)
+    decks = _DecksReadOnThreads(kept=the_admins_decks().kept)
+    fakes = PrivateFakes()
+    app = _a_hanging_app(gateway, FakeAskLimiter(), admission, fakes, decks)
 
     asyncio.run(_ask_and_leave_while_the_gateway_holds(app, gateway))
 
     assert admitted_on
-    assert threading.get_ident() not in admitted_on
-
-
-@dataclass
-class _ThreadRecordingLimiter:
-    """The in-memory lease, noting the thread each release runs on."""
-
-    released_on: list[int] = field(default_factory=list[int])
-    _inner: FakeAskLimiter = field(default_factory=FakeAskLimiter)
-
-    def admit(self, session_id: str) -> AskTicket | RetryAfter:
-        admitted = self._inner.admit(session_id)
-        if isinstance(admitted, RetryAfter):
-            return admitted
-        return _RecordingTicket(admitted, self.released_on)
-
-
-@dataclass(frozen=True)
-class _RecordingTicket:
-    _inner: FakeAskTicket
-    _released_on: list[int]
-
-    @property
-    def session_id(self) -> str:
-        return self._inner.session_id
-
-    def release(self) -> None:
-        self._released_on.append(threading.get_ident())
-        self._inner.release()
+    assert decks.read_on
+    assert threading.get_ident() not in [*admitted_on, *decks.read_on]
 
 
 @pytest.mark.parametrize(
-    "person_access_unavailable", [False, True], ids=["streams", "never-streams"]
+    ("session", "deck", "status"),
+    [
+        (None, A_DECK, HTTPStatus.UNAUTHORIZED),
+        (FixedSession(), "not-a-deck", HTTPStatus.NOT_FOUND),
+    ],
+    ids=["not-signed-in", "unknown-deck"],
 )
-def test_the_release_of_an_ask_runs_off_the_event_loop_thread(
-    *, person_access_unavailable: bool
+def test_a_refused_auth_or_deck_never_asks_the_limiter(
+    session: FixedSession | None, deck: str, status: HTTPStatus
 ) -> None:
-    """The release asks the shared Redis, which holds its thread while it is slow."""
-    gateway = HeldTransport()
-    limiter = _ThreadRecordingLimiter()
-    fakes = PrivateFakes()
-    fakes.person_access.unavailable = person_access_unavailable
-    app = _a_hanging_app(gateway, limiter, lambda _connection: FixedSession(), fakes)
+    limiter = RecordingLimiter()
+    app = _a_hanging_app(HeldTransport(), limiter, lambda _connection: session)
 
-    asyncio.run(_ask_and_leave_while_the_gateway_holds(app, gateway))
+    response = TestClient(app).post(ASK, json={**QUESTION, "deck": deck})
 
-    assert limiter.released_on
-    assert threading.get_ident() not in limiter.released_on
+    assert response.status_code == status
+    assert limiter.session_ids == []
 
 
 def test_an_answer_that_outruns_the_deadline_ends_visibly_and_frees_the_lease() -> None:
@@ -376,6 +376,7 @@ def test_an_answer_that_outruns_the_deadline_ends_visibly_and_frees_the_lease() 
     assert outrun.status_code == HTTPStatus.OK
     assert "event: error" in outrun.text
     assert "event: done" in next_answer.text
+    assert len(limiter.freed) == len([outrun, next_answer])
 
 
 async def _ask_and_leave_while_the_gateway_holds(
@@ -459,7 +460,10 @@ def test_a_send_that_stalls_past_the_deadline_ends_with_the_failure_and_frees_le
     assert body.count("event: error") == 1
     assert private.answers.exits == 1
     assert private.answers.reader_closed
-    assert isinstance(limiter.admit(FixedSession().session_id), FakeAskTicket)
+    assert limiter.freed == [FixedSession().session_id]
+    assert isinstance(
+        asyncio.run(limiter.admit(FixedSession().session_id)), FakeAskTicket
+    )
 
 
 async def _ask_while_the_first_send_outlasts_the_deadline(

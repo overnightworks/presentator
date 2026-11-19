@@ -1,17 +1,19 @@
 """The Redis every pod shares holds the ask lease and the request budgets."""
 
+import asyncio
 import socket
-from collections.abc import Callable, Iterator
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import AsyncGenerator, Callable, Iterator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
-from threading import Barrier, Thread
+from datetime import timedelta
+from threading import Thread
 
 import pytest
 from pydantic import SecretStr
 from redis import Redis
 
 from presentator.adapters.shared_redis import (
-    KEY_ROOT,
+    KEY_PREFIX,
     RateLimitedHost,
     SharedRedis,
 )
@@ -20,7 +22,8 @@ from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
     RetryAfter,
 )
-from presentator.ports.copresenter import AskLimiter
+from presentator.ports.copresenter import AskLimiter, AskTicket
+from tests.presentator.agent.support.driving import on_an_event_loop
 from tests.presentator.application.support.ask_leases import FakeAskLimiter
 from tests.support.redis import (
     NOTHING_LISTENS_HERE,
@@ -30,11 +33,10 @@ from tests.support.redis import (
     stored_keys,
 )
 
-_THREADS = 8
+_SIMULTANEOUS_ASKS = 8
 _A_SESSION = "session"
 _ANOTHER_SESSION = "another-session"
-_LEASE_SECONDS = 120
-_MILLISECONDS = 1000
+_LASTS = timedelta(seconds=120)
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +45,22 @@ class Lease:
 
     limiter: AskLimiter
     expire_every_lease: Callable[[], None]
+
+
+@asynccontextmanager
+async def _shared(url: str) -> AsyncGenerator[SharedRedis]:
+    redis = SharedRedis(url)
+    try:
+        yield redis
+    finally:
+        await redis.aclose()
+        redis.close()
+
+
+async def _admitted(limiter: AskLimiter, session_id: str) -> AskTicket:
+    ticket = await limiter.admit(session_id)
+    assert not isinstance(ticket, RetryAfter)
+    return ticket
 
 
 @pytest.fixture
@@ -58,130 +76,165 @@ def server(redis_url: str) -> Iterator[Redis]:
         yield redis
 
 
+type LeaseOf = Callable[[], AbstractAsyncContextManager[Lease]]
+
+
 @pytest.fixture(params=["in memory", "redis"])
-def lease(request: pytest.FixtureRequest) -> Iterator[Lease]:
+def lease_of(request: pytest.FixtureRequest) -> LeaseOf:
     """The in-memory double and the Redis adapter, which one contract holds for."""
     if request.param == "in memory":
-        limiter = FakeAskLimiter()
-        yield Lease(limiter, limiter.lose_every_lease)
-        return
-    shared: SharedRedis = request.getfixturevalue("shared")
+
+        @asynccontextmanager
+        async def in_memory() -> AsyncGenerator[Lease]:
+            limiter = FakeAskLimiter()
+            yield Lease(limiter, limiter.lose_every_lease)
+
+        return in_memory
+
+    redis_url: str = request.getfixturevalue("redis_url")
     server: Redis = request.getfixturevalue("server")
-    yield Lease(shared.ask_limiter(lease_seconds=_LEASE_SECONDS), lambda: empty(server))
+
+    @asynccontextmanager
+    async def in_redis() -> AsyncGenerator[Lease]:
+        async with _shared(redis_url) as shared:
+            yield Lease(shared.ask_limiter(lasts=_LASTS), lambda: empty(server))
+
+    return in_redis
 
 
-def test_a_session_whose_answer_is_running_is_told_when_to_retry(
-    lease: Lease,
+@on_an_event_loop
+async def test_a_session_whose_answer_is_running_is_told_when_to_retry(
+    lease_of: LeaseOf,
 ) -> None:
-    lease.limiter.admit(_A_SESSION)
+    async with lease_of() as lease:
+        await lease.limiter.admit(_A_SESSION)
 
-    assert lease.limiter.admit(_A_SESSION) == RetryAfter(BUSY_RETRY_SECONDS)
+        assert await lease.limiter.admit(_A_SESSION) == RetryAfter(BUSY_RETRY_SECONDS)
 
 
-def test_a_session_is_admitted_again_once_its_ticket_is_released(
-    lease: Lease,
+@on_an_event_loop
+async def test_a_session_is_admitted_again_once_its_ticket_is_released(
+    lease_of: LeaseOf,
 ) -> None:
-    ticket = lease.limiter.admit(_A_SESSION)
-    assert not isinstance(ticket, RetryAfter)
+    async with lease_of() as lease:
+        ticket = await _admitted(lease.limiter, _A_SESSION)
 
-    ticket.release()
+        await ticket.release()
 
-    assert not isinstance(lease.limiter.admit(_A_SESSION), RetryAfter)
-
-
-def test_one_session_answering_leaves_another_free(lease: Lease) -> None:
-    lease.limiter.admit(_A_SESSION)
-
-    assert not isinstance(lease.limiter.admit(_ANOTHER_SESSION), RetryAfter)
+        assert not isinstance(await lease.limiter.admit(_A_SESSION), RetryAfter)
 
 
-def test_a_session_whose_lease_ran_out_is_admitted_again(lease: Lease) -> None:
-    lease.limiter.admit(_A_SESSION)
+@on_an_event_loop
+async def test_one_session_answering_leaves_another_free(lease_of: LeaseOf) -> None:
+    async with lease_of() as lease:
+        await lease.limiter.admit(_A_SESSION)
 
-    lease.expire_every_lease()
-
-    assert not isinstance(lease.limiter.admit(_A_SESSION), RetryAfter)
+        assert not isinstance(await lease.limiter.admit(_ANOTHER_SESSION), RetryAfter)
 
 
-def test_a_released_old_ticket_cannot_free_the_lease_of_a_newer_answer(
-    lease: Lease,
+@on_an_event_loop
+async def test_a_session_whose_lease_ran_out_is_admitted_again(
+    lease_of: LeaseOf,
 ) -> None:
-    old = lease.limiter.admit(_A_SESSION)
-    assert not isinstance(old, RetryAfter)
-    lease.expire_every_lease()
-    lease.limiter.admit(_A_SESSION)
+    async with lease_of() as lease:
+        await lease.limiter.admit(_A_SESSION)
 
-    old.release()
-    old.release()
+        lease.expire_every_lease()
 
-    assert lease.limiter.admit(_A_SESSION) == RetryAfter(BUSY_RETRY_SECONDS)
+        assert not isinstance(await lease.limiter.admit(_A_SESSION), RetryAfter)
 
 
-def test_more_than_twenty_questions_in_a_row_are_admitted(lease: Lease) -> None:
-    for _ in range(21):
-        ticket = lease.limiter.admit(_A_SESSION)
-        assert not isinstance(ticket, RetryAfter)
-        ticket.release()
-
-
-def test_simultaneous_asks_of_one_session_on_many_threads_admit_exactly_one(
-    lease: Lease,
+@on_an_event_loop
+async def test_a_released_old_ticket_cannot_free_the_lease_of_a_newer_answer(
+    lease_of: LeaseOf,
 ) -> None:
-    start = Barrier(_THREADS)
+    async with lease_of() as lease:
+        old = await _admitted(lease.limiter, _A_SESSION)
+        lease.expire_every_lease()
+        await lease.limiter.admit(_A_SESSION)
 
-    def ask() -> object:
-        start.wait()
-        return lease.limiter.admit(_A_SESSION)
+        await old.release()
 
-    with ThreadPoolExecutor(max_workers=_THREADS) as pool:
-        outcomes = [
-            future.result() for future in [pool.submit(ask) for _ in range(_THREADS)]
-        ]
+        assert await lease.limiter.admit(_A_SESSION) == RetryAfter(BUSY_RETRY_SECONDS)
+
+
+@on_an_event_loop
+async def test_a_second_release_of_one_ticket_does_nothing(
+    lease_of: LeaseOf,
+) -> None:
+    async with lease_of() as lease:
+        first = await _admitted(lease.limiter, _A_SESSION)
+        await first.release()
+        await lease.limiter.admit(_A_SESSION)
+
+        await first.release()
+
+        assert await lease.limiter.admit(_A_SESSION) == RetryAfter(BUSY_RETRY_SECONDS)
+
+
+@on_an_event_loop
+async def test_more_than_twenty_questions_in_a_row_are_admitted(
+    lease_of: LeaseOf,
+) -> None:
+    async with lease_of() as lease:
+        for _ in range(21):
+            ticket = await _admitted(lease.limiter, _A_SESSION)
+            await ticket.release()
+
+
+@on_an_event_loop
+async def test_simultaneous_asks_of_one_session_as_tasks_admit_exactly_one(
+    lease_of: LeaseOf,
+) -> None:
+    async with lease_of() as lease:
+        outcomes = await asyncio.gather(
+            *(lease.limiter.admit(_A_SESSION) for _ in range(_SIMULTANEOUS_ASKS))
+        )
 
     refused = [outcome for outcome in outcomes if isinstance(outcome, RetryAfter)]
-    assert len(refused) == _THREADS - 1
+    assert len(refused) == _SIMULTANEOUS_ASKS - 1
 
 
-def test_a_lease_taken_by_one_pod_refuses_the_session_at_another(
-    redis_url: str, shared: SharedRedis
+@on_an_event_loop
+async def test_a_lease_taken_by_one_pod_refuses_the_session_at_another(
+    redis_url: str,
 ) -> None:
-    other_pod = SharedRedis(redis_url)
-    try:
-        shared.ask_limiter(lease_seconds=_LEASE_SECONDS).admit(_A_SESSION)
+    async with _shared(redis_url) as shared, _shared(redis_url) as other_pod:
+        await shared.ask_limiter(lasts=_LASTS).admit(_A_SESSION)
 
-        refused = other_pod.ask_limiter(lease_seconds=_LEASE_SECONDS).admit(_A_SESSION)
-    finally:
-        other_pod.close()
+        refused = await other_pod.ask_limiter(lasts=_LASTS).admit(_A_SESSION)
 
     assert refused == RetryAfter(BUSY_RETRY_SECONDS)
 
 
-def test_a_running_answers_lease_has_a_bounded_life_and_an_ended_one_leaves_no_key(
-    shared: SharedRedis, server: Redis
+@on_an_event_loop
+async def test_a_running_hold_has_a_bounded_life_and_an_ended_one_leaves_no_key(
+    redis_url: str, server: Redis
 ) -> None:
-    limiter = shared.ask_limiter(lease_seconds=_LEASE_SECONDS)
-    ended = limiter.admit(_A_SESSION)
-    assert not isinstance(ended, RetryAfter)
-    running = limiter.admit(_ANOTHER_SESSION)
-    assert not isinstance(running, RetryAfter)
+    async with _shared(redis_url) as shared:
+        limiter = shared.ask_limiter(lasts=_LASTS)
+        ended = await _admitted(limiter, _A_SESSION)
+        running = await _admitted(limiter, _ANOTHER_SESSION)
 
-    ended.release()
+        await ended.release()
 
-    (key,) = stored_keys(server)
-    assert 0 < server.pttl(key) <= _LEASE_SECONDS * _MILLISECONDS
+        (key,) = stored_keys(server)
+        assert 0 < server.pttl(key) <= _LASTS // timedelta(milliseconds=1)
+        await running.release()
+        assert stored_keys(server) == []
 
 
-def test_every_key_starts_with_the_versioned_root(
-    shared: SharedRedis, server: Redis
+@on_an_event_loop
+async def test_every_key_starts_with_the_app_prefix(
+    redis_url: str, server: Redis
 ) -> None:
-    shared.ask_limiter(lease_seconds=_LEASE_SECONDS).admit(_A_SESSION)
-    for host in RateLimitedHost:
-        shared.rate_limits(host).is_allowed("client", limit=5, window_seconds=60)
+    async with _shared(redis_url) as shared:
+        await shared.ask_limiter(lasts=_LASTS).admit(_A_SESSION)
+        for host in RateLimitedHost:
+            shared.rate_limits(host).is_allowed("client", limit=5, window_seconds=60)
 
-    keys = stored_keys(server)
-
-    assert len(keys) == 1 + len(RateLimitedHost)
-    assert all(key.startswith(f"{KEY_ROOT}:") for key in keys)
+    assert all(key.startswith(f"{KEY_PREFIX}:") for key in stored_keys(server))
+    assert len(stored_keys(server)) == 1 + len(RateLimitedHost)
 
 
 def test_a_budget_spent_through_one_pod_is_refused_at_another_for_the_same_host(
@@ -208,17 +261,13 @@ def test_a_redis_that_answers_is_ready(shared: SharedRedis) -> None:
     assert shared.is_ready()
 
 
-def test_a_redis_that_cannot_be_reached_is_not_ready_and_cannot_tell_the_lease() -> (
-    None
-):
-    redis = SharedRedis(NOTHING_LISTENS_HERE)
-    try:
+@on_an_event_loop
+async def test_an_unreachable_redis_is_not_ready_and_cannot_tell_the_lease() -> None:
+    async with _shared(NOTHING_LISTENS_HERE) as redis:
         ready = redis.is_ready()
-        limiter = redis.ask_limiter(lease_seconds=_LEASE_SECONDS)
+        limiter = redis.ask_limiter(lasts=_LASTS)
         with pytest.raises(CoPresenterUnavailableError):
-            limiter.admit(_A_SESSION)
-    finally:
-        redis.close()
+            await limiter.admit(_A_SESSION)
 
     assert not ready
 
@@ -253,19 +302,16 @@ def test_the_password_is_sent_to_the_server_on_connect(*, in_the_url: bool) -> N
     assert password.encode() in received[0]
 
 
-def test_a_ticket_released_while_redis_is_out_raises_nothing(
+@on_an_event_loop
+async def test_a_ticket_released_while_redis_is_out_raises_nothing(
     redis_url: str,
 ) -> None:
     with relay_in_front_of(redis_url) as hop:
-        redis = SharedRedis(hop.url)
-        try:
-            ticket = redis.ask_limiter(lease_seconds=_LEASE_SECONDS).admit(_A_SESSION)
-            assert not isinstance(ticket, RetryAfter)
+        async with _shared(hop.url) as redis:
+            ticket = await _admitted(redis.ask_limiter(lasts=_LASTS), _A_SESSION)
             hop.sever()
 
-            ticket.release()
+            await ticket.release()
             ready = redis.is_ready()
-        finally:
-            redis.close()
 
     assert not ready

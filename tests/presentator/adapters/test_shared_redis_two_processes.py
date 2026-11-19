@@ -13,11 +13,12 @@ from tests.presentator.adapters.support.ask_lease_process import (
     FINISH_PATH,
     HEALTH_PATH,
     LEASE_VARIABLE,
+    SESSION,
     URL_VARIABLE,
 )
 from tests.presentator.host.support.app_processes import two_free_ports
 from tests.support.copresenter_support import ASK, QUESTION
-from tests.support.log_lines import json_lines_among
+from tests.support.log_lines import LogLine, json_lines_among
 from tests.support.redis import relay_in_front_of
 from tests.support.two_processes import TwoProcesses, two_modules
 
@@ -91,10 +92,13 @@ def _output_of(processes: TwoProcesses) -> str:
     return "".join(written)
 
 
-def _failures_of(written: str, event: str) -> list[str]:
-    """The `error_type` of each line of that event, which names a class alone."""
-    lines = [line for line in json_lines_among(written) if line["event"] == event]
-    return [str(line["error_type"]) for line in lines]
+def _failed_lines_of(written: str, event: str) -> list[LogLine]:
+    """Each line of that event whose `outcome` is `failed`."""
+    return [
+        line
+        for line in json_lines_among(written)
+        if line["event"] == event and line["outcome"] == "failed"
+    ]
 
 
 def test_the_other_process_answers_once_the_streaming_one_ends(
@@ -156,8 +160,11 @@ def test_an_ask_while_redis_cannot_be_reached_is_refused_visibly_and_leaks_nothi
         HTTPStatus.SERVICE_UNAVAILABLE
     ] * 2
     assert not [each for each in refused if authority in each.text]
-    assert _failures_of(written, "ask_lease.failed")[0].isidentifier()
+    failed_takes = _failed_lines_of(written, "slot_take.ended")
+    assert len(failed_takes) == len(refused)
+    assert all(str(each["error_type"]).isidentifier() for each in failed_takes)
     assert authority not in written
+    assert SESSION not in written
 
 
 def test_an_answer_finishing_while_redis_is_out_ends_whole_and_leaks_nothing(
@@ -185,5 +192,7 @@ def test_an_answer_finishing_while_redis_is_out_ends_whole_and_leaks_nothing(
 
     assert "event: done" in body
     assert authority not in body
-    assert _failures_of(written, "ask_lease_release.failed")[0].isidentifier()
+    (failed_release,) = _failed_lines_of(written, "slot_release.ended")
+    assert str(failed_release["error_type"]).isidentifier()
     assert authority not in written
+    assert SESSION not in written

@@ -7,7 +7,7 @@ adapter satisfies which port.
 import asyncio
 import copy
 import logging
-from collections.abc import AsyncGenerator, Callable, Sequence
+from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
@@ -28,10 +28,7 @@ from webauth.proxies import TrustedProxies
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.build_cache import BuildCache
-from presentator.adapters.build_worker import WorkerToolchain
 from presentator.adapters.builds import (
-    DeckToolchain,
-    HostToolchain,
     PackageJsonThemes,
     SlidevBuilds,
 )
@@ -80,7 +77,6 @@ from presentator.adapters.sentences import split_sentences
 from presentator.adapters.session_access import SessionAccess
 from presentator.adapters.shared_redis import RateLimitedHost, SharedRedis
 from presentator.adapters.speech import SpeechHearing, SpeechSpeaking
-from presentator.adapters.toolchain_identity import toolchain_identity_of
 from presentator.agent.backend import gateway_answerer
 from presentator.agent.mcp import install_mcp_front
 from presentator.api.auth import (
@@ -110,7 +106,12 @@ from presentator.host.command_line import (
     read_the_command_line,
     unpin_the_host,
 )
-from presentator.host.config import Settings, WhereBuildsRun, load_settings
+from presentator.host.config import Settings, load_settings
+from presentator.host.deck_toolchain import (
+    build_bound_of,
+    identity_of_the_toolchain,
+    what_builds_a_deck,
+)
 from presentator.host.environment import ConfigurationError, cannot_start, variable_of
 from presentator.host.lifecycle import (
     ServerReason,
@@ -135,7 +136,6 @@ from presentator.host.store_connection import (
     reach_redis,
     timed_connection,
 )
-from presentator.host.worker_serving import emergency_end
 from presentator.ports.copresenter import AskLimiter, DeckTexts
 from presentator.ports.decks import (
     DeckStore,
@@ -160,10 +160,14 @@ def _nothing_to_close() -> None:
     """What an instance built without stores holds open: nothing."""
 
 
+async def _nothing_to_aclose() -> None:
+    """What an instance built without Redis holds open on the event loop: nothing."""
+
+
 # The files boto3 reads the object store's key and configuration from.
 _OBJECT_STORE_FILES: Final = ("AWS_SHARED_CREDENTIALS_FILE", "AWS_CONFIG_FILE")
 # The wait between taking the lease and the answer's clock starting, so the lease
-# outlives the whole answer.
+# outlives the whole answer. It feeds the hold's `lasts`.
 ASK_LEASE_MARGIN_SECONDS: Final = 30
 
 
@@ -176,6 +180,7 @@ class Instance:
     poller: Schedule
     session_sweep: Schedule
     close: Callable[[], None] = _nothing_to_close
+    aclose: Callable[[], Awaitable[None]] = _nothing_to_aclose
     stopping: Stopping = field(default_factory=Stopping)
 
 
@@ -211,7 +216,7 @@ def build_instance(
     shell = _lobby_shell(settings)
     redis = SharedRedis(settings.redis_url.get_secret_value(), settings.redis_password)
     reach_redis(redis)
-    toolchain = _identity_of_the_toolchain(settings)
+    toolchain = identity_of_the_toolchain(settings)
     stopping = Stopping()
     stores = _with_redis(_stores(settings, migrations_directory, toolchain), redis)
     stores = copy.replace(stores, readiness=stopping.unready(stores.readiness))
@@ -248,6 +253,7 @@ def build_instance(
             poller=_poller(settings, decks),
             session_sweep=_session_sweep(stores.sessions, SystemClock()),
             close=stores.close,
+            aclose=redis.aclose,
             stopping=stopping,
         )
     except BaseException:
@@ -453,7 +459,7 @@ def _decks(
         builder=SlidevBuilds(
             cache=cache,
             identity=toolchain,
-            toolchain=_what_builds_a_deck(settings, bound=build_bound),
+            toolchain=what_builds_a_deck(settings, bound=build_bound),
             mirrors=mirrors,
             output_megabytes=settings.build_output_megabytes,
         ),
@@ -538,7 +544,9 @@ def _copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands
 
 def ask_limiter_of(redis: SharedRedis, *, deadline_seconds: float) -> AskLimiter:
     """The ask lease: the answer's deadline plus a margin, never renewed."""
-    return redis.ask_limiter(lease_seconds=deadline_seconds + ASK_LEASE_MARGIN_SECONDS)
+    return redis.ask_limiter(
+        lasts=timedelta(seconds=deadline_seconds + ASK_LEASE_MARGIN_SECONDS)
+    )
 
 
 def _lobby_private(settings: Settings, stores: Stores, decks: Decks) -> LobbyPrivate:
@@ -624,48 +632,6 @@ def _session_sweep(
         chore=lambda: sessions.delete_expired(clock.now()),
         chore_code=ChoreCode.SESSION_SWEEP,
         interval=SESSION_SWEEP_INTERVAL,
-    )
-
-
-def _identity_of_the_toolchain(settings: Settings) -> ToolchainIdentity:
-    """The identity of this web's own toolchain project, or a refusal to start.
-
-    Computed once, for the worker runner and the host runner alike: both build
-    from the project this instance carries.
-    """
-    try:
-        return toolchain_identity_of(settings.toolchain)
-    except OSError as unreadable:
-        setting = variable_of("toolchain")
-        reason = f"{setting}: the project cannot be read: {unreadable}"
-        raise cannot_start(reason, variables=(setting,)) from None
-
-
-def _what_builds_a_deck(settings: Settings, *, bound: timedelta) -> DeckToolchain:
-    """The sealed build worker, or this machine's own toolchain project.
-
-    A deck is code (line 14a), so a build runs in the worker unless this
-    deployment asked in as many words for the development run.
-    """
-    if settings.build_runner is WhereBuildsRun.HOST:
-        return HostToolchain(project=settings.toolchain, bound=bound)
-    return the_build_worker(settings, bound=bound)
-
-
-def build_bound_of(settings: Settings) -> timedelta:
-    """The one bound of a build step, shared by every runner and the probe."""
-    return timedelta(seconds=settings.build_timeout_seconds)
-
-
-def the_build_worker(settings: Settings, *, bound: timedelta) -> WorkerToolchain:
-    """The client of the sealed build workers; no worker has to answer to start."""
-    link = settings.build_worker
-    return WorkerToolchain(
-        host=link.host,
-        port=link.port,
-        key=link.key.get_secret_value().encode(),
-        megabytes=settings.build_output_megabytes,
-        reply_bound_seconds=emergency_end(0.0, bound.total_seconds()),
     )
 
 
@@ -772,7 +738,10 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
             ):
                 yield
         finally:
-            instance.close()
+            try:
+                await instance.aclose()
+            finally:
+                instance.close()
 
     return RequestLineMiddleware(
         Router(
