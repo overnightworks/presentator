@@ -33,10 +33,15 @@ from presentator.contracts.copresenter import RetryAfter
 from presentator.contracts.decks import Build, BuildRun, Deck
 from tests.presentator.agent.support.transports import HeldTransport, RefusingTransport
 from tests.support.copresenter_support import (
+    A_DECK_WORDS,
     A_SOURCE,
+    ACCESS,
     ADMIN_GROUPS,
+    API_MEMBER_GROUPS,
     ASK,
-    LEAK_SCENARIOS,
+    REFRESH,
+    REPLY_BODY,
+    ROTATED,
     SPOKEN_QUESTION,
     THE_ASKED_DECK,
     TWO_SENTENCES,
@@ -45,6 +50,7 @@ from tests.support.copresenter_support import (
     Run,
     Scenario,
     a_copresenter_talk_host,
+    a_deck_text_over_the_clients_bound,
     ask,
     ask_as_asked,
     delete_the_sessions,
@@ -53,7 +59,6 @@ from tests.support.copresenter_support import (
     the_session_ends_during_the_grant,
     the_token_endpoint_goes_down,
     the_token_thread_fails,
-    what_the_ask_must_not_show,
 )
 from tests.support.deck_source_support import a_source
 from tests.support.deck_text_support import FakeDeckTexts
@@ -459,6 +464,74 @@ def test_another_admins_deck_gets_the_ghosts_refusal_and_spends_no_grant(
     assert foreign.response.content == ghost.response.content
     assert foreign.grants_since_sign_in == []
     assert foreign.gateway.requests == []
+
+
+def _echoing_the_key() -> Gateway:
+    return FakeGateway(
+        Reply(
+            401,
+            {"content-type": "application/json"},
+            json.dumps({"detail": f"bad {A_GATEWAY_KEY} {REPLY_BODY}"}).encode(),
+        )
+    )
+
+
+LEAK_SCENARIOS: Final = {
+    "happy": Scenario(),
+    "sign-in-again": Scenario(refresh_token=None),
+    "invalid-grant": Scenario(before_ask=the_refresh_token_is_revoked),
+    "session-ended": Scenario(before_ask=the_session_ends_during_the_grant),
+    "issuer-unavailable": Scenario(before_ask=the_token_endpoint_goes_down),
+    "groups-thread-fails": Scenario(before_ask=the_token_thread_fails),
+    "not-enabled": Scenario(groups=ADMIN_GROUPS),
+    "busy": Scenario(gateway=lambda: FakeGateway(Reply(429, {"retry-after": "7"}))),
+    "gateway-echoes-the-key": Scenario(gateway=_echoing_the_key),
+    "gateway-forbids": Scenario(gateway=lambda: FakeGateway(Reply(403))),
+    "gateway-rejects-the-request": Scenario(
+        gateway=lambda: FakeGateway(
+            Reply(422, {}, json.dumps({"detail": f"{A_GATEWAY_KEY}"}).encode())
+        )
+    ),
+    "busy-without-a-wait": Scenario(gateway=lambda: FakeGateway(Reply(429))),
+    "gateway-down": Scenario(gateway=lambda: FakeGateway(Reply(500))),
+    "malformed-reply": Scenario(
+        gateway=lambda: FakeGateway(Reply(body=f"{{{REPLY_BODY}".encode()))
+    ),
+    "foreign-origin": Scenario(headers={"origin": "https://elsewhere.example"}),
+    "question-too-long": Scenario(body={**THE_ASKED_DECK, "said": "x" * 2_001}),
+    "deck-name-too-long": Scenario(body={**THE_ASKED_DECK, "deck": "d" * 5_000}),
+    "deck-content-over-the-clients-bound": Scenario(
+        texts=FakeDeckTexts(text=a_deck_text_over_the_clients_bound())
+    ),
+    "no-words": Scenario(gateway=lambda: FakeGateway(completion(""))),
+    "refused-connection": Scenario(gateway=RefusingTransport),
+    "speech-fails-on-the-second-sentence": Scenario(
+        gateway=lambda: FakeGateway(completion(f"{TWO_SENTENCES} Dritter.")),
+        speaking_fails_at=1,
+    ),
+}
+
+
+def what_the_ask_must_not_show(run: Run) -> tuple[str, ...]:
+    """Every secret and every word of the person, as the instance holds them."""
+    return (
+        A_GATEWAY_KEY,
+        REFRESH,
+        ROTATED,
+        ACCESS,
+        *run.hosts.issuer.issued_id_tokens,
+        A.id,
+        *accounts_of(run.hosts),
+        *API_MEMBER_GROUPS,
+        str(SPOKEN_QUESTION["said"]),
+        *A_DECK_WORDS,
+        REPLY_BODY,
+    )
+
+
+def accounts_of(hosts: Hosts) -> list[str]:
+    with hosts.database.connect() as connection:
+        return list(connection.execute(text("SELECT id FROM users")).scalars())
 
 
 @pytest.mark.parametrize("scenario", LEAK_SCENARIOS.values(), ids=LEAK_SCENARIOS)
