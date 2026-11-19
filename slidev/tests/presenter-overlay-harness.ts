@@ -597,9 +597,12 @@ async function installMediaFakes(page: Page) {
       configurable: true,
     })
     const RealAudioContext = window.AudioContext
+    const contextOrigin = performance.now()
     class FakeContext {
       state = 'running'
       sampleRate = 48000
+      baseLatency = 0
+      get currentTime() { return (performance.now() - contextOrigin) / 1000 }
       audioWorklet = {
         // Real, not faked: this is the one call the page's own CSP governs
         // (`script-src 'self'`), so delegating to a real, unconnected
@@ -613,7 +616,15 @@ async function installMediaFakes(page: Page) {
       }
       destination = {}
       createMediaStreamSource() { return { connect: () => undefined, disconnect: () => undefined } }
-      createGain() { return { gain: { value: 1 }, connect: () => undefined } }
+      createGain() {
+        const gain = {
+          value: 1,
+          cancelScheduledValues: () => gain,
+          setValueAtTime: () => gain,
+          linearRampToValueAtTime: () => gain,
+        }
+        return { gain, connect: () => undefined }
+      }
       decodeAudioData() {
         if (fakes.playback === 'pending') return new Promise<object>(() => undefined)
         if (fakes.playback === 'rejected') return Promise.reject(new DOMException('undecodable', 'EncodingError'))
@@ -623,7 +634,7 @@ async function installMediaFakes(page: Page) {
             fakes.failSecond = () => reject(new DOMException('undecodable', 'EncodingError'))
           })
         }
-        return Promise.resolve({})
+        return Promise.resolve({ duration: 1 })
       }
       createBufferSource() {
         const source = {
@@ -637,6 +648,8 @@ async function installMediaFakes(page: Page) {
             const index = fakes.played.indexOf(source)
             if (index >= 0) fakes.played.splice(index, 1)
             report('playback-paused')
+            // A stopped AudioBufferSourceNode fires `ended`, which the player waits for.
+            queueMicrotask(() => source.onended?.())
           },
         }
         return source
