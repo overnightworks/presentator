@@ -45,6 +45,7 @@ from presentator.api.health import (
     add_health_route,
     always_ready,
 )
+from presentator.api.json_bodies import StorableJsonBodies
 from presentator.api.problems import install_error_answers
 from presentator.api.request_line import ClientAddressNoting, SignedInPersonNoting
 from presentator.api.session_api import language_of
@@ -70,7 +71,8 @@ def talk_content_security_policy() -> str:
 def _install_talk_middleware(
     talk: FastAPI, auth: InstalledAuth, sessions: SessionRecordStore
 ) -> None:
-    # Added before the library stack, this runs inside the session gate.
+    # Added before the library stack, these run inside the session gate.
+    talk.add_middleware(StorableJsonBodies)
     talk.add_middleware(SignedInPersonNoting)
     install_web_auth_middleware(
         talk,
