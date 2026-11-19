@@ -197,6 +197,29 @@ def test_a_probe_store_runs_the_image_of_ci_s_service_container_of_that_store(
     assert services == [pinned]
 
 
+@STORES
+def test_a_probe_store_s_pull_and_import_are_named_in_the_log(
+    make_fixture: Callable[..., Fixture],
+    manifests_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+    store: int,
+) -> None:
+    fixture = make_fixture()
+    fixture.drive()
+    lines = capsys.readouterr().out.splitlines()
+    pinned = pinned_store(manifests_module, store)
+    local = fixture.world.store_images[store]
+    pulled = [n for n, line in enumerate(lines) if pinned in line and local in line]
+    imported = [
+        n
+        for n, line in enumerate(lines)
+        if pinned not in line and local in line and fixture.run.node in line
+    ]
+    assert len(pulled) == 1
+    assert len(imported) == 1
+    assert pulled[0] < imported[0]
+
+
 def test_a_store_pull_that_fails_names_the_image_and_creates_no_cluster(
     make_fixture: Callable[..., Fixture],
     manifests_module: ModuleType,
