@@ -1,8 +1,0 @@
-claim_id = "b7a974d650494a31bf228a7cb9d81a0d"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "4406bfd993d9661b53a0672077327c4fb83537d8"
-branch = "claude/issue-1305-the-overlay-s-coverage-counts-in-sonar-a"
-scope = ["slidev", "sonar-project.properties"]
-opened_commit = "188fd74729da2c2e2039af9977ab8d2d325cb6f2"
-whole_reason = "the overlay's coverage spans its components, tests and setup in slidev"
