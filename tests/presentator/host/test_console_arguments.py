@@ -1,10 +1,12 @@
 """A console script refuses a wrong or missing argument in one coded JSON line."""
 
+import logging
 import subprocess
 from pathlib import Path
 
 import pytest
 
+from presentator.host.command_line import read_the_command_line
 from presentator.host.lifecycle import (
     ARGUMENT_REFUSED_EXIT_STATUS,
     ServerEvent,
@@ -93,6 +95,32 @@ def test_a_word_no_argument_takes_ends_the_script_in_one_line_without_it(
         ServerReason.ARGUMENT_UNKNOWN,
     )
     assert _A_MISPLACED_WORD not in ended.stdout
+
+
+@pytest.mark.parametrize(
+    ("arguments", "reason"),
+    [
+        pytest.param(["unpin-host"], ServerReason.ARGUMENT_REFUSED, id="no host"),
+        pytest.param(
+            [_A_MISPLACED_WORD], ServerReason.ARGUMENT_REFUSED, id="wrong command"
+        ),
+        pytest.param(
+            [f"--{_A_MISPLACED_WORD}"], ServerReason.ARGUMENT_UNKNOWN, id="option"
+        ),
+    ],
+)
+def test_reading_a_wrong_command_line_ends_in_the_refusal_naming_its_reason(
+    arguments: list[str], reason: ServerReason, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.ERROR), pytest.raises(SystemExit) as ended:
+        read_the_command_line(arguments)
+
+    assert ended.value.code == ARGUMENT_REFUSED_EXIT_STATUS
+    [record] = caplog.records
+    assert (record.getMessage(), record.__dict__["reason"]) == (
+        ServerEvent.PROCESS_FAILED,
+        reason,
+    )
 
 
 @pytest.mark.parametrize(
