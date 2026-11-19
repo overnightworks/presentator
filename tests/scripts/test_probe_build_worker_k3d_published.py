@@ -230,6 +230,7 @@ def test_a_store_import_that_fails_names_the_image_then_tears_down(
         fixture.drive()
     refusal = capsys.readouterr().err
     assert fixture.world.store_images[store] in refusal
+    assert "ended 1" in refusal
     assert "no space left" in refusal
     assert fixture.world.issued("kubectl", "apply") == []
     assert fixture.world.issued("k3d", "cluster", "delete") != []
@@ -245,6 +246,25 @@ def test_a_store_image_the_node_lost_after_an_import_is_imported_again_and_appli
     local = fixture.world.store_images[store]
     assert len(fixture.world.issued("k3d", "image", "import", local)) == lost + 1
     assert fixture.world.applied("Deployment") != []
+
+
+@STORES
+def test_what_k3d_said_about_an_import_the_node_lost_reads_in_the_order_k3d_wrote_it(
+    make_fixture: Callable[..., Fixture],
+    capsys: pytest.CaptureFixture[str],
+    store: int,
+) -> None:
+    written = (
+        "INFO[0000] Importing image(s) into cluster\n",
+        "ERRO[0001] failed to import image: ctr: content digest not found\n",
+        "INFO[0002] Successfully imported 1 image(s) into 1 cluster(s)\n",
+    )
+    fixture = make_fixture(
+        World(failing_store=store, store_imports_lost=1, import_log=written)
+    )
+    fixture.drive()
+    said = capsys.readouterr().out.split("k3d said:\n", 1)[1]
+    assert said.startswith("".join(written))
 
 
 @STORES
@@ -270,18 +290,21 @@ def test_a_store_image_the_node_lacks_after_every_import_is_named_with_the_node_
 
 @STORES
 @pytest.mark.parametrize(
-    ("found", "cells_printed"),
-    [(0, {"5"}), (1, {"5", "7", "8", "9"})],
+    ("lost_then_found", "cells_printed"),
+    [((2, None), {"5"}), ((0, 1), {"5", "7", "8", "9"})],
     ids=["right after its import", "when the web cells would apply it"],
 )
 def test_a_store_image_the_node_lacks_is_named_and_never_applied(
     make_fixture: Callable[..., Fixture],
     capsys: pytest.CaptureFixture[str],
     store: int,
-    found: int,
+    lost_then_found: tuple[int, int | None],
     cells_printed: set[str],
 ) -> None:
-    fixture = make_fixture(World(failing_store=store, store_found_in_node=found))
+    lost, found = lost_then_found
+    fixture = make_fixture(
+        World(failing_store=store, store_imports_lost=lost, store_found_in_node=found)
+    )
     with pytest.raises(SystemExit):
         fixture.drive()
     output = capsys.readouterr()
