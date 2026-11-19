@@ -60,8 +60,14 @@ def failed_reply(text: str | None) -> bytes:
     return support.framed(header, b"PBW\x01\x05") + support.END
 
 
-def toolchain(volume: Path, **overrides: object) -> WorkerToolchain:
-    """A client of the worker the volume names, whose port nothing serves yet."""
+def toolchain(
+    volume: Path, *, on_the_process_clock: bool = False, **overrides: object
+) -> WorkerToolchain:
+    """A client of the worker the volume names, whose port nothing serves yet.
+
+    It runs on a fresh moved time unless the caller hands it one or asks for
+    the time a client is built with by default.
+    """
     base = WorkerToolchain(
         host=LOCAL_ADDRESS,
         port=port_of(volume),
@@ -73,7 +79,8 @@ def toolchain(volume: Path, **overrides: object) -> WorkerToolchain:
         longest_retry_seconds=0.1,
         reply_margin_seconds=0.2,
     )
-    return replace(base, **overrides)
+    moved: dict[str, object] = {} if on_the_process_clock else {"time": MovedTime()}
+    return replace(base, **(moved | overrides))
 
 
 def a_step(root: Path, kind: StepKind = StepKind.BUILD) -> BuildStep:
@@ -110,19 +117,18 @@ def staging_of(step: BuildStep) -> Path:
 
 
 @dataclass
-class MovedClock:
-    """The client's monotonic clock, which only the test moves.
-
-    With `per_read`, every read moves it on by that much after answering.
-    """
+class MovedTime:
+    """The client's monotonic time, which only the test and the client's waits move."""
 
     seconds: float = 0.0
-    per_read: float = 0.0
 
-    def __call__(self) -> float:
-        now = self.seconds
-        self.seconds += self.per_read
-        return now
+    def now(self) -> float:
+        """The moment the test or the last wait left it at."""
+        return self.seconds
+
+    def wait(self, seconds: float) -> None:
+        """Move on by the wait at once."""
+        self.seconds += seconds
 
 
 @dataclass
@@ -199,3 +205,17 @@ def fake_worker(volume: Path, script: Script, accepts: int = 4) -> Generator[See
             pass
         thread.join()
         listener.close()
+
+
+def hanging_up(_connection: socket.socket, _seen: Seen, _uploads: Path) -> None:
+    return None
+
+
+def counting(connections: list[None], then: Script) -> Script:
+    """A worker that notes every connection it serves, then runs the script."""
+
+    def serve(connection: socket.socket, seen: Seen, uploads: Path) -> None:
+        connections.append(None)
+        then(connection, seen, uploads)
+
+    return serve
