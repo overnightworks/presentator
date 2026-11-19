@@ -6,23 +6,25 @@ import { chromium, type Page } from 'playwright-chromium'
 import { describe, expect, it } from 'vitest'
 
 import {
-  addonRootDirectory,
   boxesIntersect,
-  buildAddonDeck,
   contrastRatio,
+  expectFaultWordClearOfControls,
+  expectPanelCoversNoSlidevControl,
+  readBarBackground,
+  readPaintedColours,
+  readSameFrameBoxes,
+} from './presenter-bar-measures'
+import {
+  addonRootDirectory,
+  buildAddonDeck,
   createMediaObservation,
   createOverlayDeckServer,
   endHearings,
-  expectFaultWordClearOfControls,
-  expectPanelCoversNoSlidevControl,
   installCspGuard,
   openPageIn,
   openPresenter,
   openPresenterAt,
   openRoomBrowser,
-  readBarBackground,
-  readPaintedColours,
-  readSameFrameBoxes,
   registerOverlayHarness,
   saveEvidence,
   sendHeard,
