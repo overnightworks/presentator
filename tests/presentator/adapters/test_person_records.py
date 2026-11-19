@@ -54,6 +54,31 @@ def test_deleting_an_account_takes_its_sessions_and_leaves_another_account(
     assert len(sessions.sessions_of(_ANOTHER.id)) == 1
 
 
+def test_removing_a_users_row_takes_its_sessions_and_leaves_another_accounts(
+    database: Engine,
+) -> None:
+    """PE1: a session ends with its account, whatever removes the account row."""
+    sessions = PostgresSessions(database)
+    for person in (_THE_PERSON, _ANOTHER):
+        sessions.create(
+            person.id,
+            session_id=a_session_id(),
+            now=_NOW,
+            expires_at=_NOW + timedelta(hours=1),
+            refresh_token=None,
+            id_token=None,
+            account_language=None,
+        )
+
+    with database.begin() as connection:
+        connection.execute(
+            text("DELETE FROM users WHERE id = :id"), {"id": _THE_PERSON.id}
+        )
+
+    assert sessions.sessions_of(_THE_PERSON.id) == ()
+    assert len(sessions.sessions_of(_ANOTHER.id)) == 1
+
+
 def test_asking_for_an_unknown_account_creates_none(database: Engine) -> None:
     """PE3, PE10: an unknown subject creates no `users` row."""
     accounts = PostgresIdentityWrites(database, LoggingAuditSink())

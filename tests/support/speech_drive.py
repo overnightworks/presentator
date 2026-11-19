@@ -141,8 +141,7 @@ _SSE_EVENT: Final = re.compile(
     r"^event: (?P<name>\w+)\ndata: (?P<data>.*)$", re.MULTILINE
 )
 _REFRESH_COLUMN: Final = "refresh_token"
-_USER_ID_COLUMN: Final = "user_id"
-_ID_COLUMN: Final = "id"
+_ACCOUNT_ID_COLUMN: Final = "account_id"
 _A_JWT_STARTS: Final = "eyJ"
 
 
@@ -520,11 +519,9 @@ def _assert_rows_keep_only_their_own_values(
     hosts: Hosts, markers: Sequence[str]
 ) -> None:
     """A row's values show no marker, but for each column's own contract value."""
-    # A session id is random text that may start like a JWT by chance alone.
     belonging = {
         _REFRESH_COLUMN: {REFRESH, ROTATED},
-        _USER_ID_COLUMN: {A.id},
-        _ID_COLUMN: {_A_JWT_STARTS},
+        _ACCOUNT_ID_COLUMN: {A.id},
     }
     for row in stored_session_rows(hosts):
         for column, value in row.items():
