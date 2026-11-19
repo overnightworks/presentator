@@ -104,6 +104,33 @@ describe('presenter controls', () => {
     }
   }, 30_000)
 
+  it('CP6: shows No answer for a stream that ends without done, keeps its words and sound, and answers the next question', async () => {
+    state.answerMode = 'ends-without-done'
+    const { browser, page } = await openPresenter(1024)
+    try {
+      const ai = page.getByRole('switch', { name: en['controls.switch'] })
+      await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      await ai.click({ timeout: 2_000 })
+      const noAnswer = page.getByText(en['controls.noAnswer'], { exact: true })
+      await noAnswer.waitFor({ state: 'visible', timeout: 5_000 })
+      expect(await page.getByText('The answer stops here.').isVisible(), 'what it showed stays').toBe(true)
+      // The fake player never ends on its own, so the queued sound is still playing here.
+      expect(await overlayFlag(page, 'speaking'), 'the queued sound keeps playing').toBe(true)
+      await page.evaluate(() => (window as unknown as { __fakes: { endPlayback: () => void } }).__fakes.endPlayback())
+      await expect.poll(() => overlayFlag(page, 'speaking')).toBe(false)
+      sendHeard('And the next question?')
+      await page.getByText('The second ask is answered.').waitFor({ state: 'visible', timeout: 5_000 })
+      expect(state.askBodies.map((body) => body.said)).toEqual([
+        'Where does the handoff slow down?',
+        'And the next question?',
+      ])
+      expect(await noAnswer.count(), 'a stream that ends with done shows no word').toBe(0)
+    } finally {
+      state.answerMode = 'audio'
+      await closeBrowser(browser)
+    }
+  }, 30_000)
+
   it.each([1024, 390])('CP15: puts Home at the left and the AI switch at the right of one bar above the sections at %ipx', async (width) => {
     const { browser, page } = await openPresenter(width)
     try {

@@ -348,17 +348,25 @@ async function ask(text, utteranceLanguage, heardTraceparent) {
   }
 }
 
+// An answer ends with a done or an error event; a stream that closes before
+// either one is cut off, and the answer shows "No answer".
+const FINAL_EVENTS = new Set(['done', 'error'])
+
 async function readSse(body, signal) {
   const reader = body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let ended = false
   while (!signal.aborted) {
     const { done, value } = await reader.read()
-    if (done) break
+    if (done) {
+      if (!ended) throw new Error('the answer stream closed before its final event')
+      return
+    }
     buffer += decoder.decode(value, { stream: true })
     const parts = buffer.split('\n\n')
     buffer = parts.pop() || ''
-    for (const block of parts) applySse(block)
+    for (const block of parts) ended = FINAL_EVENTS.has(applySse(block)) || ended
   }
 }
 
@@ -379,6 +387,7 @@ function applySse(block) {
   if (kind === 'done' && data.text) answer.value = data.text
   if (kind === 'error') error.value = errorEventLine(data)
   if (kind === 'slide' && isShownSlide(data.number)) go(data.number)
+  return kind
 }
 
 // Slidev's `go` does not check the range, so an unknown slide stays unshown.

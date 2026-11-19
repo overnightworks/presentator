@@ -56,6 +56,7 @@ export type AnswerMode =
   | 'refused-then-answered'
   | 'two-sounds'
   | 'broken-stream'
+  | 'ends-without-done'
   | keyof typeof REFUSED_REQUESTS
 
 type MediaObservation = {
@@ -338,6 +339,19 @@ async function startServer() {
         sendEvent(response, 'audio', { wav_b64: wav })
         sendEvent(response, 'sentence', { text: 'Then the second one fails.' })
         sendEvent(response, 'error', {})
+        response.end()
+        return
+      }
+      // The first answer closes cleanly after its text and its sound, but without a done event; every later one is done.
+      if (state.answerMode === 'ends-without-done' && state.askBodies.length === 1) {
+        sendEvent(response, 'text', { text: 'The answer stops here.' })
+        sendEvent(response, 'sentence', { text: 'The answer stops here.' })
+        sendEvent(response, 'audio', { wav_b64: wav })
+        response.end()
+        return
+      }
+      if (state.answerMode === 'ends-without-done') {
+        sendEvent(response, 'done', { text: 'The second ask is answered.' })
         response.end()
         return
       }
