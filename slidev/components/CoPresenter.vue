@@ -34,6 +34,7 @@ const UNREACHABLE = 'controls.unreachable'
 const NOT_ENABLED_REASON = 'not-enabled'
 const BUSY_REASON = 'busy'
 const BUDGET_SPENT_REASON = 'budget-spent'
+const SESSION_ENDED_REASON = 'session-ended'
 // The server's `detail` values are compared as data, never shown.
 const SIGN_IN_AGAIN_DETAILS = new Set(['Sign in again', 'Not authenticated'])
 
@@ -73,6 +74,8 @@ function errorEventLine(data) {
       return busyLine(data.retry_after_s)
     case BUDGET_SPENT_REASON:
       return faultLine(BUDGET_USED_UP)
+    case SESSION_ENDED_REASON:
+      return ''
     default:
       return faultLine(NO_ANSWER)
   }
@@ -348,17 +351,25 @@ async function ask(text, utteranceLanguage, heardTraceparent) {
   }
 }
 
+// An answer ends with a done or an error event; a stream that closes before
+// either one is cut off, and the answer shows "No answer".
+const FINAL_EVENTS = new Set(['done', 'error'])
+
 async function readSse(body, signal) {
   const reader = body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let ended = false
   while (!signal.aborted) {
     const { done, value } = await reader.read()
-    if (done) break
+    if (done) {
+      if (!ended) throw new Error('the answer stream closed before its final event')
+      return
+    }
     buffer += decoder.decode(value, { stream: true })
     const parts = buffer.split('\n\n')
     buffer = parts.pop() || ''
-    for (const block of parts) applySse(block)
+    for (const block of parts) ended = FINAL_EVENTS.has(applySse(block)) || ended
   }
 }
 
@@ -377,8 +388,16 @@ function applySse(block) {
     enqueueWav(data.wav_b64)
   }
   if (kind === 'done' && data.text) answer.value = data.text
-  if (kind === 'error') error.value = errorEventLine(data)
+  if (kind === 'error') applyErrorEvent(data)
   if (kind === 'slide' && isShownSlide(data.number)) go(data.number)
+  return kind
+}
+
+// A session that ends (sign-out, expiry, a lost account) stops the answer's
+// playing and queued sound, and shows no word.
+function applyErrorEvent(data) {
+  if (data?.reason === SESSION_ENDED_REASON) invalidatePlayback()
+  error.value = errorEventLine(data)
 }
 
 // Slidev's `go` does not check the range, so an unknown slide stays unshown.
