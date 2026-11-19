@@ -63,10 +63,12 @@ def _interrupted_while_held(console_script: Path, held_at: str) -> _Interrupted:
 @pytest.mark.parametrize(
     ("console_script", "held_at"),
     [
+        (CONSOLE_ENTRY_POINT, "enum"),
         (CONSOLE_ENTRY_POINT, "presentator.host.main"),
         (CONSOLE_ENTRY_POINT, "logline"),
         (CONSOLE_ENTRY_POINT, "sqlalchemy"),
         (CONSOLE_ENTRY_POINT, "uvicorn"),
+        (WORKER_CONSOLE_ENTRY_POINT, "enum"),
         (WORKER_CONSOLE_ENTRY_POINT, "presentator.host.worker"),
         (WORKER_CONSOLE_ENTRY_POINT, "logline"),
         (WORKER_CONSOLE_ENTRY_POINT, "presentator.host.worker_serving"),

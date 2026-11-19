@@ -5,15 +5,22 @@ lands while a script imports its program ends in a traceback. Each script first
 gives SIGINT back its default action, which ends the process as the signal
 does and writes nothing, and only then imports its program; once logging is
 configured, `signals_end_as_a_stop` takes the stop signals over and hands them
-back at its end. This module imports nothing else, so the window before the
+back at its end. This module imports only the interpreter's own built-in
+signal module, which its start has loaded already, so the window before the
 script owns SIGINT is the import of its two parent packages' docstrings.
 """
 
-import signal
+# `signal` imports `enum`, and `typing` costs more: windows of milliseconds a
+# SIGINT lands in. `_signal`, which `signal` wraps, has no stub of its own.
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    import signal as _signal
+else:
+    import _signal
 
 
 def _interrupt_at_its_default_action() -> None:
-    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    _signal.signal(_signal.SIGINT, _signal.SIG_DFL)
 
 
 def presentator() -> None:
