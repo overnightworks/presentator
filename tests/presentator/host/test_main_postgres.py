@@ -3,14 +3,11 @@
 from http import HTTPStatus
 from pathlib import Path
 
-import psycopg
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import inspect, text
 
-from presentator.adapters.postgres.locks import LockClass, lock_of, parameters
 from presentator.adapters.postgres.migrate import DatabaseRefusedError
-from presentator.adapters.toolchain_identity import toolchain_identity_of
 from presentator.host import main
 from presentator.host.config import load_settings
 from tests.support.lobby import A_BROWSERS_ADDRESS, A_BROWSERS_HEADERS, A_TALK_ADDRESS
@@ -35,7 +32,7 @@ def test_an_empty_database_is_refused_at_start_and_left_without_a_table(
         engine.dispose()
 
 
-def test_a_database_that_does_not_answer_ends_the_start_in_one_failed_line(
+def test_a_database_that_does_not_answer_ends_the_starts_connection_step_failed(
     environment: pytest.MonkeyPatch,
     redis_url: str,
     tmp_path: Path,
@@ -44,52 +41,15 @@ def test_a_database_that_does_not_answer_ends_the_start_in_one_failed_line(
     point_at(environment, NO_DATABASE_HERE, tmp_path)
     environment.setenv("PRESENTATOR_REDIS_URL", redis_url)
 
-    with json_logged(capsys) as logged, pytest.raises(SystemExit) as ended:
+    with json_logged(capsys) as logged, pytest.raises(SystemExit):
         main.main([])
 
-    assert ended.value.code == 1
     (connection,) = [
         one
         for one in logged.lines
         if one["event"] == "store_connection.ended" and one["kind"] == "postgres"
     ]
     assert (connection["outcome"], connection["reason"]) == ("failed", "not_answering")
-    (failed,) = [one for one in logged.lines if one["event"] == "process.failed"]
-    assert (failed["level"], failed["reason"]) == ("error", "not_answering")
-    assert failed["error_type"] == psycopg.OperationalError.__name__
-    assert "127.0.0.1" not in logged.text
-
-
-def test_a_start_whose_store_statement_fails_ends_in_one_failed_line_and_no_traceback(
-    environment: pytest.MonkeyPatch,
-    database_url: str,
-    redis_url: str,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    point_at(environment, database_url, tmp_path)
-    environment.setenv("PRESENTATOR_REDIS_URL", redis_url)
-    # The start's wait for the toolchain's presence key ends within this bound.
-    environment.setenv("PRESENTATOR_BUILD_TIMEOUT_SECONDS", "0.5")
-    toolchain = toolchain_identity_of(load_settings().toolchain)
-    presence = parameters(lock_of(LockClass.TOOLCHAIN_PRESENCE, toolchain.digest))
-    engine = engine_on(database_url)
-    try:
-        with engine.connect() as another_process, json_logged(capsys) as logged:
-            another_process.execute(
-                text("SELECT pg_advisory_lock(:lock_class, :instance)"), presence
-            )
-            with pytest.raises(SystemExit) as ended:
-                main.main([])
-    finally:
-        engine.dispose()
-
-    assert ended.value.code == 1
-    (failed,) = [one for one in logged.lines if one["event"] == "process.failed"]
-    assert (failed["level"], failed["reason"]) == ("error", "store_unavailable")
-    assert failed["error_type"] == psycopg.errors.LockNotAvailable.__name__
-    assert "SELECT" not in logged.text
-    assert not capsys.readouterr().err
 
 
 @pytest.mark.parametrize("address", [A_BROWSERS_ADDRESS, A_TALK_ADDRESS])

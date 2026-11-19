@@ -6,7 +6,11 @@ ends in.
 
 import logging
 import os
+import signal
 import socket
+import sys
+from collections.abc import Generator
+from contextlib import contextmanager
 from enum import StrEnum
 from types import FrameType
 from typing import Final, NoReturn, override
@@ -36,7 +40,6 @@ class ServerReason(StrEnum):
     """
 
     CONFIGURATION_REFUSED = "configuration_refused"
-    STORE_UNAVAILABLE = "store_unavailable"
 
 
 def configure_logging(service: str) -> None:
@@ -63,6 +66,24 @@ def end_failed(reason: RefusalReason | ServerReason, **codes: str) -> NoReturn:
     """
     _log.error(ServerEvent.PROCESS_FAILED, extra={"reason": reason, **codes})
     raise SystemExit(1) from None
+
+
+@contextmanager
+def interrupt_ends_as_a_stop() -> Generator[None]:
+    """End the process by SIGINT itself when one interrupts it, never as a crash.
+
+    uvicorn raises the signal that stopped it again once serving returns, and
+    Python turns a SIGINT into a KeyboardInterrupt, whose crash line would
+    follow the stop line. The default action ends the process as the signal
+    does, as a SIGTERM's does.
+    """
+    try:
+        yield
+    except KeyboardInterrupt:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        signal.raise_signal(signal.SIGINT)
 
 
 class StoppingServer(uvicorn.Server):

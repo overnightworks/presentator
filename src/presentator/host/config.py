@@ -267,6 +267,13 @@ def _an_absolute_path(given: Path) -> Path:
 type PostgresUrl = Annotated[str, AfterValidator(_a_postgres_url_without_a_password)]
 type RedisUrl = Annotated[SecretStr, AfterValidator(_a_redis_url)]
 type AbsolutePath = Annotated[Path, AfterValidator(_an_absolute_path)]
+# Shutdown waits for a chore in flight, so a statement held by a lock would
+# hold it too; every statement served, and `unpin-host`'s, is cancelled past
+# this bound. The migrations run without it.
+type StatementTimeoutSeconds = Annotated[
+    float, Field(gt=0, le=LONGEST_TIMEOUT.total_seconds(), allow_inf_nan=False)
+]
+_STATEMENT_TIMEOUT_SECONDS: Final = 10.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -309,11 +316,8 @@ class Settings(
     # environment. A deployment fact: no default.
     database_url: PostgresUrl
     database_password_file: AbsolutePath
-    # Shutdown waits for a chore in flight, so a statement held by a lock would
-    # hold it too; every statement served is cancelled past this bound. The
-    # migrations run without it.
-    database_statement_timeout_seconds: float = Field(
-        default=10.0, gt=0, allow_inf_nan=False
+    database_statement_timeout_seconds: StatementTimeoutSeconds = (
+        _STATEMENT_TIMEOUT_SECONDS
     )
     # The Redis every pod shares for its limits and its ask lease; it keeps
     # nothing durable. A password may ride the URL, which is why it is a secret,
@@ -497,7 +501,7 @@ class WorkerSettings(BaseSettings):
 
 
 class DatabaseSettings(BaseSettings):
-    """What `presentator migrate` reads, so it needs no other setting."""
+    """What `presentator migrate` and `unpin-host` read, so they need no other."""
 
     model_config = SettingsConfigDict(
         env_prefix=ENVIRONMENT_PREFIX, hide_input_in_errors=True
@@ -507,6 +511,9 @@ class DatabaseSettings(BaseSettings):
     # at start, so it never rides the environment.
     database_url: PostgresUrl
     database_password_file: AbsolutePath
+    database_statement_timeout_seconds: StatementTimeoutSeconds = (
+        _STATEMENT_TIMEOUT_SECONDS
+    )
 
     @cached_property
     def postgres(self) -> PostgresDatabase:

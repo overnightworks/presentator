@@ -18,7 +18,11 @@ On the source's page choose *Fetch now*: the source's state reads reachable.
 2. Run `presentator unpin-host <host>` with the instance's two database
    settings ([configuration](../configuration.md)); `<host>` is the name the
    address names, or `[host]:port` for another port than 22. It exits 0 once
-   the host's pin is gone, and 1 when nothing was pinned for that name.
+   the host's pin is gone, and 3 when nothing was pinned for that name. It
+   exits 1 with one `process.failed` line when the database fails it; its
+   `reason` names why ([configuration](../configuration.md)), and
+   `statement_cancelled` means another session held the pins past
+   `PRESENTATOR_DATABASE_STATEMENT_TIMEOUT_SECONDS`: run it again.
    Rollback: none needed; the next fetch pins the key the host answers with.
 3. Choose *Fetch now*. The first contact pins the host's new key for every
    process. Rollback: unpin again and fix whatever the host answered.
