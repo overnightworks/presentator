@@ -6,12 +6,14 @@ from datetime import timedelta
 import psycopg
 import pytest
 from sqlalchemy import Engine, inspect, make_url, text
+from sqlalchemy.exc import OperationalError
 
 from presentator.adapters.postgres.migrate import (
     DatabaseRefusedError,
     migrate,
     migration_history,
     serving_refusal,
+    store_refusal,
 )
 from tests.support.log_lines import json_logged
 from tests.support.postgres import engine_on
@@ -182,6 +184,25 @@ def test_a_server_that_is_not_there_is_refused_as_not_answering(
     assert refused is not None
     assert (refused.reason, refused.driver_error) == (
         "not_answering",
+        psycopg.OperationalError.__name__,
+    )
+
+
+def test_a_connection_lost_during_a_statement_is_refused_as_store_unavailable(
+    database_url: str,
+) -> None:
+    # libpq gives a connection that closed under a statement no SQLSTATE, and
+    # the server's port accepts again by the time the fault is read.
+    lost = OperationalError(
+        "SELECT 1",
+        {},
+        psycopg.OperationalError("server closed the connection unexpectedly"),
+    )
+
+    refused = store_refusal(lost, database_url)
+
+    assert (refused.reason, refused.driver_error) == (
+        "store_unavailable",
         psycopg.OperationalError.__name__,
     )
 

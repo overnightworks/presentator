@@ -60,7 +60,7 @@ refused the password, the role or the database; `not_answering` means the host
 did not resolve or its port did not accept; `statement_cancelled` means the
 server cancelled a statement past its statement or lock timeout, as one behind
 another session's lock is; `store_unavailable` names any other statement the
-database failed. A store fault carries the driver's error class in
+database failed, a connection lost under a statement among them. A store fault carries the driver's error class in
 `error_type`. The refusals and the log name the kind of failure and never the
 URL or the password.
 The tests find their server in `PRESENTATOR_TEST_POSTGRES_URL`, a URL of a

@@ -64,15 +64,20 @@ def store_refusal(
     A statement the server cancelled, past its statement or lock timeout, names
     that. libpq gives a failed connect no SQLSTATE and words its message in the
     server's language, so whether the server's port accepts a plain connection
-    tells a refused login (password, role or database) from no server at all.
-    Any other fault, a statement the server failed for another reason among
+    tells a refused login (password, role or database) from no server at all;
+    SQLAlchemy raises a failed connect with no statement. Any other fault, a
+    statement the server failed or a connection lost under a statement among
     them, leaves the store unavailable.
     """
     driver_error = getattr(error, "orig", None)
-    server_answered = getattr(driver_error, "sqlstate", None) is not None
+    failed_to_connect = (
+        isinstance(error, OperationalError)
+        and error.statement is None
+        and getattr(driver_error, "sqlstate", None) is None
+    )
     if isinstance(driver_error, (QueryCanceled, LockNotAvailable)):
         reason = RefusalReason.STATEMENT_CANCELLED
-    elif server_answered or not isinstance(error, OperationalError):
+    elif not failed_to_connect:
         reason = RefusalReason.STORE_UNAVAILABLE
     elif _port_accepts(make_url(database_url)):
         reason = RefusalReason.LOGIN_REFUSED
