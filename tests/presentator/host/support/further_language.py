@@ -6,22 +6,21 @@ prints, as one JSON object, what the owners decide for `tag`: the offered
 language, the prompt for a slide outside the deck, and the start's refusal.
 """
 
-import importlib.util
 import json
 import sys
+from importlib.machinery import SourceFileLoader
 from pathlib import Path
+from types import ModuleType
+
+import pytest
 
 _WORDS_MODULE = "presentator.contracts.words"
 
 
 def _install_words(path: Path) -> None:
-    spec = importlib.util.spec_from_file_location(_WORDS_MODULE, path)
-    if spec is None or spec.loader is None:
-        message = f"{path} is no Python module"
-        raise ImportError(message)
-    module = importlib.util.module_from_spec(spec)
+    module = ModuleType(_WORDS_MODULE)
     sys.modules[_WORDS_MODULE] = module
-    spec.loader.exec_module(module)
+    SourceFileLoader(_WORDS_MODULE, str(path)).exec_module(module)
 
 
 def main() -> None:
@@ -38,13 +37,9 @@ def main() -> None:
     offered = offered_language(tag)
     deck = DeckText(title="Deck", language=tag, slides=())
     prompt = user_message(Question(said="?", slide=2, language=offered), deck)
-    try:
+    with pytest.raises(ConfigurationError) as refused:
         load_settings()
-    except ConfigurationError as refused:
-        reason: str | None = str(refused)
-        variables = list(refused.variables)
-    else:
-        reason, variables = None, []
+    reason, variables = str(refused.value), list(refused.value.variables)
     print(
         json.dumps(
             {
@@ -57,5 +52,4 @@ def main() -> None:
     )
 
 
-if __name__ == "__main__":
-    main()
+main()

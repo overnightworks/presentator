@@ -48,7 +48,7 @@ class _Decided:
 
     offered: str
     prompt: str
-    refused_reason: str | None
+    refused_reason: str
     refused_variables: tuple[str, ...]
 
 
@@ -103,7 +103,7 @@ def test_a_further_catalog_language_without_a_voice_entry_refuses_the_start(
     decided = _decided(further_words)
 
     assert decided.refused_variables == (_FURTHER_VOICE_VARIABLE,)
-    assert "no voice" in str(decided.refused_reason)
+    assert "no voice" in decided.refused_reason
 
 
 def test_the_voice_entry_of_a_further_language_is_judged_by_the_speech_catalogue(
@@ -114,4 +114,4 @@ def test_the_voice_entry_of_a_further_language_is_judged_by_the_speech_catalogue
     decided = _decided(further_words)
 
     assert decided.refused_variables == (_FURTHER_VOICE_VARIABLE,)
-    assert "does not speak" in str(decided.refused_reason)
+    assert "does not speak" in decided.refused_reason
