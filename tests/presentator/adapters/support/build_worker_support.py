@@ -61,7 +61,10 @@ def failed_reply(text: str | None) -> bytes:
 
 
 def toolchain(volume: Path, **overrides: object) -> WorkerToolchain:
-    """A client of the worker the volume names, whose port nothing serves yet."""
+    """A client of the worker the volume names, whose port nothing serves yet.
+
+    It runs on a fresh moved time unless the caller hands it one.
+    """
     base = WorkerToolchain(
         host=LOCAL_ADDRESS,
         port=port_of(volume),
@@ -72,6 +75,7 @@ def toolchain(volume: Path, **overrides: object) -> WorkerToolchain:
         first_retry_seconds=0.02,
         longest_retry_seconds=0.1,
         reply_margin_seconds=0.2,
+        time=MovedTime(),
     )
     return replace(base, **overrides)
 

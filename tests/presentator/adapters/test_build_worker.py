@@ -173,10 +173,10 @@ def test_a_step_the_worker_never_answered_is_unavailable_and_names_the_fault(
 
     with json_logged(capsys) as logged:
         if script is None:
-            result = toolchain(volume, time=MovedTime()).ran(step)
+            result = toolchain(volume).ran(step)
         else:
             with fake_worker(volume, script, accepts=50):
-                result = toolchain(volume, time=MovedTime()).ran(step)
+                result = toolchain(volume).ran(step)
         line = ended_line(step, logged)
 
     assert result == UNAVAILABLE
@@ -204,7 +204,7 @@ def test_a_peer_that_cannot_prove_the_key_is_refused_without_a_retry_or_a_byte(
     script = counting(connections, a_peer_without_the_key())
 
     with fake_worker(volume, script, accepts=50) as seen:
-        result = toolchain(volume, time=MovedTime()).ran(a_step(tmp_path))
+        result = toolchain(volume).ran(a_step(tmp_path))
 
     assert result == UNAVAILABLE
     assert len(connections) == 1
@@ -218,7 +218,7 @@ def test_a_worker_closing_then_answering_serves_build_and_export(
     """The next build succeeds once the worker's life has ended."""
     script = closing_first(closes, replying(BUILT_BY_STEP))
     with fake_worker(volume, script, accepts=closes + 3):
-        client = toolchain(volume, time=MovedTime())
+        client = toolchain(volume)
 
         built = client.ran(a_step(tmp_path))
         exported = client.ran(a_step(tmp_path, StepKind.EXPORT))
@@ -237,7 +237,7 @@ def test_a_silent_connection_is_left_after_its_attempt_for_the_next_within_the_w
     script = silent_first(silent, replying(BUILT_BY_STEP))
     connections: list[None] = []
     with fake_worker(volume, counting(connections, script), accepts=5):
-        client = toolchain(volume, attempt_seconds=0.1, time=MovedTime())
+        client = toolchain(volume, attempt_seconds=0.1)
 
         built = client.ran(a_step(tmp_path))
 
@@ -365,7 +365,7 @@ def test_a_deck_over_a_limit_or_breaking_a_rule_says_so_and_connects_to_nothing(
         json_logged(capsys) as logged,
         fake_worker(volume, counting(connections, hanging_up)),
     ):
-        result = toolchain(volume, time=MovedTime()).ran(step)
+        result = toolchain(volume).ran(step)
         line = ended_line(step, logged)
 
     assert result == failure
