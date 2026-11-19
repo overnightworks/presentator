@@ -11,7 +11,12 @@ from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from enum import StrEnum
 from types import FrameType
-from typing import Final, NoReturn
+from typing import TYPE_CHECKING, Final, NoReturn
+
+if TYPE_CHECKING:
+    from presentator.adapters.postgres.migrate import RefusalReason
+    from presentator.host.worker import StartRefusal
+    from presentator.host.worker_self_check import Predicate
 
 _log = logging.getLogger(__name__)
 _STOP_SIGNALS: Final = (signal.SIGINT, signal.SIGTERM)
@@ -30,25 +35,34 @@ class ServerEvent(StrEnum):
 
 
 class ServerReason(StrEnum):
-    """Why the process failed to start.
-
-    Together with the database's `RefusalReason`, the closed set of reasons.
-    """
+    """Why either console script refused its command line or its settings."""
 
     CONFIGURATION_REFUSED = "configuration_refused"
     ARGUMENT_REFUSED = "argument_refused"
     ARGUMENT_UNKNOWN = "argument_unknown"
 
 
-def end_failed(
-    reason: StrEnum, exit_status: int = FAILED_EXIT_STATUS, /, **codes: str
-) -> NoReturn:
-    """End the process in one line naming the refusal, without its traceback.
+# The closed set of a `process.failed` line's reasons. The sealed build worker
+# loads this module, so the database's and the worker's own reasons are named
+# for the type checker alone.
+type FailedReason = ServerReason | RefusalReason | Predicate | StartRefusal
 
-    The traceback would name the database's host and port or a file's path, so
-    the line carries only codes, such as the class name of the driver's error.
+
+def write_failed(reason: FailedReason, /, **codes: str) -> None:
+    """Write the one line naming why the process refuses to go on.
+
+    The line carries only codes, such as the class name of the driver's error,
+    never the error's text, which may name the database's host and port or a
+    file's path.
     """
     _log.error(ServerEvent.PROCESS_FAILED, extra={"reason": reason, **codes})
+
+
+def end_failed(
+    reason: FailedReason, exit_status: int = FAILED_EXIT_STATUS, /, **codes: str
+) -> NoReturn:
+    """End the process in its `write_failed` line, without the traceback."""
+    write_failed(reason, **codes)
     raise SystemExit(exit_status) from None
 
 

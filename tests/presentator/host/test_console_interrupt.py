@@ -88,19 +88,17 @@ def test_a_sigint_while_a_console_script_imports_ends_it_silently(
 
 
 @pytest.mark.parametrize(
-    ("console_script", "refusal"),
-    [
-        (CONSOLE_ENTRY_POINT, ServerEvent.PROCESS_FAILED),
-        (WORKER_CONSOLE_ENTRY_POINT, worker.START_REFUSED_EVENT),
-    ],
+    "console_script", [CONSOLE_ENTRY_POINT, WORKER_CONSOLE_ENTRY_POINT]
 )
 def test_a_sigint_after_a_refused_start_leaves_its_refusal_the_last_line(
-    console_script: Path, refusal: str
+    console_script: Path,
 ) -> None:
     interrupted = _interrupted_while_held(console_script, AT_EXIT)
 
     assert interrupted.exit_code == -signal.SIGINT
-    assert [line["event"] for line in json_lines(interrupted.output)][-1:] == [refusal]
+    assert [line["event"] for line in json_lines(interrupted.output)][-1:] == [
+        ServerEvent.PROCESS_FAILED
+    ]
     assert interrupted.errors == ""
 
 

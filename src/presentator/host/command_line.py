@@ -67,10 +67,10 @@ def read_the_command_line(arguments: Sequence[str] | None) -> argparse.Namespace
     """The command `arguments` ask for; a refused one ends the process in one line.
 
     The command line checks the host itself: argparse names no argument in the
-    refusal of a missing one.
+    refusal of a missing one, and takes an empty word for a host.
     """
     asked = read_command_line(_command_line(), arguments)
-    if asked.command == UNPIN_HOST_COMMAND and asked.host is None:
+    if asked.command == UNPIN_HOST_COMMAND and not asked.host:
         refuse_argument(_HOST)
     return asked
 
@@ -84,9 +84,11 @@ def _command_line() -> argparse.ArgumentParser:
         help="bring the database to the newest revision, then exit",
         exit_on_error=False,
     )
+    # The host is optional to argparse alone, so the usage names it as required.
     unpin = commands.add_parser(
         UNPIN_HOST_COMMAND,
         help="remove one host's pinned ssh key after a verified rotation, then exit",
+        usage=f"%(prog)s [-h] {_HOST}",
         exit_on_error=False,
     )
     unpin.add_argument(

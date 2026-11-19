@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from presentator.host import main
+from presentator.host.lifecycle import ServerEvent
 from tests.support.lobby import A_BROWSERS_ADDRESS
 from tests.support.log_lines import LoggedText, events_of
 
@@ -177,7 +178,7 @@ def test_a_refused_configuration_ends_in_one_failed_line_naming_the_setting(  # 
         main.main(arguments)
 
     assert ended.value.code == 1
-    (failed,) = events_of(logged, "process.failed")
+    (failed,) = events_of(logged, ServerEvent.PROCESS_FAILED)
     assert (failed["level"], failed["reason"]) == ("error", "configuration_refused")
     assert failed["setting"] == setting
     assert never_logged not in logged.text

@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from presentator.host import worker, worker_self_check
-from presentator.host.lifecycle import StopLine
+from presentator.host.lifecycle import ServerEvent, StopLine
 from presentator.host.worker_scratch import (
     QUEUE_MOUNT,
     SHARED_MEMORY_MOUNT,
@@ -332,7 +332,7 @@ def test_an_invalid_setting_refuses_as_settings_and_never_writes_its_value(
     assert status == worker.REFUSAL_EXIT_STATUS
     assert events[-1] == "settings"
     assert refusal_reasons(logged) == [worker.StartRefusal.SETTINGS]
-    (refused,) = events_of(logged, "start.refused")
+    (refused,) = events_of(logged, ServerEvent.PROCESS_FAILED)
     assert refused["setting"] == variable
     assert "unique-bad-value-4711" not in logged.text
 
