@@ -33,30 +33,12 @@ from tests.scripts.support.k3d_world import (
     RUN_IDENTIFIER,
     WORKER_POD_NAMES,
     Fixture,
-    fixture_maker,
 )
-
-
-@pytest.fixture
-def cluster_module(load_script: Callable[..., ModuleType]) -> ModuleType:
-    return load_script("probe_build_worker_k3d_cluster")
-
-
-@pytest.fixture
-def manifests_module(load_script: Callable[..., ModuleType]) -> ModuleType:
-    return load_script("probe_build_worker_k3d_manifests")
 
 
 @pytest.fixture
 def production_image(manifests_module: ModuleType) -> str:
     return manifests_module.PRODUCTION_IMAGE + DIGEST
-
-
-@pytest.fixture
-def make_fixture(
-    load_script: Callable[..., ModuleType], tmp_path: Path
-) -> Callable[..., Fixture]:
-    return fixture_maker(load_script, tmp_path)
 
 
 def test_the_overlay_names_the_platform_app_by_a_path_relative_to_itself(

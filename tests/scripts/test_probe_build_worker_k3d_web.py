@@ -4,7 +4,6 @@ import contextlib
 import dataclasses
 import json
 from collections.abc import Callable
-from pathlib import Path
 from types import ModuleType
 from typing import Any
 
@@ -25,27 +24,9 @@ from tests.scripts.support.k3d_world import (
     World,
     apply_positions,
     command_positions,
-    fixture_maker,
     issued_commands,
 )
 from tests.scripts.support.web_client_output import client_output, delivered_outcome
-
-
-@pytest.fixture
-def cluster_module(load_script: Callable[..., ModuleType]) -> ModuleType:
-    return load_script("probe_build_worker_k3d_cluster")
-
-
-@pytest.fixture
-def web_module(load_script: Callable[..., ModuleType]) -> ModuleType:
-    return load_script("probe_build_worker_web")
-
-
-@pytest.fixture
-def make_fixture(
-    load_script: Callable[..., ModuleType], tmp_path: Path
-) -> Callable[..., Fixture]:
-    return fixture_maker(load_script, tmp_path)
 
 
 def cell_lines(output: str, number: int) -> list[str]:
