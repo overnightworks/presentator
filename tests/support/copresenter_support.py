@@ -621,9 +621,7 @@ class Scenario:
     headers: Mapping[str, str] = field(default_factory=dict[str, str])
 
 
-def _access_over(
-    auth: InstalledAuth, sessions: PostgresSessions
-) -> SessionAccess:
+def _access_over(auth: InstalledAuth, sessions: PostgresSessions) -> SessionAccess:
     return SessionAccess(
         auth.relying_party,
         sessions,

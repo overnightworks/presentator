@@ -18,7 +18,7 @@ from webauth.ports import (
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.postgres.accounts import PostgresSubjectUserStore
-from presentator.adapters.postgres.locks import SIGN_IN_LOCK, parameters
+from presentator.adapters.postgres.locks import SIGN_IN_ENTRY_KEY
 from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.contracts.models import Role
@@ -28,15 +28,15 @@ _NOON = datetime(2026, 11, 14, 12, 0, 0, 123456, tzinfo=UTC)
 _AN_EVENT = AccountEvent(
     kind=AccountEventKind.BACKCHANNEL_LOGOUT, actor_id=None, subject_id="subject-1"
 )
-_TRY_SIGN_IN_LOCK = text("SELECT pg_try_advisory_xact_lock(:lock_class, :instance)")
+_TRY_SIGN_IN_LOCK = text("SELECT pg_try_advisory_xact_lock(:key)")
 # pg_locks spans the server, where other tests wait on locks in databases of
-# their own; a two-key lock shows its keys as classid and objid, objsubid 2.
+# their own; a one-integer lock shows its key as classid and objid, objsubid 1.
 _AWAITED_SIGN_IN_LOCKS = text(
     "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted"
     " AND database = (SELECT oid FROM pg_database"
     " WHERE datname = current_database())"
-    " AND objsubid = 2 AND classid::bigint = :lock_class"
-    " AND objid::bigint = (:instance)::bigint & 4294967295"
+    " AND objsubid = 1"
+    " AND (classid::bigint << 32) | objid::bigint = :key"
 )
 _PATIENCE_SECONDS = 10
 
@@ -74,7 +74,7 @@ def _sign_in_lock_is_free(other_engine: Engine) -> bool:
     with other_engine.begin() as other_connection:
         return bool(
             other_connection.execute(
-                _TRY_SIGN_IN_LOCK, parameters(SIGN_IN_LOCK)
+                _TRY_SIGN_IN_LOCK, {"key": SIGN_IN_ENTRY_KEY}
             ).scalar_one()
         )
 
@@ -169,7 +169,7 @@ def _until_the_sign_in_lock_is_awaited(other_engine: Engine) -> None:
     deadline = time.monotonic() + _PATIENCE_SECONDS
     with other_engine.connect() as connection:
         while not connection.execute(
-            _AWAITED_SIGN_IN_LOCKS, parameters(SIGN_IN_LOCK)
+            _AWAITED_SIGN_IN_LOCKS, {"key": SIGN_IN_ENTRY_KEY}
         ).scalar_one():
             assert time.monotonic() < deadline, "nobody waits for the sign-in lock"
             connection.rollback()

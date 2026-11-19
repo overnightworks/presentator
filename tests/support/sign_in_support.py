@@ -124,7 +124,9 @@ class Scene:
     def stored_sessions(self) -> dict[str, str | None]:
         """The refresh token of every session row by its stored key."""
         with self.engine.connect() as connection:
-            rows = connection.execute(text("SELECT id_hash, refresh_token FROM sessions"))
+            rows = connection.execute(
+                text("SELECT id_hash, refresh_token FROM sessions")
+            )
             return {row.id_hash: row.refresh_token for row in rows}
 
     def stored_id_tokens(self) -> list[str | None]:

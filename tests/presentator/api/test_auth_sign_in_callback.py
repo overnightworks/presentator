@@ -25,9 +25,9 @@ from webauth.ports import (
     AuditSink,
     SessionRecord,
 )
+from webauth.postgres import PostgresSessionStore
 
 from presentator.adapters.audit import LoggingAuditSink
-from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.api.auth import LOGOUT_PATH
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.host import main
@@ -398,11 +398,11 @@ def test_a_store_failure_inside_the_callback_leaves_no_account_no_session_and_no
     engine: Engine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     scene = a_scene(engine)
-    create = PostgresSessions.create
+    create = PostgresSessionStore.create
     failures = [OperationalError(None, None, Exception("disk I/O error"))]
 
     def create_unless_the_disk_fails(  # noqa: PLR0913
-        store: PostgresSessions,
+        store: PostgresSessionStore,
         user_id: str,
         *,
         session_id: str,
@@ -425,9 +425,7 @@ def test_a_store_failure_inside_the_callback_leaves_no_account_no_session_and_no
             account_language=account_language,
         )
 
-    monkeypatch.setattr(
-        PostgresSessions, "create", create_unless_the_disk_fails
-    )
+    monkeypatch.setattr(PostgresSessionStore, "create", create_unless_the_disk_fails)
     browser = scene.browser(raise_server_exceptions=False)
 
     failed = scene.sign_in(browser)

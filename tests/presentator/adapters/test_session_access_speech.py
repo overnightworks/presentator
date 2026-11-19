@@ -27,7 +27,7 @@ class Arranged:
         scene.issuer.issue_refresh_token(REFRESH)
         scene.issuer.issue_person_access_token(ACCESS)
         scene.sign_in(groups=["/apps/presentator"])
-        (self.session_id,) = scene.stored_sessions()
+        self.session_id = scene.session_id_of()
         self.scene = scene
         self.reader = SessionAccess(
             scene.relying_party,

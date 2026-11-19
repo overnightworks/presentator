@@ -6,9 +6,9 @@ from http import HTTPStatus
 
 import pytest
 from sqlalchemy import Engine, text
-from sqlalchemy.exc import DBAPIError
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.oidc import TokenEndpointAnswer, TokenRequest, TokenRequestPost
+from webauth.postgres import SessionStoreError
 
 from presentator.api.auth import LOGOUT_PATH
 from tests.support.leak_support import everything_shown
@@ -94,13 +94,13 @@ def test_a_sign_in_over_an_older_session_replaces_its_row_and_its_token(
     browser = scene.browser()
     scene.issuer.issue_refresh_token("rt-OLD")
     scene.sign_in(browser)
-    (old_id,) = scene.stored_sessions()
+    (old_key,) = scene.stored_sessions()
     scene.issuer.issue_refresh_token("rt-NEW")
 
     scene.sign_in(browser)
 
     sessions = scene.stored_sessions()
-    assert old_id not in sessions
+    assert old_key not in sessions
     assert list(sessions.values()) == ["rt-NEW"]
 
 
@@ -155,7 +155,7 @@ def test_a_store_failure_holding_the_token_leaks_it_to_no_error_and_no_log(
     with scene.engine.begin() as connection:
         connection.execute(text("DROP TABLE sessions"))
 
-    with pytest.raises(DBAPIError) as failure:
+    with pytest.raises(SessionStoreError) as failure:
         scene.sign_in()
 
     assert _MARKER not in everything_shown(errors=[failure.value])
@@ -202,7 +202,7 @@ def test_a_store_failure_holding_the_id_token_leaks_it_to_no_error_and_no_log(
     with scene.engine.begin() as connection:
         connection.execute(text("DROP TABLE sessions"))
 
-    with pytest.raises(DBAPIError) as failure:
+    with pytest.raises(SessionStoreError) as failure:
         scene.sign_in()
     answer = scene.sign_in(scene.browser(raise_server_exceptions=False))
 

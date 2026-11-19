@@ -27,8 +27,8 @@ def _only_the_sessions_table(
     item: SchemaItem,
     name: str | None,
     type_: str,
-    reflected: bool,  # noqa: FBT001 - alembic fixes this signature
-    compare_to: SchemaItem | None,
+    reflected: bool,  # noqa: FBT001, ARG001 - alembic fixes this signature
+    compare_to: SchemaItem | None,  # noqa: ARG001
 ) -> bool:
     if type_ == "table":
         return name == SESSIONS.name
@@ -37,7 +37,7 @@ def _only_the_sessions_table(
 
 @pytest.fixture
 def database_before_the_extra() -> Iterator[Engine]:
-    """A database migrated to the revision before the extra's table, with a live session."""
+    """A database one revision before the extra's table, holding a live session."""
     with created_database() as database_url:
         engine = engine_on(database_url)
         try:
@@ -97,7 +97,9 @@ def test_no_session_row_holds_the_id_of_a_live_cookie(engine: Engine) -> None:
     session_id = scene.session_id_of(browser)
 
     with engine.connect() as connection:
-        stored = connection.execute(text("SELECT id_hash FROM sessions")).scalars().all()
+        stored = (
+            connection.execute(text("SELECT id_hash FROM sessions")).scalars().all()
+        )
     assert stored == [stored_key(session_id)]
 
 

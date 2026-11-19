@@ -74,17 +74,13 @@ def test_the_sweep_runs_while_the_server_serves(
     deleted_a_session = threading.Event()
     delete_expired = PostgresSessions.delete_expired
 
-    def delete_expired_and_say_so(
-        store: PostgresSessions, at: datetime
-    ) -> int:
+    def delete_expired_and_say_so(store: PostgresSessions, at: datetime) -> int:
         deleted = delete_expired(store, at)
         if deleted:
             deleted_a_session.set()
         return deleted
 
-    monkeypatch.setattr(
-        PostgresSessions, "delete_expired", delete_expired_and_say_so
-    )
+    monkeypatch.setattr(PostgresSessions, "delete_expired", delete_expired_and_say_so)
     settings = load_settings()
     instance = main.build_instance(settings)
 

@@ -287,9 +287,7 @@ def a_surface_over(  # noqa: PLR0913 - each part is one thing the instance varie
     deadline: ManualDeadline,
     errors: list[BaseException],
     speech_scope: str,
-) -> Callable[
-    [FakeDeckStore, PostgresSessions, InstalledAuth], CoPresenterSurface
-]:
+) -> Callable[[FakeDeckStore, PostgresSessions, InstalledAuth], CoPresenterSurface]:
     """The talk host's surface over the real speech adapters and session access."""
     hearing, speaking = adapters
 

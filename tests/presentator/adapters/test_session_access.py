@@ -40,7 +40,7 @@ class Arranged:
         """Sign a person in; their one session row is the one asked about."""
         scene.issuer.issue_refresh_token(REFRESH)
         scene.sign_in(groups=GROUPS)
-        (self.session_id,) = scene.stored_sessions()
+        self.session_id = scene.session_id_of()
         self.scene = scene
         self.reader = SessionAccess(
             scene.relying_party,

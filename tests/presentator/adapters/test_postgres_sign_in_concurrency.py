@@ -34,7 +34,7 @@ def test_two_processes_signing_subjects_in_at_once_create_and_audit_one_account_
                 text("SELECT id, COUNT(*) FROM users GROUP BY id")
             ).all()
             sessions = connection.execute(
-                text("SELECT user_id, COUNT(*) FROM sessions GROUP BY user_id")
+                text("SELECT account_id, COUNT(*) FROM sessions GROUP BY account_id")
             ).all()
     finally:
         engine.dispose()
