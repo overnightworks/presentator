@@ -160,12 +160,12 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
   at 512 per build uid, since the platform sets no bound per pod.
 - The talk has its own origin: one cookie across both hosts would put deck code beside the
   credential it must not reach.
-- Processes share state only through Postgres and Redis. Every write that needs one winner takes an
-  advisory lock; the refresh holds a session lock on a pinned connection and bumps an epoch in
-  `refresh_owner`, which every refresh and removal write reads `FOR SHARE`, so a holder whose
-  connection ended is refused. The ask lease is a tandem slot (cap 1 per session) that lasts the
-  agent's deadline plus a margin and is freed by its holder's token only. While Redis cannot answer
-  (it keeps nothing durable), every request but `/health` is a 503: webauth's limiter fails closed.
+- Processes share state only through Postgres and Redis. Single-winner writes take an advisory lock;
+  the refresh holds a session lock on a pinned connection and bumps an epoch in `refresh_owner`,
+  which every refresh and removal reads `FOR SHARE`, so a dead-connection holder is refused. The ask
+  lease is a tandem slot (one per session) lasting the agent's deadline plus a margin, freed only by
+  its holder's token; a Redis restart can briefly allow a second answer. While Redis cannot answer,
+  all requests but `/health` get a 503; webauth's limiter fails closed.
 - The speech origin is plain `http` and the gateway's `http` or `https`, both at Service addresses
   inside the cluster; presentator sends the workload token and the person's token over that hop and
   relies on the deployment to keep it there.
