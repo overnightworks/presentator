@@ -1,8 +1,0 @@
-claim_id = "3b4a71fa9585408d989c4903411a156d"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "d479d32a9a5d1dc96448d49754e042a5d819444f"
-branch = "claude/issue-1196-a-refused-hello-names-its-cause-and-the"
-scope = ["src/presentator/adapters/build_wire.py", "src/presentator/host", "tests/presentator"]
-opened_commit = "d9236d4f4ec79c91aa9eac090a8880acb50836a7"
-whole_reason = "the wire's hello refusal spans its adapter, the worker host and their tests"
