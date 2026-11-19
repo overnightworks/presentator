@@ -3,6 +3,6 @@ agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
 role = "builder"
 base = "4b25b2fb41d2f614b8c7921abcb2459add6c845e"
 branch = "claude/issue-1244-branch-coverage-spans-every-test-layer-t"
-scope = [".github/workflows/ci.yml", "pyproject.toml", "scripts", "slidev", "tests/support"]
+scope = [".github/workflows/ci.yml", "frontend/playwright.config.ts", "pyproject.toml", "quality/config.toml", "scripts", "slidev", "sonar-project.properties", "tests/support", "uv.lock"]
 opened_commit = "8b84b088df3069950eb058eb07a7df899b6bb9f9"
 whole_reason = "One measurement over every test layer; instrumenting one layer alone would leave the merged figure unproven"
