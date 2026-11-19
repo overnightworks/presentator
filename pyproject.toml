@@ -31,6 +31,7 @@ presentator-worker = "presentator.host.worker:main"
 
 [dependency-groups]
 dev = [
+    "coverage==7.16.0",
     "overnightworks-design[catalogs] @ https://github.com/overnightworks/design/releases/download/v0.37.0/overnightworks_design-0.37.0-py3-none-any.whl#sha256=21f47850c76d247bf70d709eaf74975db1f268ee49e420f997aca94aeb0eb9f4",
     "pypdf==7.0.1",
     "pytest==9.2.0",

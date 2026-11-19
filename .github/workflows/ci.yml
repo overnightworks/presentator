@@ -112,14 +112,16 @@ jobs:
           PRESENTATOR_TEST_POSTGRES_URL: postgresql://postgres@localhost:5432/postgres
           PRESENTATOR_TEST_REDIS_URL: redis://localhost:6379/0
           PRESENTATOR_TEST_S3_BUCKET: ${{ steps.garage.outputs.bucket }}
-        run: uv run --locked pytest -q -n auto --cov=src --cov-report=xml:reports/coverage.xml
+          # The coverage job combines this data with the lobby drive's.
+          COVERAGE_FILE: reports/python-coverage/python.pytest
+        run: uv run --locked pytest -q -n auto --cov=src
 
-      - name: Upload the coverage report
+      - name: Upload the coverage data
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: coverage-python
-          path: reports/coverage.xml
+          name: python-coverage-pytest
+          path: reports/python-coverage/python.pytest
           if-no-files-found: error
           retention-days: 7
           overwrite: true
@@ -175,15 +177,22 @@ jobs:
       - name: Check types
         run: pnpm typecheck
 
+      # The overlay's browser tests build an instrumented deck and write its
+      # counters beside vitest's; the example deck below builds without them.
       - name: Test
         run: pnpm test
+
+      # Vitest and the browser tests count the same source files; the merged
+      # figure is reported, and vitest's thresholds stay the check.
+      - name: Merge the overlay's coverage
+        run: pnpm coverage:merge
 
       - name: Upload the coverage report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-slidev
-          path: reports/slidev-coverage
+          path: reports/slidev-coverage/lcov.info
           if-no-files-found: error
           retention-days: 7
           overwrite: true
@@ -283,6 +292,31 @@ jobs:
         with:
           name: coverage-lobby
           path: reports/lobby-coverage/lcov-lobby.info
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+      # Coverage names a stack's data file finished (its `.H<hash>h` suffix)
+      # only once it has written all of it; combining an unfinished one would
+      # drop that stack's lines without a word.
+      - name: Check that every stack finished its Python coverage data
+        if: ${{ !cancelled() }}
+        working-directory: .
+        run: |
+          unfinished=$(find reports/python-coverage -name 'python.*' ! -name '*.H*h')
+          if [ -n "$unfinished" ]; then
+            echo "::error::A stack stopped before its coverage data was written: $unfinished"
+            exit 1
+          fi
+
+      # The drive's stacks count the Python they run; the coverage job adds
+      # it to pytest's.
+      - name: Upload the drive's Python coverage data
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: python-coverage-drive
+          path: reports/python-coverage/
           if-no-files-found: error
           retention-days: 7
           overwrite: true
@@ -513,13 +547,50 @@ jobs:
       - lobby
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
+      - name: Check out the event commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: $/.github/actions/setup-uv
+
+      - name: Install locked dependencies
+        run: uv sync --locked --all-groups
+
+      - name: Download the Python coverage data
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: python-coverage-*
+          path: reports/python-coverage
+          merge-multiple: true
+
+      # pytest's run and the lobby drive's ran the same source tree at the
+      # same checkout path, so their data adds up. The figure is reported:
+      # pytest's own floor stays the check.
+      - name: Combine pytest's and the drive's Python coverage
+        run: |
+          uv run --locked coverage combine --data-file=reports/python-coverage/python reports/python-coverage
+          uv run --locked coverage xml --data-file=reports/python-coverage/python --fail-under=0 -o reports/coverage.xml
+          uv run --locked coverage report --data-file=reports/python-coverage/python --fail-under=0 --skip-covered
+
+      - name: Upload the combined Python coverage report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-python
+          path: reports/coverage.xml
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
       # The gate downloads the one artifact `coverage`; its Sonar scan reads
-      # coverage.xml (pytest), lcov.info (the Slidev addon's vitest) and
-      # lcov-lobby.info (the lobby's vitest) from the artifact's root. The
-      # parts stay: a rerun of only the failed jobs re-uploads just their
-      # reports, and this merge must still find all three.
+      # coverage.xml (pytest and the lobby drive), lcov.info (the overlay's
+      # vitest and browser tests) and lcov-lobby.info (the lobby's vitest and
+      # drive) from the artifact's root. The parts stay: a rerun of only the
+      # failed jobs re-uploads just their reports, and this merge must still
+      # find all three.
       - name: Merge the coverage reports into one artifact
         uses: actions/upload-artifact/merge@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
