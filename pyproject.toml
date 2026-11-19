@@ -161,6 +161,8 @@ convention = "google"
 "scripts/answer_start.py" = ["INP001"]
 # Drives the check script as a subprocess against temporary and real pages.
 "tests/scripts/test_check_catalog_purity.py" = ["S603"]
+# Reads a recorded turn's log lines with the answer start script, as a subprocess.
+"tests/presentator/api/test_copresenter_speech.py" = ["S603"]
 # `vulture` reads a whitelist as bare attribute expressions; naming a field
 # there is the entry, and assigning it would only move the dead name.
 "tests/support/vulture_allowlist.py" = ["B018"]

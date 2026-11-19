@@ -7,20 +7,26 @@ import base64
 import json
 import logging
 import re
+import subprocess
+import sys
 import threading
 from http import HTTPStatus
+from pathlib import Path
 from typing import TYPE_CHECKING, Final
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from agents.backend.fake_gateway import FakeGateway, completion
+from fastapi import WebSocket
 from fastapi.responses import JSONResponse
-from logline import REQUEST_EVENT
+from logline import REQUEST_EVENT, StepTimer, unit_trace
 from speech_client import wire
 from sqlalchemy import Engine
+from starlette.websockets import WebSocketDisconnect
 
 from tests.support.copresenter_support import (
     ACCESS,
+    HEARING,
     ROTATED,
     at_the_second_refresh,
     delete_the_sessions,
@@ -37,6 +43,7 @@ from tests.support.log_lines import LogLine, json_logged
 from tests.support.speech_drive import (
     LEAK_ASKS,
     LEAK_HEALTH,
+    ORIGIN,
     THE_ASKED_DECK,
     WORKLOAD,
     SpeechInstance,
@@ -55,23 +62,31 @@ from tests.support.speech_service import (
     PLANTED,
     SPEAK_FAILURES,
     FakeSpeechService,
+    Hear,
     RawPeer,
     Served,
     a_chunked_wav,
+    a_completed,
     a_health_document,
     a_held_wav,
     nobody_listens,
+    sending,
 )
 from tests.support.talk_support import A, Hosts
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from starlette.testclient import WebSocketTestSession
+
 
 _POLICY_VIOLATION: Final = 1008
 THREE_SENTENCES: Final = 3
 SECOND: Final = 2
 _THE_PLAIN_ERROR: Final = {"message": "the answer could not be spoken"}
+_ANSWER_START: Final = (
+    Path(__file__).resolve().parents[3] / "scripts" / "answer_start.py"
+)
 
 
 def _say(text: str) -> Callable[[], FakeGateway]:
@@ -216,6 +231,65 @@ def test_a_failed_speech_call_ends_the_answer_as_a_warning_on_the_request_trace(
         "unavailable",
     )
     assert spoken["trace_id"] == answer["trace_id"] == request["trace_id"]
+
+
+def _one_turn_ended_by_silence(turn: str) -> Hear:
+    """The service's side of one turn: its wait line in the turn's trace, its final."""
+    send_the_final = sending(a_completed("Hallo.", traceparent=turn))
+
+    async def realtime(socket_to_browser: WebSocket) -> None:
+        with unit_trace(turn):
+            StepTimer("turn_end_wait.ended", logging.getLogger("speech_service")).end()
+        await send_the_final(socket_to_browser)
+
+    return realtime
+
+
+def test_a_heard_and_answered_turn_gives_the_answer_start_figure(
+    engine: Engine, capsys: pytest.CaptureFixture[str]
+) -> None:
+    turn = f"00-{'3' * 32}-{'4' * 16}-01"
+    scenario = SpeechScenario(
+        gateway=_say("Erster Satz."),
+        service=FakeSpeechService(realtime=_one_turn_ended_by_silence(turn)),
+    )
+    with a_speech_instance(engine, scenario) as instance:
+        capsys.readouterr()
+        with json_logged(capsys) as logged:
+            with instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket:
+                socket.send_bytes(b"first")
+                (final,) = [
+                    frame for frame in _frames_until_closed(socket) if frame["final"]
+                ]
+            instance.talk.post(
+                "/copresenter/ask",
+                json=THE_ASKED_DECK,
+                headers={"traceparent": str(final["traceparent"])},
+            )
+            recorded = logged.text
+
+    read = subprocess.run(
+        [sys.executable, str(_ANSWER_START)],
+        input=recorded,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert read.returncode == 0, read.stdout
+    (count, p50, p95) = read.stdout.splitlines()
+    assert count == "turns 1"
+    assert p50.startswith("p50_ms ")
+    assert p50.removeprefix("p50_ms ") == p95.removeprefix("p95_ms ")
+
+
+def _frames_until_closed(socket: WebSocketTestSession) -> list[dict[str, object]]:
+    frames: list[dict[str, object]] = []
+    while True:
+        try:
+            frames.append(socket.receive_json())
+        except WebSocketDisconnect:
+            return frames
 
 
 def _who_status(instance: SpeechInstance) -> HTTPStatus:

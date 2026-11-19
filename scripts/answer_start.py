@@ -1,14 +1,7 @@
 """How soon a spoken answer begins: end of speech to first audio, per turn.
 
-`docs/co-presenter.md` (What the log keeps of an answer) owns the figure. A
-turn's trace holds the speech service's `turn_end_wait.ended`, whose wait starts
-at the first silent audio after speech, so its start is the end of speech, and
-the app's `answer.ended`, whose `first_output_ms` counts from the ask to the
-first audio the answer sends. A line's start is its `ts` less its `duration_ms`.
-The script reads JSON lines from the files it is given, or from standard input,
-joins them by `trace_id`, prints the turn count and the 50th and 95th
-percentiles (nearest rank) in milliseconds, and names each trace it cannot join
-with its reason. It exits 1 when no turn joins.
+`docs/co-presenter.md` (How soon an answer begins) owns the figure, the lines it
+joins by `trace_id`, what the command prints and its gaps.
 """
 
 from __future__ import annotations
