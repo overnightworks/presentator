@@ -167,6 +167,21 @@ class RefusedBody(HTTPException):
         self.fault = fault
 
 
+class OversizedBody(HTTPException):
+    """A body over its size limit, met while its route reads it.
+
+    The size limit answers its own 413 when its error reaches it. FastAPI
+    re-raises an `HTTPException` that reading a body raises and turns every
+    other error there into a 400, so this one carries that error past the route
+    and its answer raises it again, after the router has named the route.
+    """
+
+    def __init__(self, over_limit: Exception) -> None:
+        """Carry the size limit's own error."""
+        super().__init__(HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+        self.over_limit = over_limit
+
+
 def _validation_answer(faults: tuple[ValidationFault, ...]) -> Response:
     """The 422 that names each fault and nothing the request sent."""
     return Response(
@@ -180,6 +195,10 @@ def _answer_refused_body(_request: Request, error: Exception) -> Response:
     return _validation_answer((cast("RefusedBody", error).fault,))
 
 
+def _hand_oversized_body_to_its_limit(_request: Request, error: Exception) -> Response:
+    raise cast("OversizedBody", error).over_limit
+
+
 def _answer_validation(_request: Request, error: Exception) -> Response:
     invalid = cast("RequestValidationError", error)
     return _validation_answer(
@@ -191,7 +210,11 @@ def _answer_validation(_request: Request, error: Exception) -> Response:
 
 
 def install_error_answers(app: FastAPI) -> None:
-    """Answer every `ProblemError` as problem details, validation without input."""
+    """Answer every `ProblemError` as problem details, validation without input.
+
+    An oversized body goes back to the size limit, which answers it.
+    """
     app.add_exception_handler(ProblemError, _answer)
     app.add_exception_handler(RequestValidationError, _answer_validation)
     app.add_exception_handler(RefusedBody, _answer_refused_body)
+    app.add_exception_handler(OversizedBody, _hand_oversized_body_to_its_limit)

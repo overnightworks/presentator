@@ -8,8 +8,8 @@ answer. This middleware reads every JSON body before a route does, and when the
 route reads it, refuses both as 422 in the validation answer's shape, naming
 where the fault is and never what it is; a body that is not UTF-8 is
 `json_invalid`, as one that is not JSON is. JSON syntax stays the framework's to
-judge. Since the body is read here, a streamed body over its cap is answered by
-the size limit's 413.
+judge. A streamed body that passes its cap while it is read here is refused the
+same way, when the route reads it, and answered by the size limit's 413.
 """
 
 import json
@@ -19,9 +19,11 @@ from email.message import Message as ContentType
 from typing import Final, cast
 
 from starlette.datastructures import Headers
+from starlette.exceptions import HTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from webauth.middleware import RequestBodyTooLarge
 
-from presentator.api.problems import RefusedBody, ValidationFault
+from presentator.api.problems import OversizedBody, RefusedBody, ValidationFault
 
 UNSTORABLE_STRING: Final = "string_unstorable"
 _JSON_INVALID: Final = "json_invalid"
@@ -103,6 +105,15 @@ async def _whole_body(receive: Receive) -> tuple[bytes, Message | None]:
             return b"".join(chunks), None
 
 
+def _refusing(refusal: HTTPException) -> Receive:
+    """A body read that raises the refusal, so the route is named before it answers."""
+
+    async def refuse() -> Message:
+        raise refusal
+
+    return refuse
+
+
 @dataclass(frozen=True, slots=True)
 class StorableJsonBodies:
     """Pure ASGI middleware inside the gates, so it reads only admitted bodies.
@@ -124,8 +135,15 @@ class StorableJsonBodies:
         ):
             await self.app(scope, receive, send)
             return
-        body, cut_short = await _whole_body(receive)
+        try:
+            body, cut_short = await _whole_body(receive)
+        except RequestBodyTooLarge as over_limit:
+            await self.app(scope, _refusing(OversizedBody(over_limit)), send)
+            return
         fault = None if cut_short is not None else _body_fault(body)
+        if fault is not None:
+            await self.app(scope, _refusing(RefusedBody(fault)), send)
+            return
         handed: list[Message] = [
             {"type": "http.request", "body": body, "more_body": cut_short is not None}
         ]
@@ -133,11 +151,6 @@ class StorableJsonBodies:
             handed.append(cut_short)
 
         async def replay() -> Message:
-            if not handed:
-                return await receive()
-            message = handed.pop(0)
-            if fault is not None:
-                raise RefusedBody(fault)
-            return message
+            return handed.pop(0) if handed else await receive()
 
         await self.app(scope, replay, send)

@@ -14,6 +14,7 @@ from fastapi.openapi.utils import (
 from httpx2 import Response
 from sqlalchemy import Engine
 
+from presentator.api.auth import DEFAULT_BODY_BYTES
 from presentator.api.json_bodies import UNSTORABLE_STRING
 from presentator.contracts.decks import AccessKind
 from presentator.contracts.preferences import ThemeChoice
@@ -170,13 +171,16 @@ _LONE_SURROGATE = "\\ud"
 _ESCAPED_NUL = "\\u0000"
 
 
-def _sent_by_the_admin(engine: Engine, sent: JsonSent) -> Response:
+def _sent_by_the_admin(
+    engine: Engine, sent: JsonSent, *, streamed: bool = False
+) -> Response:
+    """Send the body whole, or streamed in without a `Content-Length`."""
     hosts, _ = two_hosts_with_a_copresenter(engine)
     browser = hosts.signed_in_at(sent.address, headers=A_BROWSERS_HEADERS)
     return browser.request(
         sent.method,
         sent.path,
-        content=sent.body,
+        content=iter((sent.body,)) if streamed else sent.body,
         headers={**_JSON, "content-type": "application/json"},
     )
 
@@ -304,6 +308,44 @@ def test_a_body_that_is_not_utf8_is_answered_as_invalid_json(
     is_the_frameworks_validation_answer(answer, marker=_MARKER)
     assert {error["type"] for error in answer.json()["detail"]} == {"json_invalid"}
     (line,) = request_lines(caplog)
+    assert line["route"] == sent.path
+
+
+_OVER_THE_BODY_CAP = b" " * DEFAULT_BODY_BYTES
+
+
+@pytest.mark.parametrize(
+    "sent",
+    [
+        JsonSent(
+            A_TALK_ADDRESS,
+            "POST",
+            ASK,
+            b'{"said": "Hier?", "slide": 1}' + _OVER_THE_BODY_CAP,
+        ),
+        JsonSent(
+            A_BROWSERS_ADDRESS,
+            "PUT",
+            _SETTINGS,
+            b'{"name": "Vortrag"}' + _OVER_THE_BODY_CAP,
+        ),
+    ],
+    ids=["ask", "settings"],
+)
+def test_a_streamed_body_over_the_cap_is_answered_413_and_names_its_route(
+    sent: JsonSent,
+    engine: Engine,
+    json_logging: None,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    del json_logging
+    caplog.set_level(logging.INFO)
+
+    answer = _sent_by_the_admin(engine, sent, streamed=True)
+
+    assert answer.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+    (line,) = request_lines(caplog)
+    assert line["status"] == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
     assert line["route"] == sent.path
 
 
