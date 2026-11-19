@@ -30,7 +30,12 @@ class Added:
     in_time: bool = True
 
 
-def added_up(directory: Path, *, ends_by: float) -> Added:
+def added_up(
+    directory: Path,
+    *,
+    ends_by: float,
+    entries_up_to: float = MAXIMUM_ENTRIES,
+) -> Added:
     """Add up what one run has written into that directory, so far.
 
     Every name in it was written by a deck's own build, so nothing here is
@@ -41,7 +46,8 @@ def added_up(directory: Path, *, ends_by: float) -> Added:
     next a build can make a name into anything, and a descriptor is the one
     thing it cannot exchange. A link is counted as the name it is, the walk
     stops at the first entry it cannot read, and it stops at the entry and at
-    the moment it may not go past: a talk this server could not add up is one
+    the moment it may not go past (the entry limit is the caller's to lift, for
+    a tree that is only measured): a talk this server could not add up is one
     it refuses, never one it guesses at.
     """
     root = _a_directory_of_its_own(directory)
@@ -49,13 +55,13 @@ def added_up(directory: Path, *, ends_by: float) -> Added:
         return Added(entries=0, unreadable=str(directory))
     still_open = [root]
     try:
-        return _walked(still_open, ends_by=ends_by)
+        return _walked(still_open, ends_by=ends_by, entries_up_to=entries_up_to)
     finally:
         for holder in still_open:
             os.close(holder)
 
 
-def _walked(still_open: list[int], *, ends_by: float) -> Added:
+def _walked(still_open: list[int], *, ends_by: float, entries_up_to: float) -> Added:
     held, entries = 0, 0
     while still_open:
         holder = still_open.pop()
@@ -63,7 +69,9 @@ def _walked(still_open: list[int], *, ends_by: float) -> Added:
             with os.scandir(holder) as listing:
                 for entry in listing:
                     entries += 1
-                    stopped = _stopped_at(entries, ends_by=ends_by)
+                    stopped = _stopped_at(
+                        entries, ends_by=ends_by, entries_up_to=entries_up_to
+                    )
                     if stopped is not None:
                         return stopped
                     held += _size_of(entry, held_by=holder, still_open=still_open)
@@ -74,8 +82,8 @@ def _walked(still_open: list[int], *, ends_by: float) -> Added:
     return Added(entries=entries, bytes=held)
 
 
-def _stopped_at(entries: int, *, ends_by: float) -> Added | None:
-    if entries > MAXIMUM_ENTRIES:
+def _stopped_at(entries: int, *, ends_by: float, entries_up_to: float) -> Added | None:
+    if entries > entries_up_to:
         return Added(entries=entries)
     if monotonic() > ends_by:
         return Added(entries=entries, in_time=False)

@@ -10,6 +10,7 @@ import pytest
 
 from presentator.adapters.build_cache import BuildCache, RunObjects
 from presentator.adapters.build_runs import ARRIVING_PREFIX
+from presentator.adapters.build_wire import MAXIMUM_ENTRIES
 from presentator.application import build_retention
 from presentator.contracts.decks import (
     DECK_DIRECTORY,
@@ -259,6 +260,22 @@ def test_a_process_that_builds_past_its_bound_lets_its_older_kept_run_go(
 
     assert on_disk(cache) == {"run-2"}
     assert cache.local("run-1") is not None
+
+
+def test_a_run_with_more_entries_than_a_talk_may_hold_still_counts_every_byte(
+    tmp_path: Path, store: DirectoryRunObjects
+) -> None:
+    cache = a_cache(tmp_path / "a", store, bound=2 * _A_RUNS_BYTES)
+    crowded = built_run(cache, "run-1") / DECK_DIRECTORY / "assets"
+    crowded.mkdir()
+    for number in range(MAXIMUM_ENTRIES + 1):
+        (crowded / str(number)).write_bytes(b"x")
+    assert cache.keep("run-1")
+    built_run(cache, "run-2")
+
+    assert cache.keep("run-2")
+
+    assert on_disk(cache) == {"run-2"}
 
 
 def test_past_its_bound_the_least_recently_served_run_goes_and_is_fetched_again(

@@ -224,7 +224,11 @@ def _is_a_regular_file(path: Path) -> bool:
 
 def _bytes_of(run: Path) -> int:
     """What that run's tree holds, counted by the one walker, its links not followed."""
-    return added_up(run, ends_by=math.inf).bytes
+    added = added_up(run, ends_by=math.inf, entries_up_to=math.inf)
+    if added.unreadable is not None:
+        reason = f"cannot add up {run}: {added.unreadable}"
+        raise OSError(reason)
+    return added.bytes
 
 
 def _served_at(run: Path) -> float:
