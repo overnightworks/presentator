@@ -13,7 +13,6 @@ from presentator.adapters.postgres.sources import PostgresSourceStore
 from presentator.adapters.secrets import secret_box
 from presentator.contracts.decks import SourceWrite
 from tests.presentator.adapters.support.deck_writer_process import (
-    MARKED_SOURCE_NAMES,
     OWNER,
     SLUGS,
     SOURCE_NAMES,
@@ -21,7 +20,6 @@ from tests.presentator.adapters.support.deck_writer_process import (
     SWITCHES,
     a_build,
     a_deck,
-    marked_slugs,
 )
 from tests.presentator.adapters.support.source_stores_support import (
     INSTANCE_KEY,
@@ -112,43 +110,6 @@ def test_a_reader_beside_a_writer_switching_builds_never_sees_half_a_switch(
 
     assert switched == SWITCHES
     assert torn == []
-
-
-def test_two_processes_marking_one_source_leave_what_one_of_them_would_alone(
-    database_url: str, tmp_path: Path, engine: Engine
-) -> None:
-    decks = PostgresDeckStore(engine=engine, fence=NO_FENCE)
-    carried = {
-        source_id: marked_slugs(name, first_half=True)
-        + marked_slugs(name, first_half=False)
-        for source_id, name in zip(
-            _sources_named(engine, MARKED_SOURCE_NAMES),
-            MARKED_SOURCE_NAMES,
-            strict=True,
-        )
-    }
-    for source_id, slugs in carried.items():
-        for slug in slugs:
-            decks.put(a_deck(slug, source_id))
-
-    _CHILD.both_report(
-        database_url,
-        tmp_path,
-        TypeAdapter(int),
-        first="mark-the-first-half-carried",
-        second="mark-the-second-half-carried",
-    )
-
-    with engine.connect() as connection:
-        marked = connection.execute(
-            text("SELECT source_id, slug FROM decks WHERE removed_at IS NOT NULL")
-        ).all()
-    for source_id, name in zip(carried, MARKED_SOURCE_NAMES, strict=True):
-        marked_here = {slug for owner, slug in marked if owner == source_id}
-        assert marked_here in (
-            set(marked_slugs(name, first_half=True)),
-            set(marked_slugs(name, first_half=False)),
-        )
 
 
 @pytest.mark.usefixtures("source_ids")

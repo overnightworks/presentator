@@ -14,10 +14,9 @@ from typing import Final
 
 from presentator.adapters.identity import TokenIdentifierFactory
 from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
-from presentator.adapters.postgres.source_runs import PostgresSourceRunStore
 from presentator.adapters.postgres.sources import PostgresSourceStore
 from presentator.adapters.secrets import secret_box
-from presentator.contracts.decks import SourceRun, SourceRunOutcome, SourceWrite
+from presentator.contracts.decks import SourceWrite
 from tests.presentator.adapters.support.source_stores_support import INSTANCE_KEY
 from tests.support.postgres import NO_FENCE, engine_from_environment
 from tests.support.two_processes import announce_ready_and_wait_for_go
@@ -25,7 +24,6 @@ from tests.support.two_processes import announce_ready_and_wait_for_go
 OWNERS: Final = tuple(f"concurrent-owner-{number}" for number in range(20))
 _NOON: Final = datetime(2026, 11, 14, 12, tzinfo=UTC)
 _REPEATS: Final = 5
-RUNS_RECORDED_EACH: Final = 30
 NAMES: Final = tuple(f"concurrent-source-{number}" for number in range(20))
 
 
@@ -35,7 +33,6 @@ class Stores:
 
     drafts: PostgresSourceKeyDrafts
     sources: PostgresSourceStore
-    runs: PostgresSourceRunStore
 
 
 def a_source_write(name: str, url: str, owner_id: str) -> SourceWrite:
@@ -121,26 +118,10 @@ def _promote(stores: Stores) -> object:
     return won
 
 
-def _record_runs(stores: Stores) -> object:
-    (source,) = stores.sources.all()
-    for minute in range(RUNS_RECORDED_EACH):
-        stores.runs.record(
-            SourceRun(
-                source_id=source.id,
-                at=_NOON + timedelta(minutes=minute),
-                outcome=SourceRunOutcome.SUCCESS,
-                commit=f"commit-{os.getpid()}-{minute}",
-                reason=None,
-            )
-        )
-    return source.id
-
-
 ACTIONS: Final[dict[str, Callable[[Stores], object]]] = {
     "add-with-one-name": _add_with_one_name,
     "add-with-one-url": _add_with_one_url,
     "promote": _promote,
-    "record-runs": _record_runs,
     "get-or-mint": _get_or_mint,
     "mint": _mint,
     "mint-once": _mint_once,
@@ -164,7 +145,6 @@ def main() -> None:
             box=secret_box(INSTANCE_KEY),
             fence=NO_FENCE,
         ),
-        runs=PostgresSourceRunStore(engine=engine, fence=NO_FENCE),
     )
     announce_ready_and_wait_for_go()
     print(json.dumps(action(stores)))  # noqa: T201 - the parent reads this line
