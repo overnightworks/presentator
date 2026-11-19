@@ -1,0 +1,8 @@
+claim_id = "bdda9c30bec041e6b73692eff6ca158c"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "9ae652065c55e10a49f6b3205b9f927fe96ae0c2"
+branch = "claude/issue-1309-the-k3d-worker-probe-keeps-the-images-it"
+scope = ["scripts/probe_build_worker_k3d.py", "tests/scripts"]
+opened_commit = "db04c38fa240fecd8bd5586278fc33f2b2db022b"
+whole_reason = "the probe's tests share tests/scripts and its conftest"
