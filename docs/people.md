@@ -26,7 +26,7 @@ is `{subject}`. `?dry_run=true` counts and changes nothing.
 | PE5 | 403 | A valid token without the admin group or a group below it. |
 | PE6 | 409 | A refresh or build in this process holds the lock for longer than 60 seconds; nothing was deleted. `Retry-After` is the wait in whole seconds, and `busy` lists the running work. A refresh in another process is waited for up to the build timeout (300 seconds by default) and then answers 500 (PE15). hal's timeout must exceed 60 seconds plus the build timeout. |
 | PE7 | 422 | `dry_run` is not a boolean; nothing was deleted. |
-| PE8 | 500 | A mirror or build directory could not be removed; the body is the 200's plus `leftover` (below). The person remains and a repeat finishes it. A plain 500 without `leftover` is a failed step (below). |
+| PE8 | 500 | A mirror or build directory could not be removed, or the object store did not delete a run; the body is the 200's plus `leftover` (below). The person remains and a repeat finishes it. A plain 500 without `leftover` is a failed step (below). |
 
 - **PE9** Every answer carries `Cache-Control: no-store`.
 - **PE10** A request never creates an account.
@@ -42,7 +42,8 @@ is `{subject}`. `?dry_run=true` counts and changes nothing.
   count counts source rows, not mirror directories on disk.
 - **PE13** `leftover` names only directories, one entry per directory that
   stayed: `{kind, count, path}` with `count` 1. `kind` is `mirrors` or
-  `builds`.
+  `builds`. A run the store did not delete is no directory: it is not listed,
+  and `leftover` may then be empty.
 - **PE14** `path` is relative to the data volume, as `mirrors/<64 hex digits>.git`
   or `builds/<run>`, the first part being the configured directory's own name.
   A path never holds a source name, an address, a deck, a commit, an email or
@@ -58,7 +59,8 @@ is `{subject}`. `?dry_run=true` counts and changes nothing.
   erasure.
 - **PE16** The `person_erasure.ended` line of a leftover holds the kinds and counts left over and
   removed, never a path or a name; the mirror's own warning names the source's
-  internal id.
+  internal id. Its reason is `store_unavailable` when the store kept a run, else
+  `disk_leftover`.
 - **PE17** A dry run never lists a leftover.
 
 ## Export a person

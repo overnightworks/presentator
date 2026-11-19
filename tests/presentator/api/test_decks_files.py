@@ -25,6 +25,7 @@ from tests.support.lobby import (
     GivenDecks,
     a_configured_source,
 )
+from tests.support.run_objects import DirectoryRunObjects
 from tests.support.swapped_build import a_swapped_build, real_builds_under
 from tests.support.talk_support import ONLY_THIS_TEST_WROTE_IT, two_hosts
 
@@ -247,22 +248,35 @@ def test_a_talk_with_an_application_link_outside_its_build_answers_nothing(
     assert marker not in refused.text
 
 
-def test_a_talk_whose_run_is_neither_on_this_disk_nor_in_the_store_answers_nothing(
+@pytest.mark.parametrize(
+    ("answering", "status"),
+    [(True, HTTPStatus.NOT_FOUND), (False, HTTPStatus.SERVICE_UNAVAILABLE)],
+    ids=["not in the store", "a store that is down"],
+)
+def test_a_talk_whose_run_is_not_on_this_disk_answers_what_the_store_says(
     engine: Engine,
     tmp_path: Path,
+    *,
+    answering: bool,
+    status: HTTPStatus,
 ) -> None:
-    signed_in = a_talk_host(
+    builder = real_builds_under(tmp_path)
+    store = builder.cache.store
+    assert isinstance(store, DirectoryRunObjects)
+    store.answering = answering
+    hosts = two_hosts(
         engine,
-        GivenDecks(
+        given=GivenDecks(
             store=a_deck_store(built=a_build()),
             source=a_configured_source(_ADDRESS),
-            builder=real_builds_under(tmp_path),
+            builder=builder,
         ),
     )
 
-    missing = signed_in.get(_PROJECTOR)
+    talk = hosts.signed_in_at(A_TALK_ADDRESS).get(_PROJECTOR)
+    pdf = hosts.signed_in_at(A_BROWSERS_ADDRESS).get(f"/deck/{_SLUG}/pdf")
 
-    assert missing.status_code == HTTPStatus.NOT_FOUND
+    assert (talk.status_code, pdf.status_code) == (status, status)
 
 
 def test_a_missing_path_under_a_talk_with_no_application_answers_nothing(

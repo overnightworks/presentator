@@ -16,10 +16,9 @@ import logging
 from collections.abc import Iterable
 from datetime import datetime, timedelta
 from operator import attrgetter
-from pathlib import PurePosixPath
 from typing import Final
 
-from presentator.contracts.decks import Build, BuildRun, Deck
+from presentator.contracts.decks import Build, BuildRun, Deck, RunLeft
 from presentator.ports.decks import BuildRunner, DeckStore, SourceStore
 
 _RETENTION_REFUSED: Final = "build_retention.refused"
@@ -104,10 +103,8 @@ def delete_absent(
         )
 
 
-def builds_removed(
-    builder: BuildRunner, decks: Iterable[Deck]
-) -> tuple[PurePosixPath, ...]:
-    """Take every run these decks deliver away, and name the ones that stayed."""
+def builds_removed(builder: BuildRunner, decks: Iterable[Deck]) -> tuple[RunLeft, ...]:
+    """Take every run these decks deliver away, and say what of each stayed."""
     runs = sorted(_runs_named_by(decks), key=attrgetter("name"))
     attempts = (builder.remove(run) for run in runs)
     return tuple(stayed for stayed in attempts if stayed is not None)

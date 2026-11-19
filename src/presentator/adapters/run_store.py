@@ -18,6 +18,8 @@ from boto3.exceptions import Boto3Error
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
+from presentator.contracts.decks import BuildStoreUnavailableError
+
 if TYPE_CHECKING:
     # The stubs are a development dependency; the image carries boto3 alone.
     from types_boto3_s3 import S3Client
@@ -63,17 +65,21 @@ class StoredRuns:
         return True
 
     def fetch(self, run: str, *, archive: Path, pdf: Path) -> bool:
-        """Write that run's archive and PDF to these files, or say it could not."""
+        """Write that run's archive and PDF to these files, or say the store has none.
+
+        A store that did not answer raises `BuildStoreUnavailableError`.
+        """
         try:
             self.client.download_file(self.bucket, _key(run, _ARCHIVE), str(archive))
             self.client.download_file(self.bucket, _key(run, _PDF), str(pdf))
         except ClientError as failure:
-            if _error_code(failure) not in _ABSENT:
-                _failed("fetch", failure)
-            return False
+            if _error_code(failure) in _ABSENT:
+                return False
+            _failed("fetch", failure)
+            raise BuildStoreUnavailableError from failure
         except (Boto3Error, BotoCoreError, OSError) as failure:
             _failed("fetch", failure)
-            return False
+            raise BuildStoreUnavailableError from failure
         return True
 
     def names(self) -> frozenset[str] | None:

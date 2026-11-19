@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from enum import StrEnum
 from hashlib import sha256
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from tempfile import mkdtemp
 from time import monotonic
 from typing import IO, BinaryIO, Final, Protocol, cast
@@ -54,6 +54,7 @@ from presentator.contracts.decks import (
     BuildFailureReason,
     BuildRun,
     Deck,
+    RunLeft,
     Source,
     StepKind,
     ToolchainIdentity,
@@ -108,6 +109,7 @@ class BuildFault(StrEnum):
     UNACCOUNTABLE = "unaccountable"
     ADDING_UP_TIMED_OUT = "adding_up_timed_out"
     NOT_AS_WRITTEN = "not_as_written"
+    NOT_KEPT = "not_kept"
 
 
 def deck_id_of(slug: str) -> str:
@@ -338,11 +340,13 @@ class SlidevBuilds:
     def build(
         self, deck: Deck, *, source: Source
     ) -> Artefacts | BuildFailure | ToolchainUnavailable:
-        """Build this deck at its commit, or say what came of it instead.
+        """Build this deck at its commit and keep it in the store, or say why not.
 
         The talk and the PDF are written under a directory of this build's own
         that nothing points at yet, and the directory the deck delivered from
-        before is left where it stands. What the toolchain said about a failure
+        before is left where it stands. What is handed back is held under the
+        root and kept in the store, so the build's one line says whether the
+        store took it. What the toolchain said about a failure
         travels back with it, because the deck's page shows it (line 9). A run
         that ends any other way than handing back a talk — a failure this
         method returns, or a fault one of its own steps could not turn into
@@ -366,10 +370,14 @@ class SlidevBuilds:
                 if broke is not None:
                     return broke
                 written = place.here / OUTPUT_DIRECTORY
-                delivered = True
-                return Artefacts(
+                artefacts = Artefacts(
                     directory=written / TALK_DIRECTORY, pdf=written / PDF_FILE
                 )
+                refused = self._refused_delivery(artefacts, line)
+                if refused is not None:
+                    return refused
+                delivered = True
+                return artefacts
             finally:
                 if not delivered:
                     taken_away(place.here)
@@ -407,10 +415,19 @@ class SlidevBuilds:
         found = opened_without_a_link(written, under=self.builds.absolute())
         return None if found is None else os.fdopen(found, "rb")
 
-    def deliver(self, artefacts: Artefacts) -> BuildRun | None:
-        """Keep the run those artefacts stand in in the store, or answer nothing."""
-        name = run_name_holding(artefacts.directory)
-        return BuildRun(name) if self.cache.keep(name) else None
+    def _refused_delivery(
+        self, artefacts: Artefacts, line: StepTimer
+    ) -> BuildFailure | None:
+        """Hold the artefacts and keep their run in the store, or say why not."""
+        if not self.holds(artefacts):
+            # What the deck's own build wrote is the deck's fault, not this host's.
+            line.handled()
+            line.fail(BuildFault.NOT_AS_WRITTEN)
+            return BuildFailure.without_words()
+        if not self.cache.keep(run_name_holding(artefacts.directory)):
+            line.fail(BuildFault.NOT_KEPT)
+            return BuildFailure(reason=BuildFailureReason.STORE)
+        return None
 
     def kept(self, build: Build) -> Artefacts | None:
         """That build's talk and PDF under the root, fetched where they are missing."""
@@ -429,11 +446,9 @@ class SlidevBuilds:
         """Take every run but these off this disk, leaving the store as it is."""
         self.cache.drop_copies_except(frozenset(run.name for run in runs))
 
-    def remove(self, run: BuildRun) -> PurePosixPath | None:
-        """Take that run out of the store and off disk, or name it if it stayed."""
-        if self.cache.remove(run.name):
-            return None
-        return PurePosixPath(self.builds.absolute().name, run.name)
+    def remove(self, run: BuildRun) -> RunLeft | None:
+        """Take that run out of the store and off disk, or say what of it stayed."""
+        return self.cache.remove(run.name)
 
     def _a_place_of_its_own(self) -> BuildPlace:
         """Where this run works: a directory of its own under the root.

@@ -22,11 +22,13 @@ from presentator.contracts.decks import (
     Build,
     BuildAttempt,
     BuildFailure,
+    BuildFailureReason,
     BuildRun,
     ConnectionCheckResult,
     Deck,
     DeckFolder,
     DeployKeyDraft,
+    RunLeft,
     Source,
     SourcePoll,
     SourceRun,
@@ -667,8 +669,6 @@ class HeldDeckFolders:
 # under; no test touches these paths, because the runner is the boundary the
 # filesystem lives behind.
 BUILDS_ROOT: Final = Path("/var/lib/presentator/builds")
-_SOMEWHERE_ELSE: Final = Path("/var/lib/presentator/mirrors")
-
 
 # The toolchain a fake build runner builds under until a test moves it.
 THE_TOOLCHAIN: Final = ToolchainIdentity("0" * 64)
@@ -678,9 +678,9 @@ THE_TOOLCHAIN: Final = ToolchainIdentity("0" * 64)
 class FakeBuildRunner:
     """A build that answers with paths instead of running a toolchain.
 
-    It can fail the way a broken deck does, with or without words, and it can
-    answer with a place outside the root the way a deck that wrote its own
-    output path would.
+    It can fail the way a broken deck does, with or without words, the way the
+    real one refuses a deck that wrote its own output path, and the way it
+    fails a build the store did not take.
     """
 
     root: Path = BUILDS_ROOT
@@ -722,21 +722,14 @@ class FakeBuildRunner:
             return ToolchainUnavailable()
         if self.fails:
             return BuildFailure.said(self.says)
-        root = _SOMEWHERE_ELSE if self.writes_outside_the_root else self.root
+        # Holding and keeping are the real adapter's concern; here they only fail.
+        if self.writes_outside_the_root:
+            return BuildFailure.without_words()
+        if not self.store_answers:
+            return BuildFailure(reason=BuildFailureReason.STORE)
         run = BuildRun(f"run-{len(self.built)}")
         self.on_disk.add(run)
-        return _artefacts_of(run, under=root)
-
-    def holds(self, artefacts: Artefacts) -> bool:
-        return all(
-            written.is_relative_to(self.root)
-            for written in (artefacts.directory, artefacts.pdf)
-        )
-
-    def deliver(self, artefacts: Artefacts) -> BuildRun | None:
-        if not self.store_answers:
-            return None
-        return BuildRun(artefacts.directory.parent.parent.name)
+        return _artefacts_of(run, under=self.root)
 
     def kept(self, build: Build) -> Artefacts | None:
         # Fetching is the real adapter's concern; a run here is where it was laid.
@@ -753,12 +746,17 @@ class FakeBuildRunner:
         # One set stands for the store and the disk; only a sweep empties it.
         del runs
 
-    def remove(self, run: BuildRun) -> PurePosixPath | None:
+    def remove(self, run: BuildRun) -> RunLeft | None:
         self.removed.append(run)
-        if run in self.stuck:
-            return self.directory_of(run)
-        self.on_disk.discard(run)
-        return None
+        stuck = run in self.stuck
+        if not stuck:
+            self.on_disk.discard(run)
+        if not stuck and self.store_answers:
+            return None
+        return RunLeft(
+            directory=self.directory_of(run) if stuck else None,
+            in_store=not self.store_answers,
+        )
 
     def directory_of(self, run: BuildRun) -> PurePosixPath:
         """Where this fake says a run stands, relative to the volume."""

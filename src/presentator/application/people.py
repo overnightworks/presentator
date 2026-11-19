@@ -4,8 +4,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Final
 
-from presentator.application.decks import (
-    Decks,
+from presentator.application.decks import Decks
+from presentator.application.source_removal import (
+    SourceRemovalRefusal,
     SourceRemovalRefused,
     SourceRemovalStale,
 )
@@ -162,16 +163,23 @@ class People:
         self.sessions.delete_for_user(subject)
         self.preferences.delete(subject)
         self.key_drafts.remove_for_owner(subject)
-        leftovers = self._every_source_removed(placed)
+        refusals = self._every_source_removed(placed)
         if unplaced:
             named = ", ".join(unplaced)
             message = f"source {named} has a build no run can be placed for"
             raise RuntimeError(message)
-        if not leftovers:
+        if not refusals:
             return PersonErased(kinds=census)
         remaining = self._census(subject, self._sources_of(subject))
         return PersonDiskLeftover(
-            removed=_removed_between(census, remaining), leftovers=leftovers
+            removed=_removed_between(census, remaining),
+            leftovers=tuple(
+                left for refused in refusals for left in _directories_of(refused)
+            ),
+            store_unavailable=any(
+                refused.reason is SourceRemovalRefusal.STORE_UNAVAILABLE
+                for refused in refusals
+            ),
         )
 
     def _placed(
@@ -195,14 +203,10 @@ class People:
 
     def _every_source_removed(
         self, owned: tuple[Source, ...]
-    ) -> tuple[LeftoverDirectory, ...]:
-        """Try every source, then name what stayed; one that stayed stops no other."""
-        leftovers: list[LeftoverDirectory] = []
-        for source in owned:
-            refused = self._removed(source)
-            if refused is not None:
-                leftovers.extend(_directories_of(refused))
-        return tuple(leftovers)
+    ) -> tuple[SourceRemovalRefused, ...]:
+        """Try every source, then say why each that stayed did; none stops another."""
+        attempts = [self._removed(source) for source in owned]
+        return tuple(refused for refused in attempts if refused is not None)
 
     def _account_gone(self, subject: str, outcome: PersonErasure) -> PersonErasure:
         if isinstance(outcome, PersonErased):

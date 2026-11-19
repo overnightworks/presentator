@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from ipaddress import IPv6Address
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Final, assert_never
 
 MANIFEST_FILE: Final = "deck.toml"
@@ -461,6 +461,26 @@ class BuildRun:
         if self.name in {"", ".", ".."} or Path(self.name).name != self.name:
             message = f"{self.name!r} is not one name directly under the builds root"
             raise ValueError(message)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RunLeft:
+    """What of a run a removal could not take away.
+
+    `directory` is the run's directory still on this disk, relative to the data
+    volume; `in_store` says the store did not delete its objects, which are no
+    directory anyone could name.
+    """
+
+    directory: PurePosixPath | None
+    in_store: bool
+
+
+class BuildStoreUnavailableError(Exception):
+    """The store did not answer for a run this process holds no copy of.
+
+    The run may well exist: what is asked for is unavailable, not missing.
+    """
 
 
 class UnplacedBuildError(ValueError):

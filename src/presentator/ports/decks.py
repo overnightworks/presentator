@@ -20,6 +20,7 @@ from presentator.contracts.decks import (
     ConnectionCheckResult,
     Deck,
     DeployKeyDraft,
+    RunLeft,
     Source,
     SourcePoll,
     SourceRun,
@@ -308,30 +309,20 @@ class BuildRunner(Protocol):
         what the deck's page has to show its owner (line 9); a failure with no
         words is one no toolchain reported back about. A build that never
         reached a step is no attempt at the deck and answers ToolchainUnavailable.
-        """
 
-    @abstractmethod
-    def holds(self, artefacts: Artefacts) -> bool:
-        """Whether both artefacts really stand under the root builds are kept in.
-
-        A deck is code, so where a build says it wrote is checked
-        rather than trusted before that place becomes an address.
-        """
-
-    @abstractmethod
-    def deliver(self, artefacts: Artefacts) -> BuildRun | None:
-        """Keep held artefacts where every process serves them from, as one run.
-
-        Nothing is a store that did not take them: the build is no talk yet,
-        and its run is swept like any other no row names.
+        A deck is code, so where a build says it wrote is checked rather than
+        trusted before that place becomes an address: artefacts that do not
+        both stand under the root fail without words. Artefacts handed back
+        are kept where every process serves them from, as one run; a store
+        that did not take them fails the build with the `store` reason.
         """
 
     @abstractmethod
     def kept(self, build: Build) -> Artefacts | None:
         """That build's talk and PDF on this process's disk, fetched where missing.
 
-        Nothing is a run the store does not hold, or a store that does not
-        answer while this process holds no copy.
+        Nothing is a run the store does not hold; a store that does not answer
+        while this process holds no copy raises `BuildStoreUnavailableError`.
         """
 
     @abstractmethod
@@ -362,15 +353,16 @@ class BuildRunner(Protocol):
         """
 
     @abstractmethod
-    def remove(self, run: BuildRun) -> PurePosixPath | None:
+    def remove(self, run: BuildRun) -> RunLeft | None:
         """Take that run out of the store and its whole directory off disk.
 
         Not only the two files a deck's page ever pointed at: the run's own
         directory carried what the deck's own code wrote alongside them, too.
-        Only a directory shaped like a run directly under the root goes. A run
-        that survives the attempt is answered by its path relative to the data
-        volume, so a caller that must not go on believing a build was cleared
-        can stop and say what stayed rather than take that on faith.
+        Only a directory shaped like a run directly under the root goes. Both
+        are tried, whichever refuses. A run that survives the attempt is
+        answered by what stayed, so a caller that must not go on believing a
+        build was cleared can stop and say what stayed rather than take that
+        on faith.
         """
 
 
