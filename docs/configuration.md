@@ -115,10 +115,10 @@ some of them.
 | `PRESENTATOR_BUILDS` | `builds` | Where talks are built, and where this process keeps its copies of the stored builds it serves. |
 | `PRESENTATOR_BUILD_CACHE_BYTES` | `4294967296` | Past this many bytes, the copies served least recently leave `PRESENTATOR_BUILDS` and are fetched again when asked for; set it below the size of the volume that holds it. |
 | `PRESENTATOR_BUILD_TIMEOUT_SECONDS` | `300` | Bound of each build step; the build worker reads it too. A removal waits for a refresh this long, and so does a new refresh holder for the writes the old one has open. |
-| `PRESENTATOR_BUILD_OUTPUT_MEGABYTES` | `300` | Size bound of the talk a build leaves; the build worker reads it too. |
+| `PRESENTATOR_BUILD_OUTPUT_MEGABYTES` | `300` | Size bound of the talk a build leaves, in whole megabytes above 0: a talk of more bytes than that is refused, on either runner. The build worker reads it too. |
 | `PRESENTATOR_BUILD_RUNNER` | `worker` | Builds through the build workers and starts whether or not one answers; a build that finds none within 70 seconds fails as a worker outage. `host` builds on this machine instead, for a development run (without the sandbox, whose reason is in [constraints and reasons](ARCHITECTURE.md#6-constraints-and-reasons)). |
 | `PRESENTATOR_BUILD_WORKER_ADDRESS` | none | `host:port` of the build workers' Service; required with the `worker` runner and set together with the key file. |
-| `PRESENTATOR_BUILD_WORKER_KEY_FILE` | none | File holding the key (at least 32 characters, minus one trailing newline) that proves the web in the worker's hello; the worker reads the same secret through `--key-file`, as root only. |
+| `PRESENTATOR_BUILD_WORKER_KEY_FILE` | none | File holding the key (32 to 4096 bytes, minus one trailing newline) that proves the web in the worker's hello; the worker reads the same secret through `--key-file`, as root only. |
 
 ## Trusted proxies and the client address
 
