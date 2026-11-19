@@ -12,8 +12,6 @@ from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from types import ModuleType
 
-import pytest
-
 _WORDS_MODULE = "presentator.contracts.words"
 
 
@@ -37,9 +35,12 @@ def main() -> None:
     offered = offered_language(tag)
     deck = DeckText(title="Deck", language=tag, slides=())
     prompt = user_message(Question(said="?", slide=2, language=offered), deck)
-    with pytest.raises(ConfigurationError) as refused:
+    try:
         load_settings()
-    reason, variables = str(refused.value), list(refused.value.variables)
+    except ConfigurationError as refused:
+        reason, variables = str(refused), list(refused.variables)
+    else:
+        raise SystemExit("the start did not refuse")
     print(
         json.dumps(
             {
@@ -52,4 +53,5 @@ def main() -> None:
     )
 
 
-main()
+if __name__ == "__main__":
+    main()

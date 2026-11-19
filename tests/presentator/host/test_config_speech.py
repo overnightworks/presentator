@@ -134,6 +134,7 @@ def test_a_voice_that_does_not_speak_its_language_refuses_naming_its_variable(
 def test_a_voice_set_for_one_language_leaves_the_others_shipped_voice(
     language: Language, form: str, environment: pytest.MonkeyPatch
 ) -> None:
+    shipped = a_settings().speech_voices
     if form == "entry":
         environment.setenv(_voice_variable(language), wire.VoiceId.RYAN)
     else:
@@ -142,7 +143,6 @@ def test_a_voice_set_for_one_language_leaves_the_others_shipped_voice(
 
     voices = load_settings().speech_voices
 
-    shipped = a_settings().speech_voices
     assert voices == {**shipped, language: wire.VoiceId.RYAN}
 
 
