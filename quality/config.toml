@@ -138,11 +138,6 @@ rule = "test-layout"
 reason = "it exercises the room notice across a presenter and a projector window in a browser through built decks, which no single addon source file mirrors"
 
 [[layout.allow]]
-path = "tests/support/vulture_allowlist.py"
-rule = "test-import"
-reason = "vulture's whitelist must import every name it vouches for, test helpers included"
-
-[[layout.allow]]
 path = "tests/presentator/adapters/test_person_records.py"
 rule = "test-layout"
 reason = "it checks every store of a person at once, so no single adapter module is its subject"
