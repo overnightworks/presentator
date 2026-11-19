@@ -1463,11 +1463,7 @@ def _confirmed(
     a name this instance does not have is unaffected by what is passed.
     """
     preview = decks.removal(name)
-    expected = (
-        SourceRemoval(name=name, deck_count=0, run_count=0)
-        if preview is None
-        else preview
-    )
+    expected = preview or SourceRemoval(name=name, deck_count=0, run_count=0)
     return decks.remove_source(
         name,
         expected_deck_count=expected.deck_count,
