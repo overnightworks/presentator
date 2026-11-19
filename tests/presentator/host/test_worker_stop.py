@@ -1,4 +1,4 @@
-"""A SIGINT ends the build worker in its one stop line, wherever it lands."""
+"""A stop signal ends the build worker in its one stop line, wherever it lands."""
 
 import json
 import os
@@ -29,6 +29,7 @@ def _read_until(process: subprocess.Popen[str], event: str) -> list[str]:
     pytest.fail(f"the worker ended before {event}")
 
 
+@pytest.mark.parametrize("stop_signal", [signal.SIGINT, signal.SIGTERM])
 @pytest.mark.parametrize(
     ("phase", "reached"),
     [
@@ -36,8 +37,8 @@ def _read_until(process: subprocess.Popen[str], event: str) -> list[str]:
         pytest.param(Phase.SERVING, "process.ready", id="while it serves"),
     ],
 )
-def test_a_sigint_ends_the_worker_in_its_stop_line_alone(
-    phase: Phase, reached: str
+def test_a_stop_signal_ends_the_worker_in_its_stop_line_alone(
+    phase: Phase, reached: str, stop_signal: signal.Signals
 ) -> None:
     with subprocess.Popen(  # noqa: S603 - the command is this repository's own
         [sys.executable, "-m", _CHILD, phase],
@@ -49,14 +50,15 @@ def test_a_sigint_ends_the_worker_in_its_stop_line_alone(
     ) as process:
         try:
             before = _read_until(process, reached)
-            process.send_signal(signal.SIGINT)
+            process.send_signal(stop_signal)
             after, errors = process.communicate(timeout=PATIENCE.total_seconds())
         finally:
             process.kill()
 
     events = [line["event"] for line in json_lines("".join(before) + after)]
-    # The default action of SIGINT, which a shell or a container runtime reports as 130.
-    assert process.returncode == -signal.SIGINT
+    # The signal's default action, which a shell or a container runtime reports
+    # as 128 plus the signal's number.
+    assert process.returncode == -stop_signal
     assert events[-1] == ServerEvent.PROCESS_STOPPED
     assert events.count(ServerEvent.PROCESS_STOPPED) == 1
     assert "process.crashed" not in events

@@ -2,7 +2,6 @@
 
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -13,6 +12,7 @@ from tests.presentator.host.support.config_refusals import (
     assert_refusal_names,
     assert_refusal_never_quotes,
 )
+from tests.support.two_processes import CONSOLE_ENTRY_POINT
 
 _URL = "PRESENTATOR_REDIS_URL"
 _PASSWORD_FILE = "PRESENTATOR_REDIS_PASSWORD_FILE"  # noqa: S105 - a variable name
@@ -135,7 +135,7 @@ def test_a_refused_start_writes_neither_the_url_nor_its_password_anywhere(
     }
 
     started = subprocess.run(  # noqa: S603 - the interpreter of this run
-        [str(Path(sys.executable).parent / "presentator")],
+        [str(CONSOLE_ENTRY_POINT)],
         env={"PATH": os.environ["PATH"], **settings},
         capture_output=True,
         text=True,

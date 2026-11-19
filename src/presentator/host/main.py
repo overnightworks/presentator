@@ -112,7 +112,7 @@ from presentator.host.command_line import (
 )
 from presentator.host.config import Settings, WhereBuildsRun, load_settings
 from presentator.host.environment import ConfigurationError, cannot_start, variable_of
-from presentator.host.lifecycle import StopLine, interrupt_ends_as_a_stop
+from presentator.host.lifecycle import StopLine, signals_end_as_a_stop
 from presentator.host.oidc import (
     admission_of,
     client_configs_of,
@@ -704,12 +704,12 @@ def main(
 
     Each runs on the configuration the environment carries. A refused
     configuration, or a store fault, ends any of them in one line and exit
-    status 1; a SIGINT, at any point, ends it as a stop in one
+    status 1; a SIGINT or a SIGTERM, at any point, ends it as a stop in one
     `process.stopped` line.
     """
     configure_logging(SERVICE_NAME)
-    cap_alembic_logging()
-    with interrupt_ends_as_a_stop() as stop_line:
+    with signals_end_as_a_stop() as stop_line:
+        cap_alembic_logging()
         try:
             asked = command_line().parse_args(arguments)
             if asked.command == MIGRATE_COMMAND:

@@ -26,8 +26,8 @@ dependencies = [
 ]
 
 [project.scripts]
-presentator = "presentator.host.main:main"
-presentator-worker = "presentator.host.worker:main"
+presentator = "presentator.host.console:presentator"
+presentator-worker = "presentator.host.console:presentator_worker"
 
 [dependency-groups]
 dev = [
