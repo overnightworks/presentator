@@ -430,7 +430,8 @@ class RefreshOwnership(Protocol):
     def recover(self) -> None:
         """Check the link that carries the refresh and the presence; replace a dead one.
 
-        Called before each tick, never while the refresh is held.
+        Called before each refresh, fetch and removal, never while the refresh
+        is held.
         """
 
     @abstractmethod

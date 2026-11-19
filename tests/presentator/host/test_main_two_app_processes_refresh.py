@@ -19,6 +19,7 @@ from presentator.contracts.decks import BuildFailureReason, BuildOutcome
 from tests.presentator.host.support.app_processes import App, Browser, serving_apps
 from tests.presentator.host.support.app_requests import (
     AT,
+    SOURCES,
     added,
     admin_of,
     fetched,
@@ -350,6 +351,49 @@ def test_after_every_lock_connection_ends_a_process_refreshes_again(
         after_the_end = scalar(engine, _NEWEST_RUN)
 
         _eventually(_count(engine, _NEWEST_RUN), lambda newest: newest > after_the_end)
+
+
+def _fetch_status(admin: Browser, app: App, name: str) -> int:
+    return admin.request(app, "POST", f"{SOURCES}/{name}/fetch").status_code
+
+
+@pytest.mark.parametrize(
+    "call",
+    [(_fetch_status, HTTPStatus.OK), (removal_of, HTTPStatus.NO_CONTENT)],
+    ids=["a fetch", "a removal"],
+)
+def test_a_call_right_after_the_lock_connection_ended_replaces_it_and_runs(
+    database: Database,
+    tmp_path: Path,
+    *,
+    remote_with_a_deck: GitRemote,
+    gate: BuildGate,
+    call: tuple[Callable[[Browser, App, str], int], HTTPStatus],
+) -> None:
+    ask, answered = call
+    remote = remote_with_a_deck
+    engine = database.engine
+    gate.let_through(1)
+    with serving_apps(
+        database.url, tmp_path, _stored(database.store, _NO_TICKS)
+    ) as apps:
+        admin = admin_of(apps[0])
+        added(admin, apps[0], "talks", remote)
+        _eventually(
+            (lambda: granted_advisory_locks(engine, LockClass.TOOLCHAIN_PRESENCE)),
+            lambda each: each == len(apps),
+        )
+        end_connections_holding(engine, LockClass.TOOLCHAIN_PRESENCE)
+        _eventually(
+            (lambda: granted_advisory_locks(engine, LockClass.TOOLCHAIN_PRESENCE)),
+            lambda each: each == 0,
+        )
+
+        status = ask(admin, apps[0], "talks")
+        present_after = granted_advisory_locks(engine, LockClass.TOOLCHAIN_PRESENCE)
+
+    assert status == answered
+    assert present_after >= 1
 
 
 def test_a_bump_blocked_by_a_stale_fenced_transaction_gives_up_and_succeeds_later(

@@ -250,10 +250,9 @@ class Decks:
         The schedule calls this. A further request while one runs, in this
         process or in another, is already served by it, so a flood of them pulls
         once rather than once each, and the builds of one refresh follow one
-        another instead of competing for the machine. It first makes sure the
-        link to the other processes works.
+        another instead of competing for the machine.
         """
-        self._run_one_at_a_time(self._take_in_and_build, busy=None, recovering=True)
+        self._run_one_at_a_time(self._take_in_and_build, busy=None)
 
     def refresh_named(self, name: str) -> SourceFetch | None:
         """Take that one source in, build what changed and say what that was.
@@ -353,35 +352,38 @@ class Decks:
         that outlasts the build bound raises `RefreshOwnershipTimedOutError` and
         deletes nothing. The whole removal runs fenced: a process that lost the
         refresh meanwhile raises `RefreshOwnershipLostError` before it deletes
-        a file, and none takes the refresh over until the removal ended. Name
-        and counts are read inside the lock: a source removed meanwhile is
+        a file, and none takes the refresh over until the removal ended. It
+        first makes sure the link to the other processes works. Name and
+        counts are read inside the lock: a source removed meanwhile is
         unknown, and changed counts are handed back rather than deleted under a
         number nobody confirmed. Disk and store go first: if the mirror or a run
         survives, no row is deleted and the refusal names what stayed, so the
         source stays taken rather than a leftover becoming an address a later
         add reopens with a new secret (R3); a clean disk frees the URL (R2).
         """
-        with self.one_at_a_time, self.ownership.hold(), self.ownership.fenced():
-            source = self._named(name)
-            if source is None:
-                return None
-            carried = self.store.for_source(source.id)
-            preview = self._preview_of(source, carried)
-            if (
-                preview.deck_count != expected_deck_count
-                or preview.run_count != expected_run_count
-            ):
-                return SourceRemovalStale(current=preview)
-            left = SourceRemovalRefused(
-                reason=SourceRemovalRefusal.DISK_LEFTOVER,
-                mirror=self.folders.forget(source),
-                builds=build_retention.builds_removed(self.builder, carried),
-            )
-            if left.mirror is not None or left.builds != ():
-                return left
-            self.store.remove_for_source(source.id)
-            self.source_runs.remove_for_source(source.id)
-            self.sources.remove(source.id)
+        with self.one_at_a_time:
+            self.ownership.recover()
+            with self.ownership.hold(), self.ownership.fenced():
+                source = self._named(name)
+                if source is None:
+                    return None
+                carried = self.store.for_source(source.id)
+                preview = self._preview_of(source, carried)
+                if (
+                    preview.deck_count != expected_deck_count
+                    or preview.run_count != expected_run_count
+                ):
+                    return SourceRemovalStale(current=preview)
+                left = SourceRemovalRefused(
+                    reason=SourceRemovalRefusal.DISK_LEFTOVER,
+                    mirror=self.folders.forget(source),
+                    builds=build_retention.builds_removed(self.builder, carried),
+                )
+                if left.mirror is not None or left.builds != ():
+                    return left
+                self.store.remove_for_source(source.id)
+                self.source_runs.remove_for_source(source.id)
+                self.sources.remove(source.id)
         return preview
 
     def _preview_of(self, source: Source, carried: tuple[Deck, ...]) -> SourceRemoval:
@@ -683,21 +685,22 @@ class Decks:
         return listed_source(source, self.source_runs.newest(source.id))
 
     def _run_one_at_a_time[Answer](
-        self, work: Callable[[], Answer], *, busy: Answer, recovering: bool = False
+        self, work: Callable[[], Answer], *, busy: Answer
     ) -> Answer:
         """Run that work, or answer `busy` while another refresh holds the lock.
 
         The lock of this process is taken first, so the one connection to the
-        other processes is never used by two refreshes at once. Every turn
-        drops the mirrors on this disk that no source row names, and a process
-        turned away by another drops the copies of builds no row names.
+        other processes is never used by two refreshes at once, and then that
+        connection is made sure to work, so a lost one is replaced at once
+        rather than at the next tick. Every turn drops the mirrors on this disk
+        that no source row names, and a process turned away by another drops
+        the copies of builds no row names.
         """
         if not self.one_at_a_time.acquire(blocking=False):
             return busy
         try:
             self.folders.forget_all_but(self.sources.all())
-            if recovering:
-                self.ownership.recover()
+            self.ownership.recover()
             with self.ownership.try_hold() as held:
                 if held:
                     return self._work_as_holder(work, busy=busy)
