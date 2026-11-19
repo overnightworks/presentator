@@ -1,0 +1,7 @@
+claim_id = "d401a1ffcd0a489182eacb1707727c5f"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "973ed0422270e5ed057a8c5e34b4073fb14cedca"
+branch = "claude/issue-1340-the-build-worker-client-has-one-time-sou"
+scope = ["src/presentator/adapters/build_worker.py", "tests/presentator/adapters/test_build_worker.py"]
+opened_commit = "549836b1a2e2a8ca673d075d41d5626445228c83"
