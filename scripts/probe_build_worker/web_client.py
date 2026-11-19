@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 from shutil import copytree
 from tempfile import mkdtemp
@@ -67,6 +68,8 @@ def main(decks: Path, kinds: list[StepKind]) -> None:
     place = prepared_run(decks, settings.builds)
     steps: list[dict[str, object]] = []
     for kind in kinds:
+        if steps:
+            time.sleep(20)
         failure = toolchain.ran(
             BuildStep(
                 place=place,
