@@ -37,6 +37,7 @@ from tests.support.lobby import (
     a_decks,
     a_lobby,
 )
+from tests.support.run_objects import DirectoryRunObjects
 from tests.support.sign_in_support import MEMBER, Scene, a_scene
 from tests.support.swapped_build import real_builds_under
 
@@ -274,12 +275,16 @@ def test_a_deck_whose_run_is_listed_nowhere_opens_no_view_and_no_pdf() -> None:
 def test_a_list_or_page_view_reads_a_stored_run_ready_without_fetching_it(
     tmp_path: Path,
 ) -> None:
-    builds = real_builds_under(tmp_path)
-    stored = tmp_path / "store" / a_build().run.name
-    stored.mkdir(parents=True)
-    with tarfile.open(stored / "talk.tar", "w"):
+    root = tmp_path / "builds"
+    builds = real_builds_under(root)
+    archive = tmp_path / "talk.tar"
+    with tarfile.open(archive, "w"):
         pass
-    (stored / "deck.pdf").write_bytes(b"%PDF-1.7")
+    pdf = tmp_path / "deck.pdf"
+    pdf.write_bytes(b"%PDF-1.7")
+    assert DirectoryRunObjects(root / "store").put(
+        a_build().run.name, archive=archive, pdf=pdf
+    )
     lobby = a_lobby(
         given=GivenDecks(
             store=a_deck_store(built=a_build()),
@@ -290,7 +295,7 @@ def test_a_list_or_page_view_reads_a_stored_run_ready_without_fetching_it(
     lobby.sign_in()
 
     assert states_of(lobby) == (DeckState.READY, DeckState.READY)
-    assert not (tmp_path / a_build().run.name).exists()
+    assert not (root / a_build().run.name).exists()
 
 
 def test_the_instants_carry_their_offset_as_stored() -> None:
