@@ -47,7 +47,6 @@ from presentator.api.health import (
 )
 from presentator.api.json_bodies import StorableJsonBodies
 from presentator.api.problems import install_error_answers
-from presentator.api.request_line import ClientAddressNoting, SignedInPersonNoting
 from presentator.api.session_api import language_of
 from presentator.application.decks import Decks
 
@@ -73,7 +72,6 @@ def _install_talk_middleware(
 ) -> None:
     # Added before the library stack, these run inside the session gate.
     talk.add_middleware(StorableJsonBodies)
-    talk.add_middleware(SignedInPersonNoting)
     install_web_auth_middleware(
         talk,
         sign_in_paths=TALK_SIGN_IN,
@@ -96,8 +94,6 @@ def _install_talk_middleware(
             ),
         ),
     )
-    # Added after the library stack, this sees every request, a refused one included.
-    talk.add_middleware(ClientAddressNoting)
 
 
 def create_talk(  # noqa: PLR0913 - the composition root's one call names each owner
