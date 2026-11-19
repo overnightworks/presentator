@@ -701,9 +701,10 @@ def test_a_build_that_leaves_a_link_on_the_way_to_an_artefact_is_not_held(
     )
     builds = builds_ready_for(tmp_path, source)
 
-    artefacts = what_it_built(builds.build(a_deck(remote), source=source))
+    built = builds.build(a_deck(remote), source=source)
 
-    assert not builds.holds(artefacts)
+    assert built == BuildFailure.without_words()
+    assert builds.cache.store.names() == frozenset()
 
 
 def test_a_talk_larger_than_a_build_may_leave_is_refused_with_that_reason(

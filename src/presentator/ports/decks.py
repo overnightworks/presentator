@@ -309,22 +309,12 @@ class BuildRunner(Protocol):
         what the deck's page has to show its owner (line 9); a failure with no
         words is one no toolchain reported back about. A build that never
         reached a step is no attempt at the deck and answers ToolchainUnavailable.
-        """
 
-    @abstractmethod
-    def holds(self, artefacts: Artefacts) -> bool:
-        """Whether both artefacts really stand under the root builds are kept in.
-
-        A deck is code, so where a build says it wrote is checked
-        rather than trusted before that place becomes an address.
-        """
-
-    @abstractmethod
-    def deliver(self, artefacts: Artefacts) -> BuildRun | None:
-        """Keep held artefacts where every process serves them from, as one run.
-
-        Nothing is a store that did not take them: the build is no talk yet,
-        and its run is swept like any other no row names.
+        A deck is code, so where a build says it wrote is checked rather than
+        trusted before that place becomes an address: artefacts that do not
+        both stand under the root fail without words. Artefacts handed back
+        are kept where every process serves them from, as one run; a store
+        that did not take them fails the build with the `store` reason.
         """
 
     @abstractmethod
