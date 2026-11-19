@@ -66,11 +66,12 @@ copies `examples/hello-deck` into the web pod's `emptyDir` with `kubectl cp` and
 runs the web's own client there with `kubectl exec`: its first step must end
 unavailable, an outage with no failure of its own. Cell 11 applies the workers'
 documents with two replicas, runs two web pods and builds hello-deck in each
-through the one Service; each web's client builds and exports, a worker's life
-ends with each step, and the first build's two steps must have replaced both
-worker pods, and a sample of the worker pods taken at or after its second step's
-admission must show a worker not Ready, so it reached the idle worker while the
-first restarted.
+through the one Service; each web's client builds and exports, and a worker's
+life ends with each step. The first build runs with the cluster's one node
+cordoned, so a spent worker's replacement stays unscheduled and the second step
+can only reach the idle worker; when the build is over no replacement may carry
+a node name. The node is uncordoned whatever the build did, and both first
+worker pods must then have been replaced.
 Cell 12 runs a program in a web pod that answers the workers'
 challenge under a wrong key and under the right key with the other direction's
 label: both are refused, a true hello is served, and both worker pods keep their

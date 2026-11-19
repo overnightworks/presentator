@@ -9,9 +9,6 @@ from typing import Any
 
 import pytest
 
-from tests.scripts.support.k3d_pods import (
-    at,
-)
 from tests.scripts.support.k3d_render import (
     SCRATCH_MOUNT,
 )
@@ -51,10 +48,17 @@ def execs(world: World) -> list[tuple[tuple[str, ...], str]]:
     ]
 
 
-def delivered(web_module: ModuleType, second_step_at: float = 105) -> Any:  # noqa: ANN401 - the web probe's Outcome, loaded by name
-    return delivered_outcome(
-        web_module, first_step_at=at(100), second_step_at=at(second_step_at)
-    )
+def delivered(web_module: ModuleType) -> Any:  # noqa: ANN401 - the web probe's Outcome, loaded by name
+    return delivered_outcome(web_module)
+
+
+def first_build_in_cell_11(world: World) -> int:
+    """The position of the build the first web pod runs once the workers are up."""
+    return [
+        at
+        for at in bounded(world, "exec")
+        if issued_commands(world)[at][0][-2:] == ("build", "export")
+    ][1]
 
 
 def test_the_shared_parse_reads_the_outcome_the_fake_client_prints(
@@ -184,6 +188,11 @@ def test_the_workers_apply_with_two_replicas_and_the_cells_before_with_one(
     [
         (World(workers_never_ready=True), "were not Ready within", 11),
         (World(workers_keep_uids=True), "did not take both worker pods", 11),
+        (
+            World(hold_breaks=True),
+            f"the hold did not hold: {WORKER_POD_NAMES[0]}",
+            11,
+        ),
         (World(client_exit=1, client_stderr="boom"), "cell 10", 10),
         (
             World(workers_log_only_the_first_build=True),
@@ -191,7 +200,13 @@ def test_the_workers_apply_with_two_replicas_and_the_cells_before_with_one(
             11,
         ),
     ],
-    ids=["workers not ready", "workers not replaced", "client ended", "stale line"],
+    ids=[
+        "workers not ready",
+        "workers not replaced",
+        "hold broken",
+        "client ended",
+        "stale line",
+    ],
 )
 def test_workers_that_are_not_ready_or_not_both_used_fail_cell_11(
     make_fixture: Callable[..., Fixture],
@@ -208,108 +223,47 @@ def test_workers_that_are_not_ready_or_not_both_used_fail_cell_11(
     assert f"cell {cell}: FAILED" in output.out
 
 
-def drive_with_second_step(
+def test_the_first_build_runs_on_the_cordoned_node_and_releases_it_before_the_await(
     make_fixture: Callable[..., Fixture],
-    web_module: ModuleType,
-    admitted_at: float,
-    ready_at: float,
-) -> Fixture:
-    done = delivered(web_module, second_step_at=admitted_at)
-    world = World(client_stdout=client_output(done), first_worker_ready_at=ready_at)
-    return make_fixture(world)
+) -> None:
+    fixture = make_fixture()
+    fixture.drive()
+    world = fixture.world
+    (cordoned,) = command_positions(world, "kubectl", "cordon", fixture.run.node)
+    (released,) = command_positions(world, "kubectl", "uncordon", fixture.run.node)
+    listed_after = [
+        at for at in command_positions(world, "kubectl", "get", "pods") if at > released
+    ]
+    assert cordoned < first_build_in_cell_11(world) < released < listed_after[0]
+
+
+def undelivered(web_module: ModuleType, *, second_step_unavailable: bool) -> Any:  # noqa: ANN401 - the web probe's Outcome, loaded by name
+    """A build that left no PDF, or whose second step found no worker."""
+    done = delivered(web_module)
+    if not second_step_unavailable:
+        return dataclasses.replace(done, pdf=False)
+    steps = (done.steps[0], dataclasses.replace(done.steps[1], failed=True))
+    return dataclasses.replace(done, steps=steps, out=(), talk_page=False, pdf=False)
 
 
 @pytest.mark.parametrize(
-    ("admitted_at", "ready_at"),
-    [(105, 110), (125.2, 125.5)],
-    ids=["while the first worker restarts", "in the second it is Ready in, before"],
+    "second_step_unavailable", [False, True], ids=["no pdf", "second step unavailable"]
 )
-def test_a_second_step_admitted_before_the_first_worker_was_ready_again_passes_cell_11(
-    make_fixture: Callable[..., Fixture],
-    web_module: ModuleType,
-    admitted_at: float,
-    ready_at: float,
-) -> None:
-    drive_with_second_step(make_fixture, web_module, admitted_at, ready_at).drive()
-
-
-@pytest.mark.parametrize(
-    ("admitted_at", "ready_at"),
-    [(125.8, 125.5), (110.5, 110), (160, 110)],
-    ids=["in the second it is Ready in, after", "just after", "long after"],
-)
-def test_a_second_step_admitted_after_the_first_worker_was_ready_again_fails_cell_11(
-    make_fixture: Callable[..., Fixture],
-    web_module: ModuleType,
-    capsys: pytest.CaptureFixture[str],
-    admitted_at: float,
-    ready_at: float,
-) -> None:
-    fixture = drive_with_second_step(make_fixture, web_module, admitted_at, ready_at)
-    with pytest.raises(SystemExit):
-        fixture.drive()
-    output = capsys.readouterr()
-    assert "after the first worker was Ready again" in output.err
-    assert "cell 11: FAILED" in output.out
-
-
-@pytest.mark.parametrize(
-    ("admitted", "lines", "problem"),
-    [
-        (None, ["100.0 False True "], "never admitted"),
-        (100.0, ["99.0 False True "], "no sample"),
-        (100.0, ["100.0 "], "were not one restarting"),
-        (100.0, ["100.0 False True True "], "were not one restarting"),
-        (100.0, ["100.0 False False "], "were not one restarting"),
-        (100.0, ["100.0 False "], "were not one restarting"),
-        (100.0, ["100.0 True True "], "Ready again"),
-    ],
-    ids=[
-        "no admission",
-        "an exhausted stream",
-        "an empty reading",
-        "a three-pod reading",
-        "two workers down",
-        "one listed and down",
-        "both Ready",
-    ],
-)
-def test_an_odd_or_missing_sample_at_the_admission_fails_the_restart_overlap(
-    load_script: Callable[..., ModuleType],
-    admitted: float | None,
-    lines: list[str],
-    problem: str,
-) -> None:
-    k3d_web = load_script("probe_build_worker_k3d_web")
-    result = k3d_web.restart_overlap_problem(iter(lines), admitted)
-    assert result is not None
-    assert problem in result
-
-
-@pytest.mark.parametrize(
-    "line",
-    ["100.0 False True ", "100.0 True "],
-    ids=["the restarting pod not Ready", "the restarting pod not yet recreated"],
-)
-def test_one_worker_restarting_beside_one_ready_at_the_admission_passes_the_overlap(
-    load_script: Callable[..., ModuleType], line: str
-) -> None:
-    k3d_web = load_script("probe_build_worker_k3d_web")
-    assert k3d_web.restart_overlap_problem(iter([line]), 100.0) is None
-
-
 def test_a_build_that_does_not_deliver_in_a_web_pod_fails_cell_11_naming_the_pod(
     make_fixture: Callable[..., Fixture],
     web_module: ModuleType,
     capsys: pytest.CaptureFixture[str],
+    *,
+    second_step_unavailable: bool,
 ) -> None:
-    done = delivered(web_module)
-    failed = dataclasses.replace(done, pdf=False)
-    world = World(client_stdout=client_output(failed))
+    done = undelivered(web_module, second_step_unavailable=second_step_unavailable)
+    world = World(client_stdout=client_output(done))
     fixture = make_fixture(world)
     with pytest.raises(SystemExit):
         fixture.drive()
     assert f"{WEB_POD_NAMES[0]} did not deliver" in capsys.readouterr().err
+    (released,) = command_positions(world, "kubectl", "uncordon", fixture.run.node)
+    assert first_build_in_cell_11(world) < released
     assert [
         command
         for command, _, _ in world.commands
