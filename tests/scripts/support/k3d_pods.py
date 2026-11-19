@@ -19,11 +19,6 @@ def stamp(seconds: int) -> str:
     return (EPOCH + timedelta(seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def at(seconds: float) -> float:
-    """The epoch seconds the fake's clock shows `seconds` after its start."""
-    return (EPOCH + timedelta(seconds=seconds)).timestamp()
-
-
 def terminated_state(
     exit_code: int = REFUSAL_EXIT_STATUS,
     *,
