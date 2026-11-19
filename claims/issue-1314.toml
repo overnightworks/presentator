@@ -1,0 +1,8 @@
+claim_id = "97d86d54a4cd4162a9c2ea1d075af93e"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "4a70dd96ee41643ffec50fbb77fb4d3cb01a0b7e"
+branch = "claude/issue-1314-every-gateway-turn-stopped-line-carries"
+scope = ["docs/co-presenter.md", "src/presentator/agent/backend.py", "tests/presentator/agent", "tests/presentator/api/test_copresenter_hearing.py"]
+opened_commit = "eddf6ebcac4e95db17b6e100ab720e9ccaa3d173"
+whole_reason = "the stop line's fields span the backend, its doc and the agent and hearing tests"
