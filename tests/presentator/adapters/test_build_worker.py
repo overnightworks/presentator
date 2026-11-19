@@ -96,25 +96,31 @@ def silent_first(count: int, then: Script) -> Script:
 def test_a_worker_that_is_not_there_is_retried_until_the_window_ends(
     volume: Path, tmp_path: Path
 ) -> None:
-    started = time.monotonic()
+    clock = MovedClock(per_read=WINDOW / 20)
 
-    result = toolchain(volume).ran(a_step(tmp_path))
+    result = toolchain(volume, clock=clock).ran(a_step(tmp_path))
 
     assert result == UNAVAILABLE
-    assert WINDOW <= time.monotonic() - started < WINDOW + 0.5
+    assert clock.seconds > WINDOW
 
 
 def test_a_worker_that_keeps_closing_is_retried_until_the_window_ends(
     volume: Path, tmp_path: Path
 ) -> None:
-    keeps_closing = closing_first(50, answering(nothing_to_reply))
-    started = time.monotonic()
+    clock = MovedClock(per_read=WINDOW / 20)
+    closings: list[None] = []
 
-    with fake_worker(volume, keeps_closing, accepts=50):
-        result = toolchain(volume).ran(a_step(tmp_path))
+    def closing_unspoken(
+        _connection: socket.socket, _seen: Seen, _uploads: Path
+    ) -> None:
+        closings.append(None)
+
+    with fake_worker(volume, closing_unspoken, accepts=50):
+        result = toolchain(volume, clock=clock).ran(a_step(tmp_path))
 
     assert result == UNAVAILABLE
-    assert WINDOW <= time.monotonic() - started < WINDOW + 0.5
+    assert clock.seconds > WINDOW
+    assert len(closings) > 1
 
 
 def a_peer_speaking_another_wire(
