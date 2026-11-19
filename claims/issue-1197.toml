@@ -1,8 +1,0 @@
-claim_id = "c1ec173fc72745d7a2fd5f01c01b33c4"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "20b4fa54a6e1728a0e721005ccae5ab44847a939"
-branch = "claude/issue-1197-s7-s-refresh-ownership-closes-its-named"
-scope = ["src/presentator/adapters", "src/presentator/application", "tests"]
-opened_commit = "73b009ff8dd68b2ba344dcf05d395b42c7c4a871"
-whole_reason = "the per-source locks span adapters and application, and the window tests live in tests"
