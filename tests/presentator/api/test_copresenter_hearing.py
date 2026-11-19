@@ -91,12 +91,16 @@ def _warnings(logged: list[logging.LogRecord]) -> list[str]:
     ]
 
 
-def _the_session_line(capsys: pytest.CaptureFixture[str]) -> LogLine:
-    (line,) = [
+def _session_lines(capsys: pytest.CaptureFixture[str]) -> list[LogLine]:
+    return [
         one
         for one in json_lines_among(LoggedText(capsys).text)
         if one["event"] == _SESSION_ENDED
     ]
+
+
+def _the_session_line(capsys: pytest.CaptureFixture[str]) -> LogLine:
+    (line,) = _session_lines(capsys)
     return line
 
 
@@ -435,15 +439,19 @@ def test_any_refused_token_read_closes_4502_with_no_upgrade(
 
 
 @pytest.mark.parametrize(
-    ("arrange", "upgrades"),
+    ("arrange", "upgrades", "endings"),
     [
-        (the_session_ends_during_the_grant, 0),
-        (the_session_ends_at_the_reopening, 1),
+        (the_session_ends_during_the_grant, 0, []),
+        (the_session_ends_at_the_reopening, 1, [("ok", "app_ended")]),
     ],
     ids=["first-read", "reopening"],
 )
 def test_a_session_that_ends_as_the_hearing_reads_its_tokens_closes_1000(
-    engine: Engine, arrange: Callable[[Hosts], None], upgrades: int
+    engine: Engine,
+    arrange: Callable[[Hosts], None],
+    upgrades: int,
+    endings: list[tuple[str, str]],
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     service = FakeSpeechService(
         realtime=one_after_another(draining(), sending(a_completed("Wieder da.")))
@@ -454,21 +462,7 @@ def test_a_session_that_ends_as_the_hearing_reads_its_tokens_closes_1000(
 
     assert heard.closed_with == HopClose.NORMAL
     assert len(service.upgrades) == upgrades
-
-
-def test_a_session_that_ends_at_the_reopening_logs_as_one_ending_mid_hearing(
-    engine: Engine, capsys: pytest.CaptureFixture[str]
-) -> None:
-    service = FakeSpeechService(
-        realtime=one_after_another(draining(), sending(a_completed("Wieder da.")))
-    )
-    scenario = SpeechScenario(
-        service=service, arrange=the_session_ends_at_the_reopening
-    )
-    with a_speech_instance(engine, scenario) as instance:
-        hear_and_record(instance)
-
-    assert _ended_as(_the_session_line(capsys)) == ("ok", "app_ended")
+    assert [_ended_as(line) for line in _session_lines(capsys)] == endings
 
 
 def test_a_hearings_lines_share_one_trace_of_their_own(
