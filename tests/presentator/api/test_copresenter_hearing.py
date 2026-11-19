@@ -22,6 +22,7 @@ from tests.support.copresenter_support import (
     ROTATED,
     delete_the_sessions,
     the_refresh_token_is_revoked,
+    the_session_ends_at_the_reopening,
     the_session_ends_during_the_grant,
     the_token_endpoint_goes_down,
     the_token_thread_fails,
@@ -362,12 +363,17 @@ def test_a_logout_during_the_token_read_closes_1008_with_no_upgrade_and_no_audio
     assert not service.upgrades
 
 
+def _ended_as(session: LogLine) -> tuple[object, object]:
+    return session["outcome"], session.get("ending")
+
+
 def test_a_sign_out_during_a_hearing_closes_the_browser_1000_and_the_service_socket(
-    engine: Engine,
+    engine: Engine, capsys: pytest.CaptureFixture[str]
 ) -> None:
     service = FakeSpeechService()
     with (
         a_speech_instance(engine, _reading_scenario(service)) as instance,
+        recorded_logs(),
         instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket,
     ):
         socket.send_bytes(_THE_FIRST_FRAME)
@@ -383,6 +389,7 @@ def test_a_sign_out_during_a_hearing_closes_the_browser_1000_and_the_service_soc
     assert service.closes == ["closed"]
     assert b"after the close" not in _appended(service)
     assert len(service.events) == sent_before_the_close
+    assert _ended_as(_the_session_line(capsys)) == ("ok", "app_ended")
 
 
 @pytest.mark.parametrize("error", ["invalid_scope", "invalid_client"])
@@ -424,25 +431,11 @@ def test_any_refused_token_read_closes_4502_with_no_upgrade(
     assert not instance.service.upgrades
 
 
-def _the_session_ends_at_the_reopening(hosts: Hosts) -> None:
-    first_opening_refreshed = False
-
-    def end_at_the_reopening_refresh() -> None:
-        nonlocal first_opening_refreshed
-        if hosts.issuer.grant_types[-1] != "refresh_token":
-            return
-        if first_opening_refreshed:
-            delete_the_sessions(hosts)
-        first_opening_refreshed = True
-
-    hosts.issuer.during_token_request = end_at_the_reopening_refresh
-
-
 @pytest.mark.parametrize(
     ("arrange", "upgrades"),
     [
         (the_session_ends_during_the_grant, 0),
-        (_the_session_ends_at_the_reopening, 1),
+        (the_session_ends_at_the_reopening, 1),
     ],
     ids=["first-read", "reopening"],
 )
@@ -458,6 +451,37 @@ def test_a_session_that_ends_as_the_hearing_reads_its_tokens_closes_1000(
 
     assert heard.closed_with == HopClose.NORMAL
     assert len(service.upgrades) == upgrades
+
+
+def test_a_session_that_ends_at_the_reopening_logs_as_one_ending_mid_hearing(
+    engine: Engine, capsys: pytest.CaptureFixture[str]
+) -> None:
+    service = FakeSpeechService(
+        realtime=one_after_another(draining(), sending(a_completed("Wieder da.")))
+    )
+    scenario = SpeechScenario(
+        service=service, arrange=the_session_ends_at_the_reopening
+    )
+    with a_speech_instance(engine, scenario) as instance:
+        hear_and_record(instance)
+
+    assert _ended_as(_the_session_line(capsys)) == ("ok", "app_ended")
+
+
+def test_a_hearings_lines_share_one_trace_of_their_own(
+    engine: Engine, capsys: pytest.CaptureFixture[str]
+) -> None:
+    service = FakeSpeechService(
+        realtime=one_after_another(draining(), sending(a_completed("Wieder da.")))
+    )
+    with a_speech_instance(engine, SpeechScenario(service=service)) as instance:
+        hear_and_record(instance)
+
+    lines = json.loads(_hearing_lines(capsys))
+    traces = {line.get("trace_id") for line in lines}
+    assert len(lines) > 1
+    assert len(traces) == 1
+    assert None not in traces
 
 
 def test_one_hearing_makes_one_refresh_grant_and_one_workload_grant(
@@ -628,21 +652,25 @@ def test_a_browser_that_sends_nothing_opens_one_upgrade_and_one_session_update(
 
 
 def test_a_browser_that_leaves_mid_hearing_closes_the_service_socket_quietly(
-    engine: Engine,
+    engine: Engine, capsys: pytest.CaptureFixture[str]
 ) -> None:
     service = FakeSpeechService()
     service.realtime = sending_then_reading(service)
-    with a_speech_instance(engine, SpeechScenario(service=service)) as instance:
-        with (
-            recorded_logs() as logged,
-            instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket,
-        ):
-            socket.send_bytes(_THE_FIRST_FRAME)
-            assert service.connected.wait(THREAD_WAIT_SECONDS)
+    with (
+        a_speech_instance(engine, SpeechScenario(service=service)) as instance,
+        recorded_logs() as logged,
+        instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket,
+    ):
+        socket.send_bytes(_THE_FIRST_FRAME)
+        assert service.connected.wait(THREAD_WAIT_SECONDS)
+        # A browser's close reaches the server as a disconnect; leaving the
+        # block alone would cancel the app's task, which no server does.
+        socket.close()
         assert service.closed.wait(THREAD_WAIT_SECONDS)
 
     assert _warnings(list(logged)) == []
     assert not [record for record in logged if record.levelno >= logging.ERROR]
+    assert _ended_as(_the_session_line(capsys)) == ("ok", "browser_left")
 
 
 def test_a_browser_that_leaves_during_the_token_read_sends_no_audio_and_logs_no_error(

@@ -101,14 +101,19 @@ the cluster, and that hop's trust sentence is in
 **What the log keeps of a hearing.** Each hearing is a trace of its own and
 writes one `hearing_session.ended`, with its language, how many openings and
 utterances it had, how it ended (`ending`) or why it failed (`reason`, with the
-service's `status`, `code` or `close` where one exists). Each opening of the
-service's socket writes one `hearing_opening.ended` with its `attempt`; a
-reopening names its `cause` and how long the hearing went unheard
-(`unheard_ms`), and a reopening attempt that did not open ends as `attempt_failed`.
-The speech client reports no opened session, so a first opening counts as open
-at its first event and its duration is an upper bound. No line holds a
-transcript, token, address or path. Each final transcript hands the overlay
-the service's trace of its turn; the overlay asks under that trace with a span
-of its own, or under a new trace when none came, so the turn's hearing, ask and
-answer lines share one `trace_id`, and the next turn never reuses a failed
-one's.
+service's `status`, `code` or `close` where one exists). One event is one shape:
+a browser that leaves ends `outcome` ok with `ending` `browser_left`, also when
+the service closed in the same moment, and a session that ends (CP14) ends ok
+with `ending` `app_ended`, mid-hearing and at a reopening's token read alike. A
+`cancelled` outcome is a hearing whose task was cancelled from outside, never a
+browser that left. Each opening of the service's socket writes one
+`hearing_opening.ended` with its `attempt`; a reopening that opened names its
+`cause` and how long the hearing went unheard (`unheard_ms`), one that ended
+before it opened names neither, and a reopening attempt that did not open ends
+as `attempt_failed`. The speech client reports no opened session, so a first
+opening counts as open at its first event and its duration is an upper bound. No
+line holds a transcript, token, address or path. Each final transcript hands the
+overlay the service's trace of its turn; the overlay asks under that trace with
+a span of its own, or under a new trace when none came, so the turn's hearing,
+ask and answer lines share one `trace_id`, and the next turn never reuses a
+failed one's.

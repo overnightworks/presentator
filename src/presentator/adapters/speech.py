@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Final, assert_never
 
@@ -240,11 +241,11 @@ class SpeechHearing:
             # The client leaves the browser socket to the app when the token source
             # raises, so the hearing ends here. The token read wrote its own line.
             except CoPresenterUnavailableError as unavailable:
-                mark = _token_read_ending(unavailable)
-                openings.end(mark)
+                read_end = _token_read_end(unavailable)
+                openings.end(read_end.mark)
                 session.handled()
-                mark(session)
-                await self.refuse(browser, unavailable)
+                read_end.mark(session)
+                await browser.close(read_end.close)
                 return
             except Exception as error:
                 openings.end_raised(error)
@@ -291,10 +292,7 @@ class SpeechHearing:
         A session that ended closes in order, as a sign-out does, so the overlay
         shows no fault word; anything else is a hearing the service cannot give.
         """
-        session_ended = isinstance(unavailable, SessionEndedError)
-        await browser.close(
-            HopClose.NORMAL if session_ended else HopClose.SERVICE_FAILED
-        )
+        await browser.close(_token_read_end(unavailable).close)
 
 
 class ReadinessFailure(StrEnum):
@@ -465,13 +463,18 @@ def _hearing_callbacks(
     )
 
 
-def _token_read_ending(
-    unavailable: CoPresenterUnavailableError,
-) -> Callable[[StepTimer], None]:
-    """How a line records a hearing its tokens could not be read for."""
+@dataclass(frozen=True, slots=True)
+class _TokenReadEnd:
+    """How a hearing its tokens could not be read for closes and is logged."""
+
+    close: HopClose
+    mark: Callable[[StepTimer], None]
+
+
+def _token_read_end(unavailable: CoPresenterUnavailableError) -> _TokenReadEnd:
     if isinstance(unavailable, SessionEndedError):
-        return _ended_by_the_app
-    return _tokens_unavailable
+        return _TokenReadEnd(HopClose.NORMAL, _ended_by_the_app)
+    return _TokenReadEnd(HopClose.SERVICE_FAILED, _tokens_unavailable)
 
 
 def _ended_by_the_app(step: StepTimer) -> None:

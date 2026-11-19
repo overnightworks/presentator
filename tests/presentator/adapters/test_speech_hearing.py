@@ -14,6 +14,7 @@ from presentator.adapters.speech import SpeechHearing
 from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
     HearingTranscript,
+    SessionEndedError,
     SpeechTokens,
 )
 from presentator.contracts.voice import SampleLanguage
@@ -351,8 +352,27 @@ def test_a_hearing_the_service_never_reopens_fails_after_each_attempt_fails(
 
 
 @pytest.mark.parametrize("failing_call", [1, 2], ids=["first-opening", "reopening"])
-def test_tokens_that_cannot_be_read_end_the_hearing_as_a_service_failure(
+@pytest.mark.parametrize(
+    ("fails_with", "close", "ended_as"),
+    [
+        (
+            CoPresenterUnavailableError,
+            HopClose.SERVICE_FAILED,
+            {"outcome": "failed", "reason": "tokens_unavailable", "level": "warning"},
+        ),
+        (
+            SessionEndedError,
+            HopClose.NORMAL,
+            {"outcome": "ok", "ending": "app_ended", "level": "info"},
+        ),
+    ],
+    ids=["unavailable", "session-ended"],
+)
+def test_tokens_that_cannot_be_read_end_the_hearing_as_the_read_ended(
     failing_call: int,
+    fails_with: type[CoPresenterUnavailableError],
+    close: HopClose,
+    ended_as: dict[str, str],
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     fake = FakeSpeechService()
@@ -361,20 +381,16 @@ def test_tokens_that_cannot_be_read_end_the_hearing_as_a_service_failure(
         transcripts, browser = asyncio.run(
             _heard_through(
                 one_after_another(draining(), sending(a_completed("Nie gehört."))),
-                tokens=MintedTokens(failing_call=failing_call),
+                tokens=MintedTokens(failing_call=failing_call, fails_with=fails_with),
                 fake=fake,
             )
         )
 
     assert transcripts == []
-    assert browser.closed_with == [HopClose.SERVICE_FAILED]
+    assert browser.closed_with == [close]
     assert len(fake.upgrades) == failing_call - 1
     (session,) = events_of(logged, "hearing_session.ended")
-    assert (session["outcome"], session["reason"], session["level"]) == (
-        "failed",
-        "tokens_unavailable",
-        "warning",
-    )
+    assert {name: session.get(name) for name in ended_as} == ended_as
     for minted in map(MintedTokens.pair, (1, 2)):
         assert minted.person not in logged.text
         assert minted.workload not in logged.text
