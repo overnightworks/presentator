@@ -206,10 +206,6 @@ def applied_documents(
         or (document["kind"] in WORKER_KINDS and _of_the_workers(document))
     ]
     for document in documents:
-        if document["kind"] == "Service":
-            document["spec"]["selector"]["statefulset.kubernetes.io/pod-name"] = (
-                "build-worker-0"
-            )
         if document["kind"] != "StatefulSet":
             continue
         document["spec"]["replicas"] = replicas
