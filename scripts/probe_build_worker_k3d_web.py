@@ -10,10 +10,11 @@ replacement may have been scheduled. After the release both first pods must
 have been replaced, one life ended by each step. Cell 12 sends the
 workers a hello under a wrong key and one that reflects the worker's own
 direction, and expects both refused and no pod spent. Cell 13 shows, from inside
-a worker pod, that the build and wire users reach nothing off the loopback, and,
-from a web pod, that a port of the worker pod other than the worker's own drops
-what reaches it although a process listens there and a policy of the probe's own
-admits the web's pods to every port.
+a worker pod, that the build and wire users send nothing off the loopback and open
+TCP only there, and, from a web pod, that a port of the worker pod other than the
+worker's own drops what reaches it although a process listens there and a policy
+of the probe's own admits the web's pods to every port, once the cluster enforces
+policies.
 """
 
 import contextlib
@@ -42,9 +43,11 @@ from probe_build_worker_k3d_lives import (
     poll,
 )
 from probe_build_worker_k3d_manifests import (
+    INBOUND_CANARY_POLICY,
     INBOUND_PROBE_POLICY,
     WEB_CONTAINER,
     WORKER_CONTAINER,
+    inbound_canary_policy,
     inbound_probe_policy,
 )
 from probe_build_worker_web import (
@@ -64,8 +67,6 @@ WEB_PODS = 2
 WORKER_PODS = 2
 # Long enough for a pod that a spent life made terminal to show it.
 SETTLE_SECONDS = 5
-# Long enough for the cluster's policy controller to program an applied policy.
-POLICY_SETTLE_SECONDS = 15
 HELLOS = {"wrong key": False, "reflected": False, "true": True}
 LOOPBACK = "loopback"
 POD_LOOPBACK = "127.0.0.1"
@@ -405,8 +406,32 @@ def reach_end(run: Run, pod: Document, container: str, target: str) -> str:
     return said if isinstance(said, str) else str(said.get("end"))
 
 
+def policies_enforced(
+    run: Run, deployment: Document, first: Document, second: Document, web_port: int
+) -> bool:
+    """Apply the probe's policies and wait until the cluster enforces them.
+
+    A web pod's connection to the other web pod ends in a timeout only once the
+    canary policy, applied after the others, is enforced.
+    """
+    for policy in (inbound_probe_policy(deployment), inbound_canary_policy(deployment)):
+        run("kubectl apply --filename -", stdin=json.dumps(policy))
+    target = f"{second['status']['podIP']}:{web_port}"
+    _, enforced = poll(
+        run,
+        lambda: reach_end(run, first, WEB_CONTAINER, target),
+        lambda end: end == TIMED_OUT,
+        "",
+    )
+    return enforced
+
+
 def inbound_problem(
-    run: Run, deployment: Document, web: Document, worker: Document
+    run: Run,
+    deployment: Document,
+    webs: tuple[Document, Document],
+    worker: Document,
+    web_port: int,
 ) -> str | None:
     """Why a web pod's connection to a listener in the worker pod was not dropped.
 
@@ -414,8 +439,10 @@ def inbound_problem(
     NetworkPolicy drops such a connection too, so a policy of the probe's own
     admits the web's pods to every port while the connection is tried: only the
     pod's packet filter can drop it then. The listener must answer on the pod's
-    loopback, or its timeout would say nothing.
+    loopback, or its timeout would say nothing. The connection is tried once a
+    canary policy is enforced, which shows the cluster has taken the admission.
     """
+    web, other = webs
     listening = printed_line(
         run_program(
             run, worker["metadata"]["name"], WORKER_CONTAINER, INBOUND_PROGRAM, "listen"
@@ -429,16 +456,17 @@ def inbound_problem(
     ):
         return f"the listener in the worker pod did not answer on its loopback: {own}"
     target = f"{worker['status']['podIP']}:{port}"
-    run(
-        "kubectl apply --filename -", stdin=json.dumps(inbound_probe_policy(deployment))
-    )
     try:
-        run.effects.sleep(POLICY_SETTLE_SECONDS)
+        if not policies_enforced(run, deployment, web, other, web_port):
+            return (
+                f"the cluster enforced no policy within {TERMINATION_WINDOW_SECONDS} s"
+            )
         end = reach_end(run, web, WEB_CONTAINER, target)
     finally:
         run(
             "kubectl delete networkpolicy --ignore-not-found",
             INBOUND_PROBE_POLICY,
+            INBOUND_CANARY_POLICY,
             *IN_NAMESPACE,
             check=False,
         )
@@ -468,7 +496,7 @@ def reaches_only_the_loopback(
     if isinstance(said, str):
         return said
     problem = egress_problem(said, targets) or inbound_problem(
-        run, deployment, web, worker
+        run, deployment, (web, webs[1]), worker, web_port
     )
     if problem:
         return problem

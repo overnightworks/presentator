@@ -59,7 +59,9 @@ def test_one_identity_that_can_send_over_ipv6_refuses_as_egress(position: int) -
     assert judged(tuple(sends)) == Predicate.EGRESS
 
 
-@pytest.mark.parametrize("ipv6", [SEND_DROPPED, NO_IPV6_PATH], ids=["dropped", "no path"])
+@pytest.mark.parametrize(
+    "ipv6", [SEND_DROPPED, NO_IPV6_PATH], ids=["dropped", "no path"]
+)
 def test_an_ipv6_datagram_that_is_dropped_or_has_no_path_leaves_nothing(
     ipv6: str,
 ) -> None:

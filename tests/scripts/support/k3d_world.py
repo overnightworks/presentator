@@ -128,6 +128,9 @@ class World:
     egress_loopback: str = "connected"
     egress_off_loopback: str = "EPERM"
     inbound_end: str = "timeout"
+    # How many connections between the web pods connect before the cluster
+    # enforces a policy that admits nothing to them; None when it never does.
+    connections_before_enforcement: int | None = 1
     # How a connection to the listener ends from inside the worker pod itself.
     listener_loopback_end: str = "connected"
     copy_exit: int = 0
@@ -236,13 +239,33 @@ class World:
     def failing_store_image(self) -> str:
         return self.store_images[self.failing_store]
 
+    def reach_end(self, target: str) -> str:
+        """How a new connection to HOST:PORT ends, by what listens there."""
+        host, _, port = target.rpartition(":")
+        if host == "127.0.0.1":
+            return self.listener_loopback_end
+        if port == str(INBOUND_PORT):
+            return self.inbound_end
+        tried = len(
+            [
+                command
+                for command, _, _ in self.commands
+                if command[2:4] == ("kubectl", "exec")
+                and command[-2] == "reach"
+                and command[-1].rpartition(":")[0] == host
+            ]
+        )
+        enforced = (
+            self.connections_before_enforcement is not None
+            and tried > self.connections_before_enforcement
+        )
+        return "timeout" if enforced else "connected"
+
     def exec_answer(self, command: tuple[str, ...]) -> tuple[int, str, str]:
         """What a program sent into a pod prints, by its container and arguments."""
         arguments = command[command.index("-") + 1 :]
         if arguments[:1] == ("reach",):
-            reached_inside = arguments[-1].startswith("127.0.0.1:")
-            end = self.listener_loopback_end if reached_inside else self.inbound_end
-            return 0, json.dumps({"end": end}), ""
+            return 0, json.dumps({"end": self.reach_end(arguments[-1])}), ""
         if command[command.index("--container") + 1] != "web":
             if arguments == ("listen",):
                 return 0, json.dumps({"port": INBOUND_PORT}), ""

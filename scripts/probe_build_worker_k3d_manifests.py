@@ -32,6 +32,7 @@ WORKER_KINDS = ("ConfigMap", "NetworkPolicy", "Service", "StatefulSet")
 WORKERS = "build-worker"
 WORKER_LABEL = "app.kubernetes.io/name"
 INBOUND_PROBE_POLICY = "probe-inbound-any-port"
+INBOUND_CANARY_POLICY = "probe-inbound-canary"
 WEB_KINDS = ("ConfigMap", "Deployment")
 WORKER_CONTAINER = "worker"
 WEB_CONTAINER = "web"
@@ -559,6 +560,25 @@ def inbound_probe_policy(deployment: Document) -> Document:
             "podSelector": {"matchLabels": {WORKER_LABEL: WORKERS}},
             "policyTypes": ["Ingress"],
             "ingress": [{"from": [{"podSelector": {"matchLabels": web_labels}}]}],
+        },
+    }
+
+
+def inbound_canary_policy(deployment: Document) -> Document:
+    """A NetworkPolicy admitting nothing to the web's pods.
+
+    The web's pods have no policy of their own in the probe, so one pod reaches
+    another until the cluster enforces this one: the refusal that follows shows
+    the policies applied beside it are in force.
+    """
+    web_labels = deployment["spec"]["selector"]["matchLabels"]
+    return {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "metadata": {"name": INBOUND_CANARY_POLICY, "namespace": NAMESPACE},
+        "spec": {
+            "podSelector": {"matchLabels": web_labels},
+            "policyTypes": ["Ingress"],
         },
     }
 

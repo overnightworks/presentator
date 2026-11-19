@@ -76,14 +76,16 @@ Cell 12 runs a program in a web pod that answers the workers'
 challenge under a wrong key and under the right key with the other direction's
 label: both are refused, a true hello is served, and both worker pods keep their
 uids and stay Ready, so no life was spent. Cell 13 runs a program in a worker
-pod that, as the build user and as the wire user, opens a new connection to the
-loopback, which must connect, and to the web pod and the other worker pod, which
-must end in EPERM, and it refuses a result that lacks either user or a target;
-the replies of accepted connections passed in cell 11. A listener the cell opens
-in the worker pod on a port other than the worker's own must answer on the pod's
-loopback and, with a NetworkPolicy of the probe's own admitting the web's pods to
-every port, still drop a connection from a web pod: it times out. The policy is
-deleted when the connection ended.
+pod that, as the build user and as the wire user, opens a new TCP connection to
+the loopback, which must connect, and sends one UDP datagram to the web pod and
+the other worker pod, which must end in EPERM, and it refuses a result that lacks
+either user or a target; the replies of accepted connections passed in cell 11.
+A listener the cell opens in the worker pod on a port other than the worker's own
+must answer on the pod's loopback and, with a NetworkPolicy of the probe's own
+admitting the web's pods to every port, still drop a connection from a web pod:
+it times out. The connection is tried once a canary policy that admits nothing to
+the web's pods is enforced, which one web pod's connection to the other shows by
+timing out within the window. Both policies are deleted when the connection ended.
 
 With `--image REF` the drive runs on the image `release.yml` published instead
 of one it builds, and only on a CI runner. REF is exactly
