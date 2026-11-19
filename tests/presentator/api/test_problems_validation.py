@@ -298,6 +298,35 @@ def test_a_body_that_is_not_utf8_is_answered_as_invalid_json(
     assert {error["type"] for error in answer.json()["detail"]} == {"json_invalid"}
 
 
+_BEYOND_PYTHONS_DIGIT_LIMIT = b"1" * 5000
+
+
+@pytest.mark.parametrize(
+    "sent",
+    [
+        JsonSent(
+            A_TALK_ADDRESS,
+            "POST",
+            ASK,
+            b'{"said": "Hier?", "slide": ' + _BEYOND_PYTHONS_DIGIT_LIMIT + b"}",
+        ),
+        JsonSent(
+            A_BROWSERS_ADDRESS,
+            "PUT",
+            _SETTINGS,
+            b'{"name": ' + _BEYOND_PYTHONS_DIGIT_LIMIT + b"}",
+        ),
+    ],
+    ids=["ask", "settings"],
+)
+def test_an_integer_too_long_to_read_is_a_client_error(
+    sent: JsonSent, engine: Engine
+) -> None:
+    answer = _sent_by_the_admin(engine, sent)
+
+    assert HTTPStatus(answer.status_code).is_client_error
+
+
 @pytest.mark.parametrize(
     ("sent", "read_back"),
     [

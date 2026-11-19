@@ -78,7 +78,7 @@ def _body_fault(body: bytes) -> ValidationFault | None:
         )
     try:
         document: object = json.loads(text)
-    except json.JSONDecodeError, RecursionError:
+    except ValueError, RecursionError:
         return None
     at = _unstorable_at(document)
     if at is None:
