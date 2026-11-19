@@ -431,6 +431,20 @@ def test_the_runner_hands_the_run_environment_to_the_child(
     assert (done.returncode, done.stdout.strip()) == (0, "seen input")
 
 
+def test_the_runner_keeps_the_order_of_both_streams_when_it_merges_them(
+    cluster_module: ModuleType,
+) -> None:
+    runner = cluster_module.SubprocessRunner()
+    program = (
+        "import sys\n"
+        "for stream, line in ((sys.stdout, 'first'), (sys.stderr, 'second'),"
+        " (sys.stdout, 'third')):\n"
+        "    print(line, file=stream, flush=True)"
+    )
+    done = runner((sys.executable, "-c", program), {}, None, stderr_into_stdout=True)
+    assert (done.stdout, done.stderr) == ("first\nsecond\nthird\n", "")
+
+
 def applied_twins(world: World) -> list[str]:
     """The names of the Pods an apply received, in order."""
     return [pod["metadata"]["name"] for pod in world.applied("Pod")]

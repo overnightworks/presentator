@@ -556,7 +556,10 @@ def test_a_failing_secret_apply_refuses_without_the_value_its_stderr_echoes(
     fixture = make_fixture()
 
     def echoing(
-        _command: tuple[str, ...], _environment: object, stdin: str | None
+        _command: tuple[str, ...],
+        _environment: object,
+        stdin: str | None,
+        _stderr_into_stdout: bool,  # noqa: FBT001 - Effects.run's positional shape
     ) -> object:
         return cluster_module.Completed(1, "", stdin or "")
 
