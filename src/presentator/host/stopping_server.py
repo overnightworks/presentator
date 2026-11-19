@@ -36,6 +36,7 @@ class ServerReason(StrEnum):
     """
 
     CONFIGURATION_REFUSED = "configuration_refused"
+    STORE_UNAVAILABLE = "store_unavailable"
 
 
 def configure_logging(service: str) -> None:
