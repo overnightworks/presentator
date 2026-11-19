@@ -64,18 +64,12 @@ _FAILURE_BY_CONNECTION_STATE: Final[dict[ConnectionState, SourceRunFailure]] = {
     ConnectionState.HOST_KEY_REFUSED: SourceRunFailure.HOST_KEY_REFUSED,
 }
 
-# A connection the far end or the credential turned down is a refusal of the
-# fetch; every other failure to read a source is a failed step.
-_REFUSALS: Final = frozenset(
-    {SourceRunFailure.REFUSED, SourceRunFailure.CREDENTIAL_UNRESOLVABLE}
-)
-
 _log = logging.getLogger(__name__)
 
 
 def _unread(fetch: StepTimer, failure: SourceRunFailure) -> SourcePoll:
     """End the fetch step for a source that could not be read, with its code."""
-    if failure in _REFUSALS:
+    if failure.is_refusal:
         fetch.refuse(failure.value)
     else:
         fetch.fail(failure.value)
@@ -231,7 +225,8 @@ class MirroredDeckFolders:
         """Poll for every top-level folder at the newest commit, or why not.
 
         The reading is one `source_fetch.ended` step: it is a warning where the
-        source could not be read and the refresh goes on to the next one.
+        source could not be read, an info line where the read was refused,
+        and either way the refresh goes on to the next one.
         """
         with StepTimer(_SOURCE_FETCH_ENDED, _log, source_id=source.id) as fetch:
             fetch.handled()

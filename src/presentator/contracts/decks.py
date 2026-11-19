@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import StrEnum
 from ipaddress import IPv6Address
 from pathlib import Path
-from typing import Final
+from typing import Final, assert_never
 
 MANIFEST_FILE: Final = "deck.toml"
 SLIDES_FILE: Final = "slides.md"
@@ -254,6 +254,29 @@ class SourceRunFailure(StrEnum):
     FAILED = "failed"
     UNREACHABLE = "unreachable"
     HOST_KEY_REFUSED = "host-key-refused"
+
+    @property
+    def is_refusal(self) -> bool:
+        """Whether the read was refused rather than broken.
+
+        The fetch's log line and the source's listed state both read this one
+        answer. A login the host turned down and a host that answers with
+        another key than its pinned one are refusals the person mends at the
+        source or its host. A stored credential the instance cannot produce
+        is a fault of the instance's own state, such as a restore without its
+        key file, and warns like a host that never answers.
+        """
+        match self:
+            case SourceRunFailure.REFUSED | SourceRunFailure.HOST_KEY_REFUSED:
+                return True
+            case (
+                SourceRunFailure.CREDENTIAL_UNRESOLVABLE
+                | SourceRunFailure.FAILED
+                | SourceRunFailure.UNREACHABLE
+            ):
+                return False
+            case _:
+                assert_never(self)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
