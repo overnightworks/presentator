@@ -204,9 +204,10 @@ class GatewayAnswerer:
                 [TurnMessage(role=TurnRole.USER, text=message)]
             )
         except ValueError:
-            _LOGGER.warning(
-                "gateway_turn.stopped",
-                extra={"outcome": TurnStopKind.FAILED, "reason": "request_invalid"},
+            _log_stop(
+                TurnStopKind.FAILED,
+                reason="request_invalid",
+                stop_outcome=StopOutcome.UNAVAILABLE,
             )
             _unavailable()
         summary = _RunSummary(self._monotonic)
@@ -265,17 +266,35 @@ async def _answered(
         _refuse(stopped)
 
 
-def _refuse(stopped: TurnStopped) -> NoReturn:
+def _log_stop(
+    kind: TurnStopKind,
+    *,
+    reason: str,
+    stop_outcome: StopOutcome,
+    detail: str | None = None,
+    retry_after_s: int | None = None,
+) -> None:
+    """Write the `gateway_turn.stopped` line, with one field set for every stop."""
     # Only closed values: a body, a message or an exception may carry the question.
     _LOGGER.warning(
         "gateway_turn.stopped",
         extra={
-            "outcome": stopped.kind,
-            "reason": stopped.code,
-            "stop_outcome": stopped.outcome,
-            "detail": stopped.detail,
-            "retry_after_s": stopped.retry_after_s,
+            "outcome": kind,
+            "reason": reason,
+            "stop_outcome": stop_outcome,
+            "detail": detail,
+            "retry_after_s": retry_after_s,
         },
+    )
+
+
+def _refuse(stopped: TurnStopped) -> NoReturn:
+    _log_stop(
+        stopped.kind,
+        reason=stopped.code,
+        stop_outcome=stopped.outcome,
+        detail=stopped.detail,
+        retry_after_s=stopped.retry_after_s,
     )
     match stopped.outcome:
         case StopOutcome.NOT_ENABLED:
