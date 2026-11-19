@@ -127,3 +127,19 @@ fields whatever its reason: `outcome` (`refused` or `failed`), `reason` (the
 gateway's code, or `request_invalid` for an ask whose message never became a
 request), `stop_outcome` (the wording it ends in), `detail` and `retry_after_s`
 (null where none exists). No line holds the question or the answer.
+
+**How soon an answer begins.** The answer start is one turn's time from the end
+of speech to the first audio its answer sends, the figure behind the vision's
+three seconds. A line's start is its `ts` less its `duration_ms`. The end of
+speech is the start of the speech service's `turn_end_wait.ended` in the turn's
+trace, the wait from the first silent audio to the turn's end; the first audio
+is the start of `answer.ended` plus its `first_output_ms`, which counts from the
+ask. `uv run --locked python scripts/answer_start.py <files>` (or the lines on
+standard input) reads both services' JSON lines of a release, joins them by
+`trace_id` and prints `turns`, `p50_ms` and `p95_ms` (nearest rank), then one
+`unjoined <trace_id> <reason>` per trace it leaves out: `no_end_of_speech` (an
+ask under a fresh trace), `no_answer` (a turn nobody asked), `no_first_audio`
+(an answer that sent no audio), `repeated` or `malformed`. It exits 1 when no
+turn joins. The two instants come from two processes' wall clocks, so the
+figure carries their offset, and it ends where the server sends the first audio,
+before the network and the browser's playback.
