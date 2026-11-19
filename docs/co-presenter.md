@@ -114,6 +114,7 @@ as `attempt_failed`. The speech client reports no opened session, so a first
 opening counts as open at its first event and its duration is an upper bound. No
 line holds a transcript, token, address or path. Each final transcript hands the
 overlay the service's trace of its turn; the overlay asks under that trace with
-a span of its own, or under a new trace when none came, so the turn's hearing,
-ask and answer lines share one `trace_id`, and the next turn never reuses a
-failed one's.
+a span of its own and its flags, or under a new trace with flags `00` when no
+valid one came (W3C Trace Context, a higher version included), so the turn's
+hearing, ask and answer lines share one `trace_id`, and the next turn never
+reuses a failed one's.
