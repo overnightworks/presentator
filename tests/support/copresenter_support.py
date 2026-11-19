@@ -221,7 +221,9 @@ class RecordingSpeech:
         await heard(event)
         return True
 
-    async def refuse(self, browser: HearingSocket) -> None:
+    async def refuse(
+        self, browser: HearingSocket, _unavailable: CoPresenterUnavailableError
+    ) -> None:
         self.refusals += 1
         await browser.close(HopClose.SERVICE_FAILED)
 

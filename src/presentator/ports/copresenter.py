@@ -14,6 +14,7 @@ if TYPE_CHECKING:
         AccessRefusal,
         AskingPerson,
         CoPresenterReadiness,
+        CoPresenterUnavailableError,
         DeckText,
         HearingTranscript,
         RetryAfter,
@@ -77,8 +78,14 @@ class SpeechHearing(Protocol):
         """
         ...
 
-    async def refuse(self, browser: HearingSocket) -> None:
-        """Close the browser socket as a hearing the service cannot give."""
+    async def refuse(
+        self, browser: HearingSocket, unavailable: CoPresenterUnavailableError
+    ) -> None:
+        """Close the browser socket on a hearing its tokens could not be read for.
+
+        A session that ended closes in order, as a sign-out does; anything else
+        closes as a hearing the service cannot give.
+        """
         ...
 
 

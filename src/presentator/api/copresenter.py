@@ -566,8 +566,8 @@ async def _read_tokens(
             return None
         try:
             return read.result()
-        except CoPresenterUnavailableError:
-            await use.refuse_hearing(socket)
+        except CoPresenterUnavailableError as unavailable:
+            await use.refuse_hearing(socket, unavailable)
             return None
     finally:
         await _finish_tasks((read,))

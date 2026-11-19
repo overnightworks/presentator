@@ -109,7 +109,10 @@ if TYPE_CHECKING:
 
     from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
     from presentator.api.auth import InstalledAuth
-    from presentator.contracts.copresenter import CoPresenterReadiness
+    from presentator.contracts.copresenter import (
+        CoPresenterReadiness,
+        CoPresenterUnavailableError,
+    )
     from presentator.ports.copresenter import HearingSocket, Speaking
     from presentator.ports.copresenter import SpeechHearing as SpeechHearingPort
     from tests.presentator.application.support.fakes import FakeDeckStore
@@ -233,9 +236,11 @@ class WitnessedSpeech:
             self._errors.append(error)
             raise
 
-    async def refuse(self, browser: HearingSocket) -> None:
+    async def refuse(
+        self, browser: HearingSocket, unavailable: CoPresenterUnavailableError
+    ) -> None:
         try:
-            await self._speech.refuse(browser)
+            await self._speech.refuse(browser, unavailable)
         except BaseException as error:
             self._errors.append(error)
             raise
