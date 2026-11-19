@@ -118,8 +118,10 @@ def migrate(engine: Engine) -> None:
     A database whose revision this release does not know was migrated by a
     newer release: it stays as it is. A migration drops a column only one
     release after its last reader, so a rollback by one release runs its
-    migration step and serves without harm. A store fault is refused for the
-    reason `store_refusal` names.
+    migration step and serves without harm; revision 0005 is the one
+    exception, and the release before it cannot read a session or sign anyone
+    in until it rolls forward. A store fault is refused for the reason
+    `store_refusal` names.
     """
     try:
         _migrate(engine)
@@ -162,8 +164,10 @@ def serving_refusal(
     release migrated: serving either would read tables or columns that may not
     exist. A revision this release does not know is a newer release's, which
     drops a column only once the release before it no longer reads it, so it
-    is served. The reasons name the kind of failure and never what the driver
-    says, which may quote the address the connection used.
+    is served; revision 0005 is the one exception, which the release before it
+    serves without being able to read a session. The reasons name the kind of
+    failure and never what the driver says, which may quote the address the
+    connection used.
     """
     try:
         with engine.connect() as connection:

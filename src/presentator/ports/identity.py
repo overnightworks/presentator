@@ -24,7 +24,7 @@ class PersonAccounts(Protocol):
 
     @abstractmethod
     def delete_account(self, user_id: str) -> None:
-        """Delete the account and its remaining sessions together."""
+        """Delete the account; its remaining sessions end with it by cascade."""
 
 
 class PersonSessions(Protocol):

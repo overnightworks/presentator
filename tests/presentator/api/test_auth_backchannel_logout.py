@@ -117,7 +117,7 @@ class World:
     def sessions_of(self, subject: str) -> int:
         with self.scene.engine.connect() as connection:
             count = connection.execute(
-                text("SELECT count(*) FROM sessions WHERE user_id = :subject"),
+                text("SELECT count(*) FROM sessions WHERE account_id = :subject"),
                 {"subject": subject},
             ).scalar_one()
         return int(count)

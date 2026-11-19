@@ -13,7 +13,7 @@ from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.identity import TokenIdentifierFactory
 from presentator.adapters.postgres.deck_store import PostgresDeckStore
 from presentator.adapters.postgres.preferences import PostgresPersonPreferencesStore
-from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.adapters.postgres.source_runs import PostgresSourceRunStore
 from presentator.adapters.postgres.sources import PostgresSourceStore
@@ -53,7 +53,7 @@ def _stores_over(engine: Engine) -> Stores:
         runs=PostgresSourceRunStore(engine=engine, fence=NO_FENCE),
         key_drafts=a_key_drafts_store(engine),
         accounts=PostgresIdentityWrites(engine, LoggingAuditSink()),
-        sessions=PostgresSessionRecordStore(engine),
+        sessions=PostgresSessions(engine),
         preferences=PostgresPersonPreferencesStore(engine),
     )
 

@@ -57,7 +57,10 @@ Concurrent `migrate` runs wait for one another on an advisory lock, and each
 ends at the newest revision. A database whose revision this release does not
 know was migrated by a newer release: `migrate` leaves it as it is and exits 0.
 A migration drops a column only one release after its last reader, so the
-release before the newest still serves it. Serving refuses a database with no revision row and
+release before the newest still serves it; revision 0005 is the one exception.
+It recreates `sessions` in one step, so every person signs in once again, and
+the release before it fails every session read and every sign-in until it rolls
+forward or the old table shape is restored by hand. Serving refuses a database with no revision row and
 one behind this release's head, and `GET /health` answers 503 while the
 database does not answer or fails that rule, or while Redis does not answer. A start the database refuses, and a store fault in a start, a `migrate` or a
 `presentator unpin-host`, end in one `process.failed` line with exit status 1.

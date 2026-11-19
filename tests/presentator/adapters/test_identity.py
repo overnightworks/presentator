@@ -9,11 +9,12 @@ from pydantic import SecretStr
 from sqlalchemy import Connection, Engine, text
 from webauth.config import WebAuthConfig
 from webauth.dependencies import ConnectionRefusal, admit_session
-from webauth.ports import AccountKind
+from webauth.ports import AccountKind, SessionRecord
+from webauth.postgres import SessionStoreError, stored_key
 
 from presentator.adapters.audit import LoggingAuditSink
-from presentator.adapters.identity import StoredAccount, StoredSession, SystemClock
-from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+from presentator.adapters.identity import StoredAccount, SystemClock
+from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
@@ -37,8 +38,8 @@ def database(engine: Engine) -> Engine:
 
 
 @pytest.fixture
-def sessions(database: Engine) -> PostgresSessionRecordStore:
-    return PostgresSessionRecordStore(database)
+def sessions(database: Engine) -> PostgresSessions:
+    return PostgresSessions(database)
 
 
 _TABLES = text(
@@ -76,14 +77,14 @@ def an_id_token(word: str = _ID_MARKER) -> SecretStr:
 
 
 def open_session(  # noqa: PLR0913 - one keyword per stored column
-    store: PostgresSessionRecordStore,
+    store: PostgresSessions,
     user_id: str = "user-1",
     *,
     now: datetime = _NOW,
     expires_at: datetime = _NOW,
     refresh_token: SecretStr | None = None,
     account_language: str | None = None,
-) -> StoredSession:
+) -> SessionRecord:
     return store.create(
         user_id,
         session_id=a_session_id(),
@@ -111,7 +112,8 @@ def the_account_of(person: User) -> StoredAccount:
 def stored_expiry(database: Engine, session_id: str) -> datetime:
     with database.connect() as connection:
         return connection.execute(
-            text("SELECT expires_at FROM sessions WHERE id = :id"), {"id": session_id}
+            text("SELECT expires_at FROM sessions WHERE id_hash = :key"),
+            {"key": stored_key(session_id)},
         ).scalar_one()
 
 
@@ -121,7 +123,7 @@ def session_count(database: Engine) -> int:
 
 
 def test_a_session_is_read_back_with_the_account_joined_from_the_users(
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
 ) -> None:
     expires_at = _NOW + timedelta(hours=1)
 
@@ -135,16 +137,16 @@ def test_a_session_is_read_back_with_the_account_joined_from_the_users(
 
 def test_a_session_for_an_account_that_does_not_exist_is_refused_loudly(
     database: Engine,
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
 ) -> None:
-    with pytest.raises(LookupError, match="nobody"):
+    with pytest.raises(SessionStoreError):
         open_session(sessions, "nobody")
 
     assert session_count(database) == 0
 
 
 def test_a_touched_session_keeps_its_creation_and_takes_the_given_expiry(
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
 ) -> None:
     session = open_session(sessions, "user-1")
     later = _NOW + timedelta(minutes=15)
@@ -158,10 +160,10 @@ def test_a_touched_session_keeps_its_creation_and_takes_the_given_expiry(
 
 
 def test_a_session_deleted_after_its_load_is_not_brought_back_by_touch(
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
     database: Engine,
 ) -> None:
-    logout = PostgresSessionRecordStore(database)
+    logout = PostgresSessions(database)
     session = open_session(sessions, "user-1")
 
     assert sessions.load(session.id) is not None
@@ -173,7 +175,7 @@ def test_a_session_deleted_after_its_load_is_not_brought_back_by_touch(
 
 
 def test_deleting_one_persons_sessions_counts_them_and_leaves_another_standing(
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
 ) -> None:
     kept = open_session(sessions, "user-2")
     open_session(sessions, "user-1")
@@ -185,13 +187,13 @@ def test_deleting_one_persons_sessions_counts_them_and_leaves_another_standing(
 
 
 def test_deleting_sessions_for_nobody_drops_nothing(
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
 ) -> None:
     assert sessions.delete_for_user("nobody") == 0
 
 
 def test_a_session_count_below_the_cap_drops_nothing(
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
 ) -> None:
     created = [
         open_session(sessions, "user-1", now=_NOW + timedelta(minutes=minute))
@@ -205,7 +207,7 @@ def test_a_session_count_below_the_cap_drops_nothing(
 
 def test_a_timestamp_given_with_an_offset_is_stored_as_the_same_instant_in_utc(
     database: Engine,
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
 ) -> None:
     in_berlin = timezone(timedelta(hours=1))
 
@@ -231,7 +233,7 @@ def test_the_system_clock_reads_an_aware_utc_time() -> None:
 
 def test_an_admitted_session_is_renewed_to_the_cap_when_the_window_reaches_it(
     database: Engine,
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
 ) -> None:
     session = open_session(sessions, "user-1", expires_at=_NOW + timedelta(hours=1))
     at = _NOW + timedelta(minutes=30)
@@ -258,7 +260,7 @@ def test_an_admitted_session_is_renewed_to_the_cap_when_the_window_reaches_it(
 )
 def test_a_refused_session_is_not_renewed(
     database: Engine,
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
     idle_expiry: timedelta,
     refused_at: timedelta,
 ) -> None:
@@ -296,8 +298,8 @@ def test_a_fresh_database_stores_no_password_no_login_attempts_and_no_client_add
 
     assert user_columns == ["id", "username", "role", "kind"]
     assert session_columns == [
-        "id",
-        "user_id",
+        "id_hash",
+        "account_id",
         "created_at",
         "expires_at",
         "refresh_token",
@@ -317,7 +319,7 @@ def test_a_fresh_database_stores_no_password_no_login_attempts_and_no_client_add
     ids=["before the sweep", "at the sweep", "after the sweep"],
 )
 def test_a_sweep_deletes_a_session_only_when_it_ended_before_the_sweep(
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
     expires_at: datetime,
     *,
     stays: bool,
@@ -339,7 +341,7 @@ def test_a_sweep_deletes_a_session_only_when_it_ended_before_the_sweep(
     ids=["at the expiry", "within the second after", "a second after"],
 )
 def test_the_sweep_keeps_exactly_the_sessions_the_admission_admits(
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
     after_expiry: timedelta,
 ) -> None:
     expires_at = _NOW + timedelta(hours=1)
@@ -369,7 +371,7 @@ def dump_without_sessions(database: Engine) -> list[str]:
 
 def test_a_sweep_leaves_the_accounts_and_every_other_table_as_they_were(
     database: Engine,
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
 ) -> None:
     ended = _NOW - SESSION_LIFETIME
     open_session(sessions, "user-1", now=ended, expires_at=ended)
@@ -397,7 +399,7 @@ def occurrences_in_the_database(database: Engine, word: str) -> int:
 
 
 def test_a_refresh_token_is_stored_in_the_row_and_read_back_as_a_secret(
-    database: Engine, sessions: PostgresSessionRecordStore
+    database: Engine, sessions: PostgresSessions
 ) -> None:
     """SI6: a refresh token is stored in the row and read back as a secret."""
     created = open_session(sessions, "user-1", refresh_token=a_token())
@@ -412,7 +414,7 @@ def test_a_refresh_token_is_stored_in_the_row_and_read_back_as_a_secret(
 
 @pytest.mark.parametrize("language", ["de", "pt-BR", None])
 def test_a_session_reads_back_the_account_language_it_was_created_with(
-    sessions: PostgresSessionRecordStore, language: str | None
+    sessions: PostgresSessions, language: str | None
 ) -> None:
     created = open_session(sessions, "user-1", account_language=language)
 
@@ -425,7 +427,7 @@ def test_a_session_reads_back_the_account_language_it_was_created_with(
 
 
 def test_a_session_without_a_refresh_token_reads_back_none(
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
 ) -> None:
     created = open_session(sessions, "user-1")
 
@@ -436,7 +438,7 @@ def test_a_session_without_a_refresh_token_reads_back_none(
 
 
 def test_a_replaced_refresh_token_is_read_back_and_the_answer_is_true(
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
 ) -> None:
     created = open_session(sessions, "user-1", refresh_token=a_token())
 
@@ -454,10 +456,10 @@ def test_a_replaced_refresh_token_is_read_back_and_the_answer_is_true(
 
 
 def test_a_logout_on_another_store_before_a_replacement_leaves_the_row_gone(
-    database: Engine, sessions: PostgresSessionRecordStore
+    database: Engine, sessions: PostgresSessions
 ) -> None:
     created = open_session(sessions, "user-1", refresh_token=a_token())
-    PostgresSessionRecordStore(database).delete(created.id)
+    PostgresSessions(database).delete(created.id)
 
     answer = sessions.replace_refresh_token(created.id, refresh_token=a_token("rt-2"))
 
@@ -467,7 +469,7 @@ def test_a_logout_on_another_store_before_a_replacement_leaves_the_row_gone(
 
 
 def test_replacing_the_token_of_a_never_created_session_creates_no_row(
-    database: Engine, sessions: PostgresSessionRecordStore
+    database: Engine, sessions: PostgresSessions
 ) -> None:
     answer = sessions.replace_refresh_token("never-existed", refresh_token=a_token())
 
@@ -475,26 +477,26 @@ def test_replacing_the_token_of_a_never_created_session_creates_no_row(
     assert session_count(database) == 0
 
 
-def end_by_delete(store: PostgresSessionRecordStore, session_id: str) -> None:
+def end_by_delete(store: PostgresSessions, session_id: str) -> None:
     store.delete(session_id)
 
 
-def end_by_delete_for_user(store: PostgresSessionRecordStore, session_id: str) -> None:
+def end_by_delete_for_user(store: PostgresSessions, session_id: str) -> None:
     del session_id
     store.delete_for_user("user-1")
 
 
-def end_by_delete_expired(store: PostgresSessionRecordStore, session_id: str) -> None:
+def end_by_delete_expired(store: PostgresSessions, session_id: str) -> None:
     del session_id
     store.delete_expired(_NOW + timedelta(days=1))
 
 
-def end_by_prune_overflow(store: PostgresSessionRecordStore, session_id: str) -> None:
+def end_by_prune_overflow(store: PostgresSessions, session_id: str) -> None:
     del session_id
     store.prune_overflow("user-1", 0)
 
 
-def end_by_delete_account(store: PostgresSessionRecordStore, session_id: str) -> None:
+def end_by_delete_account(store: PostgresSessions, session_id: str) -> None:
     del session_id
     PostgresIdentityWrites(store.engine, LoggingAuditSink()).delete_account("user-1")
 
@@ -511,8 +513,8 @@ def end_by_delete_account(store: PostgresSessionRecordStore, session_id: str) ->
 )
 def test_every_way_of_ending_a_session_removes_its_token_with_the_row(
     database: Engine,
-    sessions: PostgresSessionRecordStore,
-    remove: Callable[[PostgresSessionRecordStore, str], None],
+    sessions: PostgresSessions,
+    remove: Callable[[PostgresSessions, str], None],
 ) -> None:
     created = open_session(sessions, "user-1", refresh_token=a_token())
     assert occurrences_in_the_database(database, "rt-MARKER") == 1
@@ -532,7 +534,7 @@ def test_every_way_of_ending_a_session_removes_its_token_with_the_row(
 
 
 def test_a_session_never_shows_its_tokens_in_repr_or_str(
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
 ) -> None:
     """Neither `repr` nor `str` shows a token."""
     created = sessions.create(
@@ -551,7 +553,7 @@ def test_a_session_never_shows_its_tokens_in_repr_or_str(
 
 
 def test_the_id_token_is_read_back_and_survives_a_touch_and_a_refresh_token_swap(
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
 ) -> None:
     """The ID token reads back and outlives a touch and a swap."""
     created = sessions.create(
@@ -577,7 +579,7 @@ def test_a_session_created_without_an_id_token_stores_none(
     database: Engine,
 ) -> None:
     """SI7: the caller states the ID token; NULL is stored for none."""
-    store = PostgresSessionRecordStore(database)
+    store = PostgresSessions(database)
     created = store.create(
         "user-1",
         session_id=a_session_id(),

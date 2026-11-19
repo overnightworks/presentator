@@ -59,7 +59,7 @@ from presentator.adapters.postgres.preferences import (
     PostgresPersonPreferencesStore,
 )
 from presentator.adapters.postgres.refresh_owner import PostgresRefreshOwnership
-from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.adapters.postgres.source_runs import PostgresSourceRunStore
 from presentator.adapters.postgres.sources import (
@@ -195,7 +195,7 @@ class Stores:
     refresh_ownership: RefreshOwnership
     credentials: PostgresSourceCredentials
     host_keys: PostgresHostKeyPins
-    sessions: PostgresSessionRecordStore
+    sessions: PostgresSessions
     identity_writes: PostgresIdentityWrites
     instance_settings: InstanceSettingsStore
     person_preferences: PersonPreferencesStore
@@ -331,7 +331,7 @@ def _stores(
         refresh_ownership=ownership,
         credentials=PostgresSourceCredentials(engine=engine, box=box),
         host_keys=PostgresHostKeyPins(engine=engine),
-        sessions=PostgresSessionRecordStore(engine),
+        sessions=PostgresSessions(engine),
         identity_writes=PostgresIdentityWrites(engine, LoggingAuditSink()),
         instance_settings=PostgresInstanceSettingsStore(engine),
         person_preferences=PostgresPersonPreferencesStore(engine),
@@ -506,7 +506,7 @@ def _talk(  # noqa: PLR0913 - the composition root hands the talk host each owne
 
 def _copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands the surface each owner
     settings: Settings,
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
     decks: Decks,
     auth: InstalledAuth,
     texts: DeckTexts,
@@ -624,9 +624,7 @@ def _preferences(stores: Stores) -> Preferences:
     )
 
 
-def _session_sweep(
-    sessions: PostgresSessionRecordStore, clock: SystemClock
-) -> Schedule:
+def _session_sweep(sessions: PostgresSessions, clock: SystemClock) -> Schedule:
     """Delete expired sessions on a schedule, reading the clock on every run."""
     return Schedule(
         chore=lambda: sessions.delete_expired(clock.now()),

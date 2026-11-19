@@ -8,7 +8,7 @@ from sqlalchemy import Engine, text
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.postgres.preferences import PostgresPersonPreferencesStore
-from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.contracts.models import Role, User
 from presentator.contracts.people import SessionExport
@@ -33,7 +33,7 @@ def test_deleting_an_account_takes_its_sessions_and_leaves_another_account(
     database: Engine,
 ) -> None:
     """PE1: the account goes with its sessions; no other account is touched."""
-    sessions = PostgresSessionRecordStore(database)
+    sessions = PostgresSessions(database)
     accounts = PostgresIdentityWrites(database, LoggingAuditSink())
     for person in (_THE_PERSON, _ANOTHER):
         sessions.create(
@@ -54,6 +54,31 @@ def test_deleting_an_account_takes_its_sessions_and_leaves_another_account(
     assert len(sessions.sessions_of(_ANOTHER.id)) == 1
 
 
+def test_removing_a_users_row_takes_its_sessions_and_leaves_another_accounts(
+    database: Engine,
+) -> None:
+    """PE1: a session ends with its account, whatever removes the account row."""
+    sessions = PostgresSessions(database)
+    for person in (_THE_PERSON, _ANOTHER):
+        sessions.create(
+            person.id,
+            session_id=a_session_id(),
+            now=_NOW,
+            expires_at=_NOW + timedelta(hours=1),
+            refresh_token=None,
+            id_token=None,
+            account_language=None,
+        )
+
+    with database.begin() as connection:
+        connection.execute(
+            text("DELETE FROM users WHERE id = :id"), {"id": _THE_PERSON.id}
+        )
+
+    assert sessions.sessions_of(_THE_PERSON.id) == ()
+    assert len(sessions.sessions_of(_ANOTHER.id)) == 1
+
+
 def test_asking_for_an_unknown_account_creates_none(database: Engine) -> None:
     """PE3, PE10: an unknown subject creates no `users` row."""
     accounts = PostgresIdentityWrites(database, LoggingAuditSink())
@@ -70,7 +95,7 @@ def test_the_sessions_of_a_person_carry_their_times_and_no_secret(
     database: Engine,
 ) -> None:
     """PE21: sessions are counted by their times and never show the token."""
-    sessions = PostgresSessionRecordStore(database)
+    sessions = PostgresSessions(database)
     sessions.create(
         _THE_PERSON.id,
         session_id=a_session_id(),
@@ -98,7 +123,7 @@ def test_a_persons_session_carries_the_account_language_stored_at_its_sign_in(
     database: Engine, language: str | None
 ) -> None:
     """PE31: the language is exported as stored, `null` where the account named none."""
-    sessions = PostgresSessionRecordStore(database)
+    sessions = PostgresSessions(database)
     sessions.create(
         _THE_PERSON.id,
         session_id=a_session_id(),
@@ -118,7 +143,7 @@ def test_only_sessions_holding_a_refresh_token_are_counted_as_holding_one(
     database: Engine,
 ) -> None:
     """PE21: a session without a refresh token is not counted as holding one."""
-    sessions = PostgresSessionRecordStore(database)
+    sessions = PostgresSessions(database)
     for token in (SecretStr(_A_REFRESH_WORD), None):
         sessions.create(
             _THE_PERSON.id,

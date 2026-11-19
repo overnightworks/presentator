@@ -34,7 +34,7 @@ def connection(database_url: str) -> Iterator[Connection]:
             id="a second row of instance settings",
         ),
         pytest.param(
-            "INSERT INTO sessions (id, user_id, created_at, expires_at)"
+            "INSERT INTO sessions (id_hash, account_id, created_at, expires_at)"
             " VALUES ('s1', 'nobody', now(), now())",
             id="a session of a user that does not exist",
         ),

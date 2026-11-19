@@ -80,7 +80,7 @@ if TYPE_CHECKING:
     from httpx2 import Response
     from sqlalchemy import Engine
 
-    from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+    from presentator.adapters.postgres.sessions import PostgresSessions
     from presentator.api.auth import InstalledAuth
     from presentator.ports.copresenter import (
         AgentAnswers,
@@ -621,9 +621,7 @@ class Scenario:
     headers: Mapping[str, str] = field(default_factory=dict[str, str])
 
 
-def _access_over(
-    auth: InstalledAuth, sessions: PostgresSessionRecordStore
-) -> SessionAccess:
+def _access_over(auth: InstalledAuth, sessions: PostgresSessions) -> SessionAccess:
     return SessionAccess(
         auth.relying_party,
         sessions,
@@ -661,7 +659,7 @@ def drive(engine: Engine, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
             await scenario.delay(gateway, hosts_made[0], seconds)
 
     def surface(
-        store: FakeDeckStore, sessions: PostgresSessionRecordStore, auth: InstalledAuth
+        store: FakeDeckStore, sessions: PostgresSessions, auth: InstalledAuth
     ) -> CoPresenterSurface:
         return CoPresenterSurface(
             use=CoPresenterUse(

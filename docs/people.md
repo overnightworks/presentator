@@ -12,7 +12,8 @@ is `{subject}`. `?dry_run=true` counts and changes nothing.
 
 - **PE1** Erasure takes every row of the person: their account, sessions,
   preferences and key draft, and every source they own with its decks, runs,
-  mirror and builds. It takes only the named person's rows.
+  mirror and builds. It takes only the named person's rows. A session ends with
+  its account row by the database's cascade.
 - **PE2** The counts of a real run are what was removed. A dry run changes
   nothing and answers the real run's counts with `dry_run` true. Both answer
   the `people_erasure` v1 body with `kinds`, counted by

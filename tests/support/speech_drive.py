@@ -111,7 +111,7 @@ if TYPE_CHECKING:
     from sqlalchemy import Engine
     from starlette.types import Message, Scope
 
-    from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+    from presentator.adapters.postgres.sessions import PostgresSessions
     from presentator.api.auth import InstalledAuth
     from presentator.contracts.copresenter import (
         CoPresenterReadiness,
@@ -141,8 +141,7 @@ _SSE_EVENT: Final = re.compile(
     r"^event: (?P<name>\w+)\ndata: (?P<data>.*)$", re.MULTILINE
 )
 _REFRESH_COLUMN: Final = "refresh_token"
-_USER_ID_COLUMN: Final = "user_id"
-_ID_COLUMN: Final = "id"
+_ACCOUNT_ID_COLUMN: Final = "account_id"
 _A_JWT_STARTS: Final = "eyJ"
 
 
@@ -287,14 +286,12 @@ def a_surface_over(  # noqa: PLR0913 - each part is one thing the instance varie
     deadline: ManualDeadline,
     errors: list[BaseException],
     speech_scope: str,
-) -> Callable[
-    [FakeDeckStore, PostgresSessionRecordStore, InstalledAuth], CoPresenterSurface
-]:
+) -> Callable[[FakeDeckStore, PostgresSessions, InstalledAuth], CoPresenterSurface]:
     """The talk host's surface over the real speech adapters and session access."""
     hearing, speaking = adapters
 
     def surface(
-        store: FakeDeckStore, sessions: PostgresSessionRecordStore, auth: InstalledAuth
+        store: FakeDeckStore, sessions: PostgresSessions, auth: InstalledAuth
     ) -> CoPresenterSurface:
         return CoPresenterSurface(
             use=CoPresenterUse(
@@ -522,11 +519,9 @@ def _assert_rows_keep_only_their_own_values(
     hosts: Hosts, markers: Sequence[str]
 ) -> None:
     """A row's values show no marker, but for each column's own contract value."""
-    # A session id is random text that may start like a JWT by chance alone.
     belonging = {
         _REFRESH_COLUMN: {REFRESH, ROTATED},
-        _USER_ID_COLUMN: {A.id},
-        _ID_COLUMN: {_A_JWT_STARTS},
+        _ACCOUNT_ID_COLUMN: {A.id},
     }
     for row in stored_session_rows(hosts):
         for column, value in row.items():

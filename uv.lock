@@ -640,7 +640,7 @@ dependencies = [
     { name = "overnightworks-logline" },
     { name = "overnightworks-speech-client" },
     { name = "overnightworks-tandem" },
-    { name = "overnightworks-webauth", extra = ["redis"] },
+    { name = "overnightworks-webauth", extra = ["postgres", "redis"] },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
     { name = "sqlalchemy" },
@@ -675,7 +675,7 @@ requires-dist = [
     { name = "overnightworks-logline", git = "https://github.com/overnightworks/logline?rev=v1.4.0" },
     { name = "overnightworks-speech-client", git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.22.0" },
     { name = "overnightworks-tandem", git = "https://github.com/overnightworks/tandem?rev=v0.13.0" },
-    { name = "overnightworks-webauth", extras = ["redis"], git = "https://github.com/overnightworks/webauth?rev=v0.41.1" },
+    { name = "overnightworks-webauth", extras = ["postgres", "redis"], git = "https://github.com/overnightworks/webauth?rev=v0.41.1" },
     { name = "psycopg", extras = ["binary"], specifier = "==3.3.9" },
     { name = "pydantic-settings", specifier = "==2.16.2" },
     { name = "sqlalchemy", specifier = "==2.1.8" },
@@ -734,6 +734,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+postgres = [
+    { name = "sqlalchemy" },
+]
 redis = [
     { name = "redis" },
 ]
