@@ -231,7 +231,8 @@ class Run:
         command = (*words.split(), *arguments)
         done = self.effects.run(command, self.environment, stdin, stderr_into_stdout)
         if check and done.returncode:
-            refuse(f"{words} ended {done.returncode}: {done.stderr[-2000:]}")
+            output = done.stderr or done.stdout
+            refuse(f"{words} ended {done.returncode}: {output[-2000:]}")
         return done
 
     def watch(self, words: str, *arguments: str) -> Generator[str]:
