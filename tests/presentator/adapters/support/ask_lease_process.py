@@ -1,7 +1,7 @@
 """One process of the co-presenter's ask route, its lease taken in the shared Redis.
 
 Run with `python -m <module> <port>` in an environment that names the Redis and
-the lease length. Every question is the one admitted session's, and its answer
+the lease length (`lasts`). Every question is the one admitted session's, and its answer
 streams one sentence and then waits until `FINISH_PATH` is posted to this process.
 """
 
@@ -11,6 +11,7 @@ import sys
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import replace
+from datetime import timedelta
 from typing import Final
 
 import logline
@@ -39,7 +40,6 @@ URL_VARIABLE: Final = "ASK_LEASE_REDIS_URL"
 LEASE_VARIABLE: Final = "ASK_LEASE_MILLISECONDS"
 HEALTH_PATH: Final = "/health"
 FINISH_PATH: Final = "/finish"
-_MILLISECONDS: Final = 1000
 SESSION: Final = "session-two-processes-ask"
 
 
@@ -63,14 +63,14 @@ class _HeldAnswers:
         yield sentences()
 
 
-def _app(redis: SharedRedis, *, lease_seconds: float) -> FastAPI:
+def _app(redis: SharedRedis, *, lasts: timedelta) -> FastAPI:
     answers = _HeldAnswers()
     app = FastAPI()
     add_copresenter_routes(
         app,
         surface=CoPresenterSurface(
             use=replace(a_use(PrivateFakes(), the_admins_decks()), answers=answers),
-            limiter=redis.ask_limiter(lease_seconds=lease_seconds),
+            limiter=redis.ask_limiter(lasts=lasts),
             browser_origin=TALK_ORIGIN,
             deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
         ),
@@ -86,17 +86,25 @@ def _app(redis: SharedRedis, *, lease_seconds: float) -> FastAPI:
     return app
 
 
+async def _serve(port: int) -> None:
+    redis = SharedRedis(os.environ[URL_VARIABLE])
+    lasts = timedelta(milliseconds=int(os.environ[LEASE_VARIABLE]))
+    server = uvicorn.Server(
+        uvicorn.Config(
+            _app(redis, lasts=lasts), host="127.0.0.1", port=port, log_config=None
+        )
+    )
+    try:
+        await server.serve()
+    finally:
+        await redis.aclose()
+        redis.close()
+
+
 def run() -> None:
     """Serve the ask route on the given port until killed."""
     logline.configure("presentator")
-    redis = SharedRedis(os.environ[URL_VARIABLE])
-    lease_seconds = int(os.environ[LEASE_VARIABLE]) / _MILLISECONDS
-    uvicorn.run(
-        _app(redis, lease_seconds=lease_seconds),
-        host="127.0.0.1",
-        port=int(sys.argv[1]),
-        log_config=None,
-    )
+    asyncio.run(_serve(int(sys.argv[1])))
 
 
 if __name__ == "__main__":

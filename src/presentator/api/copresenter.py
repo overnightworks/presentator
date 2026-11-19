@@ -289,11 +289,18 @@ async def _admitted(
     question: AskRequest,
     begun: _Begun,
 ) -> _Ask | Response:
-    """Admit the question off the event loop, ending its line if admission breaks."""
+    """Admit the question, ending its line if admission breaks.
+
+    Who asks and which deck are read off the event loop; only a question that
+    passed both takes the session's hold, on the loop.
+    """
     with _ended_if_it_breaks(begun.step):
-        return await run_in_threadpool(
-            _admit, surface, admission, request, question, begun
+        looked_up = await run_in_threadpool(
+            _looked_up, surface, admission, request, question, begun.step
         )
+        if isinstance(looked_up, Response):
+            return looked_up
+        return await _with_the_sessions_hold(surface.limiter, looked_up, begun)
 
 
 @contextmanager
@@ -345,13 +352,13 @@ def _ask_route(
                     ),
                     media_type="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-                    background=BackgroundTask(admitted.ticket.release),
+                    background=BackgroundTask(_released, admitted.ticket),
                 )
             streaming = True
             return response
         finally:
             if not streaming:
-                await _release_off_the_loop(admitted.ticket)
+                await _released(admitted.ticket)
 
     return _ask
 
@@ -368,34 +375,30 @@ def _answer_ended_with(step: StepTimer, response: Response) -> Response:
     return response
 
 
-def _admit(
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _LookedUp:
+    """A question whose asker and deck are known and which holds nothing yet."""
+
+    connection: SignedIn
+    asked: AskedDeck
+    question: Question
+
+
+def _looked_up(
     surface: CoPresenterSurface,
     admission: _AskAdmission,
     request: Request,
     question: AskRequest,
-    begun: _Begun,
-) -> _Ask | Response:
-    step = begun.step
+    step: StepTimer,
+) -> _LookedUp | Response:
     connection = admission.admission(request)
     if connection is None:
         return _answer_ended_with(step, _not_authenticated())
     asked = surface.use.asked_deck(question.deck, viewer=connection.user_id)
     if asked is None:
         return _answer_ended_with(step, _deck_not_found())
-    try:
-        ticket = surface.limiter.admit(connection.session_id)
-    except CoPresenterUnavailableError:
-        return _answer_ended_with(step, _unavailable())
-    if isinstance(ticket, RetryAfter):
-        return _answer_ended_with(
-            step,
-            JSONResponse(
-                {"detail": "Too many questions"},
-                HTTPStatus.TOO_MANY_REQUESTS,
-                headers={"Retry-After": str(ticket.seconds)},
-            ),
-        )
-    return _Ask(
+    return _LookedUp(
+        connection=connection,
         asked=asked,
         question=Question(
             said=question.said,
@@ -404,11 +407,34 @@ def _admit(
                 question.language, lambda: admission.interface_language(request)
             ),
         ),
+    )
+
+
+async def _with_the_sessions_hold(
+    limiter: AskLimiter, looked_up: _LookedUp, begun: _Begun
+) -> _Ask | Response:
+    session_id = looked_up.connection.session_id
+    try:
+        ticket = await limiter.admit(session_id)
+    except CoPresenterUnavailableError:
+        return _answer_ended_with(begun.step, _unavailable())
+    if isinstance(ticket, RetryAfter):
+        return _answer_ended_with(
+            begun.step,
+            JSONResponse(
+                {"detail": "Too many questions"},
+                HTTPStatus.TOO_MANY_REQUESTS,
+                headers={"Retry-After": str(ticket.seconds)},
+            ),
+        )
+    return _Ask(
+        asked=looked_up.asked,
+        question=looked_up.question,
         ticket=ticket,
-        subject=connection.user_id,
-        role=connection.person.role,
+        subject=looked_up.connection.user_id,
+        role=looked_up.connection.person.role,
         deadline=begun.deadline,
-        step=step,
+        step=begun.step,
     )
 
 
@@ -454,11 +480,11 @@ def _not_authenticated() -> JSONResponse:
     return JSONResponse({"detail": "Not authenticated"}, HTTPStatus.UNAUTHORIZED)
 
 
-async def _release_off_the_loop(ticket: AskTicket) -> None:
-    # The release asks the shared Redis, which can hold its thread for a second;
-    # the shield lets it finish when the browser's leaving cancels the stream.
+async def _released(ticket: AskTicket) -> None:
+    # The shield lets the release finish when the browser's leaving cancels the
+    # stream; a cancelled release would leave the hold to lapse.
     with anyio.CancelScope(shield=True):
-        await run_in_threadpool(ticket.release)
+        await ticket.release()
 
 
 async def _answer_events(
@@ -513,7 +539,7 @@ async def _answer_events(
             except (CoPresenterUnavailableError, TimeoutError) as stop:
                 yield _stopped(step, stop)
     finally:
-        await _release_off_the_loop(ask.ticket)
+        await _released(ask.ticket)
         await _finish_tasks((session_watch,))
 
 

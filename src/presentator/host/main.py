@@ -7,7 +7,7 @@ adapter satisfies which port.
 import asyncio
 import copy
 import logging
-from collections.abc import AsyncGenerator, Callable, Sequence
+from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
@@ -160,10 +160,14 @@ def _nothing_to_close() -> None:
     """What an instance built without stores holds open: nothing."""
 
 
+async def _nothing_to_aclose() -> None:
+    """What an instance built without Redis holds open on the event loop: nothing."""
+
+
 # The files boto3 reads the object store's key and configuration from.
 _OBJECT_STORE_FILES: Final = ("AWS_SHARED_CREDENTIALS_FILE", "AWS_CONFIG_FILE")
 # The wait between taking the lease and the answer's clock starting, so the lease
-# outlives the whole answer.
+# outlives the whole answer. It feeds the hold's `lasts`.
 ASK_LEASE_MARGIN_SECONDS: Final = 30
 
 
@@ -176,6 +180,7 @@ class Instance:
     poller: Schedule
     session_sweep: Schedule
     close: Callable[[], None] = _nothing_to_close
+    aclose: Callable[[], Awaitable[None]] = _nothing_to_aclose
     stopping: Stopping = field(default_factory=Stopping)
 
 
@@ -248,6 +253,7 @@ def build_instance(
             poller=_poller(settings, decks),
             session_sweep=_session_sweep(stores.sessions, SystemClock()),
             close=stores.close,
+            aclose=redis.aclose,
             stopping=stopping,
         )
     except BaseException:
@@ -538,7 +544,9 @@ def _copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands
 
 def ask_limiter_of(redis: SharedRedis, *, deadline_seconds: float) -> AskLimiter:
     """The ask lease: the answer's deadline plus a margin, never renewed."""
-    return redis.ask_limiter(lease_seconds=deadline_seconds + ASK_LEASE_MARGIN_SECONDS)
+    return redis.ask_limiter(
+        lasts=timedelta(seconds=deadline_seconds + ASK_LEASE_MARGIN_SECONDS)
+    )
 
 
 def _lobby_private(settings: Settings, stores: Stores, decks: Decks) -> LobbyPrivate:
@@ -772,7 +780,10 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
             ):
                 yield
         finally:
-            instance.close()
+            try:
+                await instance.aclose()
+            finally:
+                instance.close()
 
     return RequestLineMiddleware(
         Router(

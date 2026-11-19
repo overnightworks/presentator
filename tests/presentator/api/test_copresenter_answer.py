@@ -173,13 +173,15 @@ def test_a_signed_in_admins_ask_reaches_the_gateway_with_only_that_decks_words(
 
 
 def the_ticket_was_released(run: Run) -> bool:
-    """Whether every ticket the ask took is free again, so its session may ask."""
+    """Whether every ticket the ask took was freed once, so its session may ask."""
     assert run.limiter.session_ids
+    if run.limiter.freed != run.limiter.session_ids:
+        return False
     for session_id in set(run.limiter.session_ids):
-        ticket = run.limiter.admit(session_id)
+        ticket = asyncio.run(run.limiter.admit(session_id))
         if isinstance(ticket, RetryAfter):
             return False
-        ticket.release()
+        asyncio.run(ticket.release())
     return True
 
 
@@ -619,7 +621,7 @@ def test_an_ask_that_breaks_while_it_is_prepared_still_writes_its_answer_line(
     assert line["outcome"] == outcome
     assert line.get("reason") == reason
     (session_id,) = set(limiter.session_ids)
-    ticket = limiter.admit(session_id)
+    ticket = asyncio.run(limiter.admit(session_id))
     assert not isinstance(ticket, RetryAfter)
 
 
@@ -629,7 +631,7 @@ class _LimiterThatRaises:
     def __init__(self, raised: BaseException) -> None:
         self._raised = raised
 
-    def admit(self, session_id: str) -> RetryAfter:
+    async def admit(self, session_id: str) -> RetryAfter:
         """Raise, as admission does when the lease store breaks."""
         raise self._raised
 

@@ -16,6 +16,7 @@ dependencies = [
     "overnightworks-agents[backend,mcp-server] @ git+https://github.com/overnightworks/agents@v0.59.0",
     "overnightworks-logline @ git+https://github.com/overnightworks/logline@v1.4.0",
     "overnightworks-speech-client @ git+https://github.com/overnightworks/speech@v0.22.0#subdirectory=packages/client",
+    "overnightworks-tandem @ git+https://github.com/overnightworks/tandem@v0.13.0",
     "overnightworks-webauth[redis] @ git+https://github.com/overnightworks/webauth@v0.41.1",
     "psycopg[binary]==3.3.9",
     "pydantic-settings==2.16.2",
@@ -392,8 +393,8 @@ as_packages = true
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
-id = "redis-library"
-name = "Only adapters import the Redis client"
+id = "redis-client-and-tandem"
+name = "Only adapters import the Redis client and tandem"
 type = "forbidden"
 # The Redis every pod shares is reached through the adapter that owns its
 # clients and keys; a layer above is handed the limits and the lease.
@@ -404,7 +405,7 @@ source_modules = [
     "presentator.ports",
     "presentator.contracts",
 ]
-forbidden_modules = ["redis"]
+forbidden_modules = ["redis", "tandem"]
 as_packages = true
 allow_indirect_imports = true
 

@@ -18,13 +18,15 @@ class FakeAskTicket:
 
     session_id: str
     _holders: dict[str, FakeAskTicket]
+    _freed: list[str]
     _guard: threading.Lock
 
-    def release(self) -> None:
+    async def release(self) -> None:
         """Free the session if this ticket still holds it; later calls do nothing."""
         with self._guard:
             if self._holders.get(self.session_id) is self:
                 del self._holders[self.session_id]
+                self._freed.append(self.session_id)
 
 
 class FakeAskLimiter:
@@ -34,13 +36,14 @@ class FakeAskLimiter:
         """Start with no session answering."""
         self._holders: dict[str, FakeAskTicket] = {}
         self._guard = threading.Lock()
+        self.freed: list[str] = []
 
-    def admit(self, session_id: str) -> FakeAskTicket | RetryAfter:
+    async def admit(self, session_id: str) -> FakeAskTicket | RetryAfter:
         """Hand out the session's ticket, or say when to retry."""
         with self._guard:
             if session_id in self._holders:
                 return RetryAfter(BUSY_RETRY_SECONDS)
-            ticket = FakeAskTicket(session_id, self._holders, self._guard)
+            ticket = FakeAskTicket(session_id, self._holders, self.freed, self._guard)
             self._holders[session_id] = ticket
             return ticket
 
@@ -53,6 +56,6 @@ class FakeAskLimiter:
 class UnavailableAskLimiter:
     """An ask lease that cannot be told."""
 
-    def admit(self, session_id: str) -> FakeAskTicket | RetryAfter:
+    async def admit(self, session_id: str) -> FakeAskTicket | RetryAfter:
         """Raise: the lease store does not answer."""
         raise CoPresenterUnavailableError

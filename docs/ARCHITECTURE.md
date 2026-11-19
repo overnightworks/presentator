@@ -163,9 +163,9 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
 - Processes share state only through Postgres and Redis. Every write that needs one winner takes an
   advisory lock; the refresh holds a session lock on a pinned connection and bumps an epoch in
   `refresh_owner`, which every refresh and removal write reads `FOR SHARE`, so a holder whose
-  connection ended is refused. The ask lease is a Redis key (`SET NX PX`) that expires with the
-  agent's deadline and is freed only by its holder's token. Redis keeps nothing durable; while it
-  cannot answer, every request but `/health` is a 503, since webauth's limiter fails closed.
+  connection ended is refused. The ask lease is a tandem slot (cap 1 per session) that lasts the
+  agent's deadline plus a margin and is freed by its holder's token only; a Redis restart can
+  briefly allow a second answer. While Redis cannot answer, every request but `/health` is a 503.
 - The speech origin is plain `http` and the gateway's `http` or `https`, both at Service addresses
   inside the cluster; presentator sends the workload token and the person's token over that hop and
   relies on the deployment to keep it there.

@@ -143,15 +143,18 @@ class AskTicket(Protocol):
         """The session the answer belongs to."""
         ...
 
-    def release(self) -> None:
-        """Free the session if this ticket still holds it; later calls do nothing."""
+    async def release(self) -> None:
+        """Free the session if this ticket still holds it; later calls do nothing.
+
+        A store that does not answer leaves the hold to expire on its own.
+        """
         ...
 
 
 class AskLimiter(Protocol):
     """Admits one streaming answer per session at a time, across every process."""
 
-    def admit(self, session_id: str) -> AskTicket | RetryAfter:
+    async def admit(self, session_id: str) -> AskTicket | RetryAfter:
         """Hand out the session's ticket, or say when to retry.
 
         Raises CoPresenterUnavailableError when the lease cannot be told.
