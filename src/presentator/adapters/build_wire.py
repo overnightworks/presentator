@@ -614,6 +614,16 @@ def _meets_step_contract(step: StepKind, position: int, entry: TreeEntry) -> boo
     return entry.components[0] == talk
 
 
+def over_the_bound(total_bytes: int, megabytes: int) -> bool:
+    """Whether that many bytes are more than the bound of that many megabytes."""
+    return total_bytes > megabytes * MEGABYTE
+
+
+def megabytes_written(total_bytes: int) -> int:
+    """The megabytes a refusal reports for that many bytes, rounded up."""
+    return (total_bytes + MEGABYTE - 1) // MEGABYTE
+
+
 def _survey(
     root: int,
     megabytes: int,
@@ -633,11 +643,10 @@ def _survey(
             total += entry.size
     if contract is not None and count == 0:
         raise TreeRefusedError(_SHAPE_REFUSAL)
-    if total > megabytes * MEGABYTE:
+    if over_the_bound(total, megabytes):
         raise TreeRefusedError(
             RefusedOutcome(
-                limit=RefusalLimit.MEGABYTES,
-                written=(total + MEGABYTE - 1) // MEGABYTE,
+                limit=RefusalLimit.MEGABYTES, written=megabytes_written(total)
             )
         )
 

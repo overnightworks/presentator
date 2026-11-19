@@ -9,6 +9,7 @@ holds, so a build under way here is never taken. A run that went is fetched
 again when it is asked for.
 """
 
+import math
 import os
 import tarfile
 from abc import abstractmethod
@@ -25,6 +26,7 @@ from presentator.adapters.build_runs import (
     removed_run,
     taken_away,
 )
+from presentator.adapters.build_tree import added_up
 from presentator.contracts.decks import (
     DECK_DIRECTORY,
     MANIFEST_FILE,
@@ -221,12 +223,8 @@ def _is_a_regular_file(path: Path) -> bool:
 
 
 def _bytes_of(run: Path) -> int:
-    """What that run's tree holds, its links not followed."""
-    return sum(
-        (Path(directory) / name).lstat().st_size
-        for directory, _, files in os.walk(run)
-        for name in files
-    )
+    """What that run's tree holds, counted by the one walker, its links not followed."""
+    return added_up(run, ends_by=math.inf).bytes
 
 
 def _served_at(run: Path) -> float:

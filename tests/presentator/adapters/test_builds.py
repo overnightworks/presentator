@@ -32,6 +32,7 @@ from presentator.contracts.decks import (
     Deck,
     RunLeft,
     Source,
+    ToolchainUnavailable,
     talk_address,
 )
 from tests.presentator.adapters.support.build_support import (
@@ -169,6 +170,16 @@ case "$out" in
 esac
 """
 )
+# A talk of exactly the bytes a test asks for, and an empty PDF.
+_A_TOOLCHAIN_THAT_WRITES_BYTES = (
+    _FINDS_ITS_OUTPUT
+    + """case "$out" in
+    *.pdf) : > "$out";;
+    *) mkdir -p "$out"; head -c {talk} /dev/zero > "$out/index.html";;
+esac
+"""
+)
+_A_MEGABYTE = 1024 * 1024
 _AND_THEN_IT_KEEPS_GOING = "sleep 60"
 _AND_THEN_IT_IS_DONE = ":"
 # A build that leaves a link where a file would be, pointing at something of
@@ -744,7 +755,54 @@ def test_a_talk_larger_than_a_build_may_leave_is_refused_with_that_reason(
         BuildFailureReason.OUTPUT_MEGABYTES,
         "info",
     )
-    assert ended["written_megabytes"] == _MEGABYTES_A_GREEDY_BUILD_WRITES
+    *_, last_step = lines_of(logged, "build_step.ended")
+    assert last_step["written_megabytes"] == _MEGABYTES_A_GREEDY_BUILD_WRITES
+
+
+def _built_with_a_talk_of_the_bound_plus(
+    bytes_over: int,
+    *,
+    remote: GitRemote,
+    source: Source,
+    machine: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> Artefacts | BuildFailure | ToolchainUnavailable:
+    machine.setattr(builds_module, "_ACCOUNTED_EVERY", timedelta(hours=1))
+    with_the_toolchain(
+        machine,
+        tmp_path,
+        _A_TOOLCHAIN_THAT_WRITES_BYTES.format(
+            talk=_ONLY_A_MEGABYTE_MAY_BE_LEFT * _A_MEGABYTE + bytes_over
+        ),
+    )
+    builds = builds_ready_for(
+        tmp_path, source, output_megabytes=_ONLY_A_MEGABYTE_MAY_BE_LEFT
+    )
+    return builds.build(a_deck(remote), source=source)
+
+
+def test_a_talk_of_exactly_the_megabytes_is_kept(
+    remote: GitRemote, source: Source, machine: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    built = _built_with_a_talk_of_the_bound_plus(
+        0, remote=remote, source=source, machine=machine, tmp_path=tmp_path
+    )
+
+    assert isinstance(built, Artefacts)
+
+
+def test_a_talk_one_byte_over_the_megabytes_is_refused_with_the_rounded_up_total(
+    remote: GitRemote, source: Source, machine: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    built = _built_with_a_talk_of_the_bound_plus(
+        1, remote=remote, source=source, machine=machine, tmp_path=tmp_path
+    )
+
+    assert built == BuildFailure(
+        reason=BuildFailureReason.OUTPUT_MEGABYTES,
+        written_megabytes=_ONLY_A_MEGABYTE_MAY_BE_LEFT + 1,
+        allowed_megabytes=_ONLY_A_MEGABYTE_MAY_BE_LEFT,
+    )
 
 
 def test_a_build_that_delivers_writes_one_line_per_step_and_one_for_the_build(
@@ -768,7 +826,7 @@ def test_a_build_that_delivers_writes_one_line_per_step_and_one_for_the_build(
     ]
     (ended,) = lines_of(logged, "deck_build.ended")
     assert ended["outcome"] == "ok"
-    assert ended["entry_count"] == len(list(built.directory.parent.rglob("*")))
+    assert steps[-1]["entry_count"] == len(list(built.directory.parent.rglob("*")))
     assert all(one["deck_id"] == ended["deck_id"] for one in steps)
     assert isinstance(ended["duration_ms"], float)
     assert EXAMPLE_SLUG not in logged.text

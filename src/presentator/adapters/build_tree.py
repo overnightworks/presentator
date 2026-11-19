@@ -14,7 +14,6 @@ from typing import Final
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES
 
 _UP: Final = ".."
-_A_MEGABYTE: Final = 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -26,7 +25,7 @@ class Added:
     """
 
     entries: int
-    megabytes: int = 0
+    bytes: int = 0
     unreadable: str | None = None
     in_time: bool = True
 
@@ -72,7 +71,7 @@ def _walked(still_open: list[int], *, ends_by: float) -> Added:
             return Added(entries=entries, unreadable=str(unreadable))
         finally:
             os.close(holder)
-    return Added(entries=entries, megabytes=held // _A_MEGABYTE)
+    return Added(entries=entries, bytes=held)
 
 
 def _stopped_at(entries: int, *, ends_by: float) -> Added | None:

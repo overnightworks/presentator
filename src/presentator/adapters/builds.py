@@ -38,7 +38,11 @@ from gitmirror.model import MirrorError, Revision
 from presentator.adapters.build_cache import BuildCache
 from presentator.adapters.build_runs import RUN_DIRECTORY_MODE, taken_away
 from presentator.adapters.build_tree import added_up, opened_without_a_link
-from presentator.adapters.build_wire import MAXIMUM_ENTRIES
+from presentator.adapters.build_wire import (
+    MAXIMUM_ENTRIES,
+    megabytes_written,
+    over_the_bound,
+)
 from presentator.adapters.decks import SourceMirrors
 from presentator.contracts.decks import (
     DECK_DIRECTORY,
@@ -184,9 +188,10 @@ class BuildStep:
     slug: str
     name: StepKind
     arguments: tuple[str, ...]
-    # Asked while the step runs: a build that has already written more than it
-    # may leave is stopped there, because by the time it ends this machine is
-    # full. It answers with what the deck's page will say, or with nothing.
+    # Asked by a runner that writes into out/ itself, while the step runs and
+    # when it ends: a build that has already written more than it may leave is
+    # stopped there, because by the time it ends this machine is full. It
+    # answers with what the deck's page will say, or with nothing.
     watched: Callable[[], BuildFailure | None]
     # The step's one `build_step.ended` line: the runner names why it stopped.
     line: StepTimer
@@ -497,7 +502,7 @@ class SlidevBuilds:
             if broke is not None:
                 step_line.ends(line)
                 return broke
-        return self._more_than_it_may_leave(place, line)
+        return None
 
     def _ran(
         self,
@@ -528,8 +533,10 @@ class SlidevBuilds:
 
         A deck's own code decides what its talk holds, and a talk this machine
         cannot keep is a machine that stops keeping the others. It is asked
-        while the build runs and once more when it is over, because a build
-        that fills this machine has filled it long before it ends. No toolchain
+        while a step runs and once more when it ends, because a build that
+        fills this machine has filled it long before it ends. Only a runner
+        that leaves the talk on this machine asks it: a worker's tree is
+        judged once, by the wire, before it is admitted. No toolchain
         failed, so the reason a page words here is this server's own; what only
         this host can act on is the reason its line carries.
         """
@@ -544,19 +551,20 @@ class SlidevBuilds:
         if not added.in_time:
             line.fail(BuildFault.ADDING_UP_TIMED_OUT)
             return BuildFailure.without_words()
-        line.add(written_megabytes=added.megabytes)
+        written = megabytes_written(added.bytes)
+        line.add(written_megabytes=written)
         if added.entries > MAXIMUM_ENTRIES:
             line.refuse(BuildFailureReason.OUTPUT_ENTRIES)
             return BuildFailure(
                 reason=BuildFailureReason.OUTPUT_ENTRIES,
                 allowed_entries=MAXIMUM_ENTRIES,
             )
-        if added.megabytes <= self.output_megabytes:
+        if not over_the_bound(added.bytes, self.output_megabytes):
             return None
         line.refuse(BuildFailureReason.OUTPUT_MEGABYTES)
         return BuildFailure(
             reason=BuildFailureReason.OUTPUT_MEGABYTES,
-            written_megabytes=added.megabytes,
+            written_megabytes=written,
             allowed_megabytes=self.output_megabytes,
         )
 
@@ -680,7 +688,7 @@ def _what_a_step_said(
         failure = BuildFailure.said(words)
         stopped_by(step.line, failure)
         return failure
-    return None
+    return step.watched()
 
 
 def _the_end_of_what_it_printed(
