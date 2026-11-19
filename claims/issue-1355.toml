@@ -1,7 +1,0 @@
-claim_id = "1768154564974ab6ae2a97139faf4ab4"
-agent = "Claude 8ee5fb01-f0ec-4dfd-8667-519e2cc2cc19"
-role = "builder"
-base = "a76ff0f012671f9bdc8d602d32ad803fd760fcb5"
-branch = "claude/issue-1355-pin-fleet-packages-by-git-tag"
-scope = [".github/dependabot.yml", "pyproject.toml", "uv.lock"]
-opened_commit = "87e05b78cc04cf63ab82406775eed863ae49b994"
