@@ -669,6 +669,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "coverage" },
     { name = "overnightworks-design", extra = ["catalogs"] },
     { name = "pypdf" },
     { name = "pyright" },
@@ -702,6 +703,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "coverage", specifier = "==7.16.0" },
     { name = "overnightworks-design", extras = ["catalogs"], url = "https://github.com/overnightworks/design/releases/download/v0.37.0/overnightworks_design-0.37.0-py3-none-any.whl" },
     { name = "pypdf", specifier = "==7.0.1" },
     { name = "pyright", specifier = "==1.1.414" },
