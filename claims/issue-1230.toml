@@ -1,0 +1,8 @@
+claim_id = "e035b1e3e5f44459837a44731ba853a0"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "a0b0a00652a9600ac6444c16f8b67843f903f8f6"
+branch = "claude/issue-1230-the-hearing-s-log-lines-close-the-gaps-1"
+scope = ["docs/co-presenter.md", "slidev/components/CoPresenter.vue", "slidev/tests", "src/presentator/adapters/speech.py", "src/presentator/agent/backend.py", "tests/presentator", "tests/support/copresenter_support.py", "tests/support/speech_drive.py"]
+opened_commit = "fd642b6fa97b473a4a0792aaa5012a54bfbd8062"
+whole_reason = "the hearing's log lines span the overlay, the speech adapter, the agent backend and their tests"
