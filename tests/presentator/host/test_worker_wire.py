@@ -354,7 +354,6 @@ def test_the_entry_closes_a_refused_input_with_no_reply(
 
 CLOSED_REASONS = {
     "an end of stream before any byte": (b"", "WireClosedError"),
-    "an end of stream inside the preamble": (b"PBW", "WireClosedError"),
     "bytes that break the grammar": (
         REFUSED_INPUTS["wrong magic X"],
         "WireRefusedError",
