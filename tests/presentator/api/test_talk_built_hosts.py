@@ -101,3 +101,19 @@ def test_a_built_talks_request_line_names_the_deck_address_never_the_file(
 
     assert line["route"] == f"{DECK_PATH}/{{slug}}"
     assert line["sub"] == A.id
+
+
+def test_a_refused_talk_request_writes_its_request_line_with_the_client_and_no_person(
+    engine: Engine, json_logging: None, caplog: pytest.LogCaptureFixture
+) -> None:
+    del json_logging
+    caplog.set_level(logging.INFO)
+    signed_out = two_hosts(engine).browser(A_TALK_ADDRESS)
+
+    answer = signed_out.get(talk_address(A_DECK))
+    (line,) = request_lines(caplog)
+
+    assert answer.status_code == HTTPStatus.FOUND
+    assert line["status"] == HTTPStatus.FOUND
+    assert line["sub"] is None
+    assert line["ip"] == "testclient"

@@ -73,7 +73,6 @@ from presentator.api.lobby_shell import LobbyShell
 from presentator.api.people import ADMIN_PREFIX, AdminPeople, people_routes
 from presentator.api.preference_api import preference_api_routes
 from presentator.api.problems import install_error_answers
-from presentator.api.request_line import ClientAddressNoting, SignedInPersonNoting
 from presentator.api.session_api import (
     SESSION_PATH,
     SessionAddresses,
@@ -397,7 +396,6 @@ def _install_middleware(
     lobby.add_middleware(
         StorableJsonBodies, own_readers=frozenset({urlsplit(resource.url).path})
     )
-    lobby.add_middleware(SignedInPersonNoting)
     install_web_auth_middleware(
         lobby,
         sign_in_paths=LOBBY_SIGN_IN,
@@ -419,8 +417,6 @@ def _install_middleware(
             optional=PathRules(exact=frozenset({SESSION_PATH})),
         ),
     )
-    # Added after the library stack, this sees every request, a refused one included.
-    lobby.add_middleware(ClientAddressNoting)
 
 
 def _bearer_gate(

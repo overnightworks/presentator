@@ -16,7 +16,7 @@ dependencies = [
     "overnightworks-agents[backend,mcp-server] @ git+https://github.com/overnightworks/agents@v0.59.0",
     "overnightworks-logline @ https://github.com/overnightworks/logline/releases/download/v1.4.0/overnightworks_logline-1.4.0-py3-none-any.whl#sha256=a1f36da28f7f09080219b08438208c4dca5678c92fb2e9fb3a2bdd15fe31ac30",
     "overnightworks-speech-client @ git+https://github.com/overnightworks/speech@v0.22.0#subdirectory=packages/client",
-    "overnightworks-webauth[redis] @ git+https://github.com/overnightworks/webauth@v0.40.1",
+    "overnightworks-webauth[redis] @ git+https://github.com/overnightworks/webauth@v0.41.1",
     "psycopg[binary]==3.3.9",
     "pydantic-settings==2.16.2",
     "sqlalchemy==2.1.8",
