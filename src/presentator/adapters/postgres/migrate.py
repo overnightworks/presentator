@@ -165,8 +165,9 @@ def serving_refusal(
     exist. A revision this release does not know is a newer release's, which
     drops a column only once the release before it no longer reads it, so it
     is served; revision 0005 is the one exception, which the release before it
-    serves without being able to read a session. The reasons name the kind of failure and never what the driver
-    says, which may quote the address the connection used.
+    serves without being able to read a session. The reasons name the kind of
+    failure and never what the driver says, which may quote the address the
+    connection used.
     """
     try:
         with engine.connect() as connection:
