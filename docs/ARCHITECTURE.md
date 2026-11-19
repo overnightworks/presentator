@@ -107,8 +107,8 @@ closes its stores and writes `process.stopped`.
 A worker pod keeps a link that reaches only the web: its init container loads nftables rules that
 accept only the worker's port in and let nothing leave but the loopback and the accepted
 connections' replies, so a deck's code (the build and wire uids) reaches only the pod. The
-self-check sends an IPv4 and an IPv6 datagram as each uid and requires `EPERM`, or for IPv6 no route. The root controller verifies a keyed hello
-(nonces, HMAC-SHA256 under a direction label, a deadline) before it spawns anything; a failed
+self-check sends an IPv4 and an IPv6 datagram as each uid and requires `EPERM`, or for IPv6 no
+route. The root controller verifies a keyed hello (nonces, HMAC-SHA256 under a direction label, a deadline) before it spawns anything; a failed
 hello is logged and spends no life; a wire child that closes without an outcome logs its reason.
 Each life ends the pod and the StatefulSet makes a fresh one.
 
