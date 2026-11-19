@@ -45,6 +45,8 @@ let productionSecurityHeaders: Record<string, string> = {}
 type CspViolation = { directive: string; blockedUri: string }
 let cspViolations: CspViolation[] = []
 const hearingSockets = new Set<import('node:stream').Duplex>()
+// The answers that stay open until the test ends their session.
+const heldAnswers = new Set<ServerResponse>()
 
 export type AnswerMode =
   | 'audio'
@@ -56,6 +58,8 @@ export type AnswerMode =
   | 'refused-then-answered'
   | 'two-sounds'
   | 'broken-stream'
+  | 'ends-without-done'
+  | 'session-ends'
   | keyof typeof REFUSED_REQUESTS
 
 type MediaObservation = {
@@ -341,6 +345,28 @@ async function startServer() {
         response.end()
         return
       }
+      // The first answer closes cleanly after its text and its sound, but without a done event; every later one is done.
+      if (state.answerMode === 'ends-without-done' && state.askBodies.length === 1) {
+        sendEvent(response, 'text', { text: 'The answer stops here.' })
+        sendEvent(response, 'sentence', { text: 'The answer stops here.' })
+        sendEvent(response, 'audio', { wav_b64: wav })
+        response.end()
+        return
+      }
+      if (state.answerMode === 'ends-without-done') {
+        sendEvent(response, 'done', { text: 'The second ask is answered.' })
+        response.end()
+        return
+      }
+      // The answer plays one sound and queues a second, and stays open until endAnswerSessions.
+      if (state.answerMode === 'session-ends') {
+        sendEvent(response, 'text', { text: 'The answer is cut here.' })
+        sendEvent(response, 'sentence', { text: 'The answer is cut here.' })
+        sendEvent(response, 'audio', { wav_b64: wav })
+        sendEvent(response, 'audio', { wav_b64: wav })
+        heldAnswers.add(response)
+        return
+      }
       if (state.answerMode === 'broken-stream') {
         // The socket breaks only once the headers and the first event left it, so the answer begins and its read fails.
         response.flushHeaders()
@@ -446,6 +472,15 @@ export async function overlayFlag(page: Page, name: 'on' | 'capturing' | 'speaki
 // A final transcript asks; one that is not final only shows as heard.
 export function sendHeard(text: string, final = true) {
   for (const socket of hearingSockets) socket.write(frame(JSON.stringify({ text, final, language: state.heardLanguage, traceparent: state.heardTraceparent })))
+}
+
+// The server ends every held answer in order, as it does when the session ends.
+export function endAnswerSessions() {
+  for (const response of heldAnswers) {
+    sendEvent(response, 'error', { message: 'the answer could not be spoken', reason: 'session-ended' })
+    response.end()
+  }
+  heldAnswers.clear()
 }
 
 // The server ends every open hearing with a close code, as it does when a

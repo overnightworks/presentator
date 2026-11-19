@@ -45,6 +45,7 @@ class AnswerStopReason(StrEnum):
     NOT_ENABLED = "not-enabled"
     BUSY = "busy"
     BUDGET_SPENT = "budget-spent"
+    SESSION_ENDED = "session-ended"
 
 
 class AccessRefusal(Enum):

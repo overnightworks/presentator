@@ -494,6 +494,7 @@ async def _answer_events(
                             if session_watch in done:
                                 _observe_session_end(session_watch)
                                 step.refuse(AnswerRefusal.SESSION_ENDED)
+                                yield _error_sse(AnswerStopReason.SESSION_ENDED)
                                 return
                             if next_event not in done or loop.time() >= ask.deadline:
                                 raise TimeoutError

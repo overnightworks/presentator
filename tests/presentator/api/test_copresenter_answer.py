@@ -415,7 +415,7 @@ class ChangeOnceTheAnswerHangs:
 def test_an_answer_ends_within_one_recheck_when_the_session_goes(
     engine: Engine,
 ) -> None:
-    """CP14: no text was sent before the end, and the held call is cancelled."""
+    """CP14: the stream ends on its session-end reason; the held call is cancelled."""
     recheck = ChangeOnceTheAnswerHangs(delete_the_sessions)
     scenario = Scenario(gateway=HeldTransport, delay=recheck)
 
@@ -423,7 +423,8 @@ def test_an_answer_ends_within_one_recheck_when_the_session_goes(
 
     assert isinstance(run.gateway, HeldTransport)
     assert run.response.status_code == HTTPStatus.OK
-    assert run.events == []
+    assert run.events == ["error"]
+    assert run.error_payload()["reason"] == "session-ended"
     assert recheck.waits == 1
     assert run.gateway.cancelled
     assert the_ticket_was_released(run)
