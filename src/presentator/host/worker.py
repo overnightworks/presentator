@@ -27,7 +27,7 @@ from presentator.adapters.worker_children import (
 )
 from presentator.host.environment import ConfigurationError
 from presentator.host.lifecycle import (
-    ServerEvent,
+    ServerReason,
     StopLine,
     read_command_line,
     refuse_argument,
@@ -81,9 +81,9 @@ from presentator.host.worker_wire import SERVICE_NAME
 
 logger = logging.getLogger(__name__)
 
-START_REFUSED_EVENT: Final = ServerEvent.PROCESS_FAILED
 REFUSAL_EXIT_STATUS = 2
 _PORT: Final = "--port"
+_LOWEST_PORT: Final = 1
 _HIGHEST_PORT: Final = 65535
 _KEY_FILE: Final = "--key-file"
 NOT_READY_EXIT_STATUS = 1
@@ -102,7 +102,6 @@ class StartRefusal(StrEnum):
     KEY = "key"
     BIND = "bind"
     LISTEN = "listen"
-    SETTINGS = "settings"
 
 
 class StartRefusedError(Exception):
@@ -402,7 +401,7 @@ REAL_BOUNDARY = Boundary(
 )
 
 
-def _refuse(refused: Predicate | StartRefusal, **fields: str) -> int:
+def _refuse(refused: Predicate | StartRefusal | ServerReason, **fields: str) -> int:
     write_failed(refused, **fields)
     return REFUSAL_EXIT_STATUS
 
@@ -460,9 +459,9 @@ def _refuse_unless_given(serving_needs: dict[str, object]) -> None:
 
 
 def _tcp_port(word: str) -> int:
-    """The TCP port `word` names; a word outside the port range is refused."""
+    """The TCP port `word` names; 0, which binds any free port, is refused too."""
     port = int(word)
-    if not 0 <= port <= _HIGHEST_PORT:
+    if not _LOWEST_PORT <= port <= _HIGHEST_PORT:
         raise ValueError(port)
     return port
 
@@ -500,7 +499,9 @@ def _start(argv: Sequence[str] | None, boundary: Boundary, stop_line: StopLine) 
     try:
         settings = boundary.load_settings()
     except ConfigurationError as refused:
-        return _refuse(StartRefusal.SETTINGS, setting=",".join(refused.variables))
+        return _refuse(
+            ServerReason.CONFIGURATION_REFUSED, setting=",".join(refused.variables)
+        )
     return boundary.serve(
         port=arguments.port,
         key_file=arguments.key_file,

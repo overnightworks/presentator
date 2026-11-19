@@ -208,7 +208,7 @@ def test_the_workers_apply_with_two_replicas_and_the_cells_before_with_one(
         "stale line",
     ],
 )
-def test_workers_that_are_not_ready_or_not_both_used_fail_cell_11(
+def test_workers_that_are_not_ready_not_both_used_or_not_held_fail_cell_11(
     make_fixture: Callable[..., Fixture],
     capsys: pytest.CaptureFixture[str],
     world: World,
@@ -235,6 +235,18 @@ def test_the_first_build_runs_on_the_cordoned_node_and_releases_it_before_the_aw
         at for at in command_positions(world, "kubectl", "get", "pods") if at > released
     ]
     assert cordoned < first_build_in_cell_11(world) < released < listed_after[0]
+
+
+def test_a_first_build_that_breaks_still_releases_the_cordoned_node(
+    make_fixture: Callable[..., Fixture],
+) -> None:
+    fixture = make_fixture(World(build_over_workers_breaks=True))
+    with pytest.raises(RuntimeError):
+        fixture.drive()
+    world = fixture.world
+    (cordoned,) = command_positions(world, "kubectl", "cordon", fixture.run.node)
+    (released,) = command_positions(world, "kubectl", "uncordon", fixture.run.node)
+    assert cordoned < first_build_in_cell_11(world) < released
 
 
 def undelivered(web_module: ModuleType, *, second_step_unavailable: bool) -> Any:  # noqa: ANN401 - the web probe's Outcome, loaded by name

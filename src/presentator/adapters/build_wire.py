@@ -257,7 +257,10 @@ def verify_hello(connection: socket.socket, key: bytes, *, seconds: float) -> No
 
 def answer_hello(connection: socket.socket, key: bytes) -> None:
     """Run the web's side of the keyed hello; raise unless the peer proves the key."""
-    challenge = _read_exactly(connection, CHALLENGE_BYTES)
+    try:
+        challenge = _read_exactly(connection, CHALLENGE_BYTES)
+    except WireRefusedError as closed:
+        raise HelloRefusedError(HelloFault.CLOSE) from closed
     if challenge[0] != HELLO_VERSION:
         raise HelloRefusedError(HelloFault.VERSION)
     nonce = challenge[1:]

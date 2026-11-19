@@ -110,6 +110,8 @@ class World:
     # The scheduler binds the last replacement worker pod although the node is
     # cordoned; it is not Ready yet while the hold is read.
     hold_breaks: bool = False
+    # The runner breaks on the first build the web runs over the workers.
+    build_over_workers_breaks: bool = False
     hello_spends_a_life: bool = False
     # What the programs sent into the pods print and how the copy ends: the web's
     # client with no worker and with workers (set up with the driver if empty),
@@ -256,7 +258,11 @@ class World:
             )
         if command[-2:] != ("build", "export"):
             return 0, self.hello_stdout, ""
-        shown = self.client_stdout if self.workers_up() else self.outage_stdout
+        workers_up = self.workers_up()
+        if workers_up and self.build_over_workers_breaks:
+            message = "the fake runner broke"
+            raise RuntimeError(message)
+        shown = self.client_stdout if workers_up else self.outage_stdout
         return self.client_exit, "" if self.client_exit else shown, self.client_stderr
 
     def answer(self, command: tuple[str, ...]) -> str | None:

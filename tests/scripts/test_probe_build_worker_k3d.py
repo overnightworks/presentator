@@ -9,7 +9,8 @@ from types import ModuleType, SimpleNamespace
 import pytest
 
 from presentator.adapters.build_worker import CONNECT_WINDOW_SECONDS
-from presentator.host.worker import REFUSAL_EXIT_STATUS, START_REFUSED_EVENT
+from presentator.host.lifecycle import ServerEvent
+from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import BUILD_IDENTITY, Predicate
 from tests.scripts.support.k3d_pods import (
     Document,
@@ -658,7 +659,7 @@ def a_failed_remove_link(refusal: Predicate | None) -> Document:
 @pytest.mark.parametrize(
     ("end", "fragment"),
     [
-        (another_predicate, f"no {START_REFUSED_EVENT} line"),
+        (another_predicate, f"no {ServerEvent.PROCESS_FAILED} line"),
         (a_failed_end, "exit status 1"),
         (a_restart, "restartCount is 1"),
         (a_failed_remove_link, "nft-rules ended as 1"),

@@ -5,7 +5,8 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from presentator.host.worker import REFUSAL_EXIT_STATUS, START_REFUSED_EVENT
+from presentator.host.lifecycle import ServerEvent
+from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import Predicate
 
 K3S_VERSION = "v1.37.2+k3s1"
@@ -84,7 +85,7 @@ def ending(refusal: Predicate | None, *, started: int = 0) -> Document:
         return terminated_state(0, reason="Completed", started=started)
     said = (
         '{"event": "process.started", "service": "presentator-worker"}\n'
-        + json.dumps({"event": START_REFUSED_EVENT, "reason": refusal})
+        + json.dumps({"event": ServerEvent.PROCESS_FAILED, "reason": refusal})
         + "\n"
     )
     return terminated_state(message=said, started=started)

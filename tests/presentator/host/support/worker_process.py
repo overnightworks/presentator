@@ -20,8 +20,10 @@ from tests.presentator.host.support.worker_boundary import boundary_over
 from tests.support.worker_support import ScriptedLife
 
 _KEY = b"k" * 32
+# The command line refuses port 0, so it names a port the fake serve never binds.
+_ARGUMENTS = ["--port", "1", "--key-file", "unread"]
 # Any port the kernel hands out: the parent reads the ready line, not the port.
-_ARGUMENTS = ["--port", "0", "--key-file", "unread"]
+_ANY_FREE_PORT = 0
 
 
 class Phase(StrEnum):
@@ -39,9 +41,12 @@ def _held_in_the_self_check() -> Snapshot:
 def _serve_a_free_port(
     *, port: int, key_file: Path, settings: WorkerSettings, stop_line: StopLine
 ) -> int:
-    del key_file, settings
+    del port, key_file, settings
     return worker.serve(
-        port=port, key=_KEY, serving=ScriptedLife().serving(), stop_line=stop_line
+        port=_ANY_FREE_PORT,
+        key=_KEY,
+        serving=ScriptedLife().serving(),
+        stop_line=stop_line,
     )
 
 

@@ -8,7 +8,8 @@ from types import ModuleType
 import pytest
 
 from presentator.adapters.build_worker import CONNECT_WINDOW_SECONDS
-from presentator.host.worker import REFUSAL_EXIT_STATUS, START_REFUSED_EVENT
+from presentator.host.lifecycle import ServerEvent
+from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import Predicate
 from tests.scripts.support.k3d_pods import (
     Document,
@@ -66,7 +67,7 @@ UNTERMINATED = [
         (REFUSED, refused_life(ended=terminated_state(1)), "exit status 1"),
         (REFUSED, passing_life(), "exit status 0"),
         (REFUSED, life_events("one", Predicate.ALONE), Predicate.ALONE),
-        (REFUSED, refused_life(ended=terminated_state()), START_REFUSED_EVENT),
+        (REFUSED, refused_life(ended=terminated_state()), ServerEvent.PROCESS_FAILED),
         (REFUSED, refused_life(version=Version(init_exit=1)), "nft-rules ended as 1"),
         (REFUSED, refused_life(version=Version(init=False)), "lacks an init container"),
         (REFUSED, refused_life(version=Version(restarts=1)), "restartCount is 1"),
@@ -74,7 +75,7 @@ UNTERMINATED = [
         (REFUSED, refused_life(ended=GONE), "ContainerStatusUnknown"),
         (REFUSED, UNTERMINATED, "deleted before its worker terminated"),
         (None, refused_life(), f"exit status {REFUSAL_EXIT_STATUS}"),
-        (None, refused_life(), START_REFUSED_EVENT),
+        (None, refused_life(), ServerEvent.PROCESS_FAILED),
         (None, passing_life(ended=terminated_state(1)), "exit status 1"),
     ],
     ids=[
