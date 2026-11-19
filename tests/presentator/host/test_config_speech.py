@@ -146,6 +146,17 @@ def test_a_voice_set_for_one_language_leaves_the_others_shipped_voice(
     assert voices == {**shipped, language: wire.VoiceId.RYAN}
 
 
+def test_voices_that_are_no_mapping_refuse_naming_their_variable(
+    environment: pytest.MonkeyPatch,
+) -> None:
+    environment.setenv("PRESENTATOR_SPEECH_VOICES", "[]")
+
+    with pytest.raises(ConfigurationError) as refused:
+        load_settings()
+
+    assert refused.value.variables == ("PRESENTATOR_SPEECH_VOICES",)
+
+
 def test_an_env_file_names_a_voice_and_an_entry_no_setting_reads_refuses(
     tmp_path: Path, environment: pytest.MonkeyPatch
 ) -> None:

@@ -160,6 +160,14 @@ def test_a_refused_connection_is_unavailable() -> None:
         asyncio.run(running)
 
 
+def test_a_language_outside_the_offered_ones_is_a_fault_of_its_sender() -> None:
+    speaking = SpeechSpeaking("http://speech.test", voices=the_speech_voices())
+
+    running = speaking.speak(SENTENCE, "xx", TOKENS)
+    with pytest.raises(ValueError, match="no offered language"):
+        asyncio.run(running)
+
+
 @pytest.mark.parametrize("case", MALFORMED_PEERS)
 def test_a_malformed_answer_is_unavailable(case: str) -> None:
     async def scenario() -> None:
