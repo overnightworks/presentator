@@ -17,7 +17,8 @@ from uvicorn.config import STARTUP_FAILURE
 
 from presentator.api.health import Stopping
 from presentator.host import main
-from presentator.host.stopping_server import StopLine, StoppingServer, served_config
+from presentator.host.lifecycle import StopLine
+from presentator.host.stopping_server import StoppingServer, served_config
 from tests.support.log_lines import LoggedText, LogLine, events_of, json_logged
 
 _LOOPBACK = "127.0.0.1"

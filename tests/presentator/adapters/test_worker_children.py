@@ -26,7 +26,7 @@ from presentator.adapters.worker_children import (
 )
 from presentator.host import worker, worker_scratch, worker_self_check, worker_serving
 from presentator.host.config import WorkerSettings
-from presentator.host.stopping_server import StopLine
+from presentator.host.lifecycle import StopLine
 from presentator.host.worker_serving import (
     HEADER_SECONDS,
     LifeEnd,
@@ -67,7 +67,7 @@ import ctypes, os, sys, time
 from pathlib import Path
 from presentator.adapters.worker_children import readable_within
 from presentator.host import worker, worker_scratch, worker_serving
-from presentator.host.stopping_server import StopLine
+from presentator.host.lifecycle import StopLine
 from presentator.host.worker_termination import FaultHandlerWatchdog
 
 def stall(*_arguments, **_keywords):

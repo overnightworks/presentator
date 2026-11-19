@@ -27,7 +27,7 @@ from presentator.adapters.worker_children import (
     spawn_gated,
 )
 from presentator.host import worker, worker_scratch
-from presentator.host.stopping_server import StopLine
+from presentator.host.lifecycle import StopLine
 from presentator.host.worker_serving import Serving, StepEffects
 from presentator.host.worker_termination import FaultHandlerWatchdog
 

@@ -15,7 +15,7 @@ from sqlalchemy import Engine
 
 from presentator.api.health import Stopping
 from presentator.host import main
-from presentator.host.stopping_server import StopLine
+from presentator.host.lifecycle import StopLine
 from tests.support.git_remote import (
     GitRemote,
     a_remote,

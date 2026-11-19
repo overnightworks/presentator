@@ -14,7 +14,7 @@ from presentator.host.config import (
     load_worker_settings,
     worker_settings_variables,
 )
-from presentator.host.stopping_server import StopLine
+from presentator.host.lifecycle import StopLine
 from presentator.host.worker_scratch import (
     QUEUE_MOUNT,
     SHARED_MEMORY_MOUNT,

@@ -118,6 +118,7 @@ from presentator.host.config import (
     load_settings,
     variable_of,
 )
+from presentator.host.lifecycle import StopLine, interrupt_ends_as_a_stop
 from presentator.host.oidc import (
     admission_of,
     client_configs_of,
@@ -126,11 +127,9 @@ from presentator.host.oidc import (
 from presentator.host.polling import ChoreCode, Schedule
 from presentator.host.stopping_server import (
     ServerReason,
-    StopLine,
     StoppingServer,
     configure_logging,
     end_failed,
-    interrupt_ends_as_a_stop,
     served_config,
 )
 from presentator.host.store_connection import (

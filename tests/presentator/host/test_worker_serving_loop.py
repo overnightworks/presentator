@@ -13,7 +13,7 @@ import pytest
 
 from presentator.adapters import build_wire
 from presentator.host import worker, worker_self_check, worker_serving
-from presentator.host.stopping_server import StopLine
+from presentator.host.lifecycle import StopLine
 from presentator.host.worker_serving import (
     HEADER_SECONDS,
     HelloRefusal,

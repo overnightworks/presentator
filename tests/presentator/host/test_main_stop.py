@@ -18,9 +18,9 @@ from presentator.adapters.postgres.locks import (
     MIGRATION_LOCK,
     hold_until_transaction_ends,
 )
+from presentator.host.lifecycle import interrupt_ends_as_a_stop
 from presentator.host.main import Instance, served_by_host
 from presentator.host.polling import ChoreCode, Schedule
-from presentator.host.stopping_server import interrupt_ends_as_a_stop
 from tests.presentator.application.support.fakes import PATIENCE
 from tests.presentator.host.support.app_processes import (
     presentator_environment,

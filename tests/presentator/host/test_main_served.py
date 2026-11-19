@@ -9,7 +9,7 @@ from logline import RequestLineMiddleware
 
 from presentator.api.health import Stopping
 from presentator.host import main
-from presentator.host.stopping_server import StopLine
+from presentator.host.lifecycle import StopLine
 from tests.support.lobby import A_BROWSERS_ADDRESS, A_BROWSERS_HEADERS
 
 pytestmark = pytest.mark.usefixtures("redis_environment", "served_database")

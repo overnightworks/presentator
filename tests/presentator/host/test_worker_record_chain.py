@@ -167,7 +167,7 @@ from presentator.adapters.worker_children import (
 )
 from presentator.host import worker
 from presentator.host.worker_serving import Serving, StepEffects
-from presentator.host.stopping_server import StopLine
+from presentator.host.lifecycle import StopLine
 from presentator.host.worker_termination import FaultHandlerWatchdog
 
 log = open(sys.argv[2], "a")

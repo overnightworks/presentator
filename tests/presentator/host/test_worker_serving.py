@@ -10,7 +10,7 @@ import pytest
 
 from presentator.host import worker
 from presentator.host.config import MINIMUM_KEY_LENGTH
-from presentator.host.stopping_server import StopLine
+from presentator.host.lifecycle import StopLine
 from presentator.host.worker import StartRefusal
 from presentator.host.worker_serving import Serving
 from tests.presentator.host.support.worker_boundary import LOADED_SETTINGS

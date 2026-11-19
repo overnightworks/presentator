@@ -13,7 +13,7 @@ from pathlib import Path
 
 from presentator.host import worker
 from presentator.host.config import WorkerSettings
-from presentator.host.stopping_server import StopLine
+from presentator.host.lifecycle import StopLine
 from presentator.host.worker_self_check import Snapshot
 from tests.presentator.host.support.sealed_snapshot import sealed_snapshot
 from tests.presentator.host.support.worker_boundary import boundary_over

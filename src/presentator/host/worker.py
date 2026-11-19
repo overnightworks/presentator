@@ -31,7 +31,7 @@ from presentator.host.config import (
     WorkerSettings,
     load_worker_settings,
 )
-from presentator.host.stopping_server import StopLine, interrupt_ends_as_a_stop
+from presentator.host.lifecycle import StopLine, interrupt_ends_as_a_stop
 from presentator.host.worker_scratch import (
     HOME_DIRECTORY,
     TEMPORARY_MOUNT,

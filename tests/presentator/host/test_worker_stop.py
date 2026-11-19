@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from presentator.host.stopping_server import ServerEvent
+from presentator.host.lifecycle import ServerEvent
 from tests.presentator.application.support.fakes import PATIENCE
 from tests.presentator.host.support.worker_process import Phase
 from tests.support.log_lines import json_lines
