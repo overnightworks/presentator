@@ -21,7 +21,6 @@ from tests.scripts.support.k3d_pods import (
     OWN,
     Document,
     Version,
-    at,
     lives_stream,
     node,
     stamp,
@@ -108,9 +107,9 @@ class World:
     workers_keep_uids: bool = False
     # The workers write an ok line for the first build, and none for a later one.
     workers_log_only_the_first_build: bool = False
-    # The seconds after the fake's start at which the first worker's replacement
-    # is Ready again; the worker pods are sampled as not all Ready until then.
-    first_worker_ready_at: float = 110
+    # The scheduler binds the last replacement worker pod although the node is
+    # cordoned; it is not Ready yet while the hold is read.
+    hold_breaks: bool = False
     hello_spends_a_life: bool = False
     # What the programs sent into the pods print and how the copy ends: the web's
     # client with no worker and with workers (set up with the driver if empty),
@@ -390,8 +389,6 @@ class World:
     ) -> Generator[str]:
         """The lines kubectl's watch prints; a closed stream is counted."""
         self.commands.append((command, environment, None))
-        if command[0] == "timeout" and command[2:4] == ("sh", "-c"):
-            return self.worker_samples()
         if command[0] == "timeout" and command[2:5] == (
             "kubectl",
             "logs",
@@ -417,16 +414,6 @@ class World:
             lives = 0
         for _ in range(lives):
             yield f"{ended}\n"
-
-    def worker_samples(self) -> Generator[str]:
-        """The stamped Ready statuses of the worker pods, every tenth of a second."""
-        try:
-            for tenth in range(950, 2000):
-                seconds = tenth / 10
-                down = seconds < self.first_worker_ready_at
-                yield f"{at(seconds):.6f} {'False' if down else 'True'} True \n"
-        finally:
-            self.watches_closed += 1
 
     def stream(self, events: list[Document]) -> Generator[str]:
         try:
@@ -468,10 +455,10 @@ class World:
                     return True
         return False
 
-    def spent_lives(self) -> int:
-        """How many times the worker pods were all replaced since they came up."""
+    def spent_lives(self, commands: list[Issued] | None = None) -> int:
+        """How many times the worker pods were all replaced, over the commands given."""
         spent = 0
-        for command, _, _ in self.commands:
+        for command, _, _ in self.commands if commands is None else commands:
             if (
                 command[2:4] == ("kubectl", "exec")
                 and command[command.index("--container") + 1] == "web"
@@ -479,16 +466,32 @@ class World:
                 spent += command[-2:] == ("build", "export") or self.hello_spends_a_life
         return spent
 
-    def pod(self, name: str, uid: str, created: int, *, ready: bool) -> Document:
-        """A Pod as kubectl lists it: its uid, age, Ready condition and address."""
+    def lives_at_cordon(self) -> int | None:
+        """The spent lives when the node was cordoned, while it still is; else None."""
+        held = None
+        for index, (command, _, _) in enumerate(self.commands):
+            if command[:2] == ("kubectl", "cordon"):
+                held = self.spent_lives(self.commands[:index])
+            elif command[:2] == ("kubectl", "uncordon"):
+                held = None
+        return held
+
+    def pod(
+        self, name: str, uid: str, created: int, *, ready: bool, scheduled: bool = True
+    ) -> Document:
+        """A Pod as kubectl lists it: its uid, age, node, Ready condition and address.
+
+        An unscheduled Pod has no node name and is not Ready.
+        """
         condition = {
             "type": "Ready",
-            "status": "True" if ready else "False",
+            "status": "True" if ready and scheduled else "False",
             "lastTransitionTime": stamp(created + READY_AFTER_SECONDS),
         }
         web: Document = {"name": "web", "restartCount": self.web_restarts}
         return {
             "metadata": {"name": name, "uid": uid, "creationTimestamp": stamp(created)},
+            "spec": {"nodeName": self.node_name} if scheduled else {},
             "status": {
                 "conditions": [condition],
                 "containerStatuses": [web],
@@ -508,16 +511,24 @@ class World:
         ]
 
     def worker_pods(self) -> list[Document]:
-        """The worker Pods: none before they are applied, new ones after each life."""
+        """The worker Pods: none before they are applied, new ones after each life.
+
+        A pod that replaced one while the node is cordoned stays unscheduled and
+        not Ready, apart from the last one a broken hold binds.
+        """
         if not self.workers_up():
             return []
         generation = 0 if self.workers_keep_uids else self.spent_lives()
+        held_above = self.lives_at_cordon()
+        held = held_above is not None and generation > held_above
+        last = len(WORKER_POD_NAMES) - 1
         return [
             self.pod(
                 name,
                 f"{name}-generation-{generation}",
                 100 + 10 * generation + number,
-                ready=not self.workers_never_ready,
+                ready=not self.workers_never_ready and not held,
+                scheduled=not held or (self.hold_breaks and number == last),
             )
             for number, name in enumerate(WORKER_POD_NAMES)
         ]
@@ -701,7 +712,7 @@ def fixture_maker(
         world.production_image, world.twin_pod = production_image, driver.TWIN_POD
         world.residue_pods = residue_pods(load_script, driver, world.outcomes)
         world.client_stdout = world.client_stdout or client_output(
-            delivered_outcome(web_module, first_step_at=at(100), second_step_at=at(105))
+            delivered_outcome(web_module)
         )
         world.outage_stdout = world.outage_stdout or client_output(
             outage_outcome(web_module)

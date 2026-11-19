@@ -22,17 +22,11 @@ HELLO_STEPS = ("build", "export")
 
 @dataclass(frozen=True, slots=True)
 class StepOutcome:
-    """How one step of a client run ended: the failure the build reported, if any.
-
-    `admitted` is the web pod's clock, in epoch seconds, when a worker had
-    answered the step's header and the upload began; None for a step no worker
-    admitted.
-    """
+    """How one step of a client run ended: the failure the build reported, if any."""
 
     step: str
     failed: bool
     failure: dict[str, str | int | None] | None
-    admitted: float | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,9 +48,7 @@ def outcome_in(stdout: str) -> Outcome:
     said = json.loads(lines[-1])
     return Outcome(
         steps=tuple(
-            StepOutcome(
-                step["step"], step["failed"], step.get("failure"), step["admitted"]
-            )
+            StepOutcome(step["step"], step["failed"], step.get("failure"))
             for step in said["steps"]
         ),
         out=tuple(said["out"]),
