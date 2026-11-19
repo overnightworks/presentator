@@ -8,7 +8,7 @@ git, TOML, SQL, and the build toolchain stay outside.
 import hmac
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import StrEnum
 from functools import partial
@@ -31,7 +31,6 @@ from presentator.contracts.decks import (
     AccessKind,
     Artefacts,
     BuildAttempt,
-    BuildRun,
     ConnectionCheckResult,
     Deck,
     DeckPage,
@@ -205,15 +204,6 @@ def _connection_fingerprint(
         ),
     )
     return hmac.new(key, message, sha256).hexdigest()
-
-
-def _as_served(deck: Deck, listed: frozenset[BuildRun] | None) -> Deck:
-    """That deck as a view shows it: without a build whose run is listed nowhere.
-
-    `listed` is one `BuildRunner.runs` answer per view, so a list or a page
-    reads the store's names and fetches no run.
-    """
-    return replace(deck, build=build_retention.standing_build(deck, listed))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -598,7 +588,7 @@ class Decks:
             ListedDeck(
                 slug=deck.slug,
                 title=deck.title,
-                state=deck_state_of(_as_served(deck, listed)),
+                state=deck_state_of(build_retention.as_served(deck, listed)),
                 changed_at=deck.changed_at,
             )
             for deck in newest_first
@@ -615,14 +605,12 @@ class Decks:
         The commit named is the one the delivered talk was built from, not the
         one the source carries now: a person reads it to see whether their push
         is in what is on the screen (line 7), and while nothing is built there
-        is nothing on the screen but what the source last carried. A build
-        whose run left the store and the disk delivers nothing, so the page
-        reads as if none had been built, as the list does.
+        is nothing on the screen but what the source last carried.
         """
         owned = self._owned(slug, viewer)
         if owned is None:
             return None
-        deck = _as_served(owned, self.builder.runs())
+        deck = build_retention.as_served(owned, self.builder.runs())
         built = deck.build
         return DeckPage(
             slug=deck.slug,

@@ -85,6 +85,16 @@ def standing_build(deck: Deck, listed: frozenset[BuildRun] | None) -> Build | No
     return None if listed is not None and build.run not in listed else build
 
 
+def as_served(deck: Deck, listed: frozenset[BuildRun] | None) -> Deck:
+    """That deck as a view shows it: a build whose run is listed nowhere is gone.
+
+    Such a build delivers nothing, so the list and the page read the deck as if
+    none had been built. `listed` is one `BuildRunner.runs` answer per view: a
+    view reads the store's names and fetches no run.
+    """
+    return deck.delivering(standing_build(deck, listed))
+
+
 def delete_absent(
     store: DeckStore, *, present: frozenset[str], source_id: str, at: datetime
 ) -> None:

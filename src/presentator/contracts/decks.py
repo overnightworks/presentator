@@ -576,6 +576,19 @@ class Deck:
             attempt=attempt,
         )
 
+    def delivering(self, build: Build | None) -> Deck:
+        """This talk with the build it delivers replaced."""
+        return Deck(
+            slug=self.slug,
+            title=self.title,
+            changed_at=self.changed_at,
+            owner_id=self.owner_id,
+            source_id=self.source_id,
+            commit=self.commit,
+            build=build,
+            attempt=self.attempt,
+        )
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ListedDeck:
