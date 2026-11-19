@@ -14,7 +14,6 @@ from webauth.postgres import SessionStoreError, stored_key
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.identity import StoredAccount, SystemClock
-from presentator.adapters.postgres.session_schema import SESSIONS
 from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.application.identity import SESSION_LIFETIME
@@ -298,7 +297,15 @@ def test_a_fresh_database_stores_no_password_no_login_attempts_and_no_client_add
         tables = set(_tables_of(connection))
 
     assert user_columns == ["id", "username", "role", "kind"]
-    assert session_columns == [column.name for column in SESSIONS.columns]
+    assert session_columns == [
+        "id_hash",
+        "account_id",
+        "created_at",
+        "expires_at",
+        "refresh_token",
+        "id_token",
+        "account_language",
+    ]
     assert "login_attempts" not in tables
 
 
