@@ -1,5 +1,5 @@
 claim_id = "537f1258972f483384bb430e90c9a0d4"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+agent = "Claude 8ee5fb01-f0ec-4dfd-8667-519e2cc2cc19"
 role = "builder"
 base = "eca956d598670088deba8bdf243474f9bb77ef79"
 branch = "claude/issue-1243-a-further-co-presenter-language-needs-no"
