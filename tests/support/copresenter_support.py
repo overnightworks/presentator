@@ -456,9 +456,20 @@ class RecordingLogs(logging.Handler):
         """Start with nothing recorded."""
         super().__init__(logging.NOTSET)
         self.records: list[logging.LogRecord] = []
+        self._recorded = threading.Condition()
 
     def emit(self, record: logging.LogRecord) -> None:
-        self.records.append(record)
+        with self._recorded:
+            self.records.append(record)
+            self._recorded.notify_all()
+
+    def wait_for(self, message: str, timeout: float) -> bool:
+        """Whether a record with this message is raised within the timeout."""
+        with self._recorded:
+            return self._recorded.wait_for(
+                lambda: any(record.getMessage() == message for record in self.records),
+                timeout,
+            )
 
 
 class WitnessedAnswers:

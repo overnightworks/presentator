@@ -376,6 +376,13 @@ def a_speech_instance(
 @contextmanager
 def recorded_logs() -> Generator[list[logging.LogRecord]]:
     """Every record raised in the block, the host's logging at DEBUG."""
+    with recording_logs() as logs:
+        yield logs.records
+
+
+@contextmanager
+def recording_logs() -> Generator[RecordingLogs]:
+    """The handler recording every record raised in the block, logging at DEBUG."""
     logs = RecordingLogs()
     root = logging.getLogger()
     named = [logging.getLogger(name) for name in _WIDE_OPEN_LOGGERS]
@@ -386,7 +393,7 @@ def recorded_logs() -> Generator[list[logging.LogRecord]]:
         for logger in named:
             logger.setLevel(logging.DEBUG)
         try:
-            yield logs.records
+            yield logs
         finally:
             for logger, level in zip(named, levels, strict=True):
                 logger.setLevel(level)

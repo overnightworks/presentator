@@ -41,6 +41,7 @@ from tests.support.speech_drive import (
     assert_nothing_shows,
     hear_and_record,
     recorded_logs,
+    recording_logs,
     refusing_every_workload_grant,
 )
 from tests.support.speech_service import (
@@ -78,6 +79,7 @@ if TYPE_CHECKING:
 _POLICY_VIOLATION = 1008
 _SHORT_SECONDS = 0.5
 _THE_FIRST_FRAME = b"first"
+_SESSION_ENDED = "hearing_session.ended"
 _OVER_THE_HELD_LIMIT = (2 * 1024 * 1024) // HOP_FRAME_BYTES + 2
 
 
@@ -93,7 +95,7 @@ def _the_session_line(capsys: pytest.CaptureFixture[str]) -> LogLine:
     (line,) = [
         one
         for one in json_lines_among(LoggedText(capsys).text)
-        if one["event"] == "hearing_session.ended"
+        if one["event"] == _SESSION_ENDED
     ]
     return line
 
@@ -373,7 +375,7 @@ def test_a_sign_out_during_a_hearing_closes_the_browser_1000_and_the_service_soc
     service = FakeSpeechService()
     with (
         a_speech_instance(engine, _reading_scenario(service)) as instance,
-        recorded_logs(),
+        recording_logs() as logs,
         instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket,
     ):
         socket.send_bytes(_THE_FIRST_FRAME)
@@ -384,6 +386,7 @@ def test_a_sign_out_during_a_hearing_closes_the_browser_1000_and_the_service_soc
         assert service.closed.wait(THREAD_WAIT_SECONDS)
         socket.send_bytes(b"after the close")
         sent_before_the_close = len(service.events)
+        assert logs.wait_for(_SESSION_ENDED, THREAD_WAIT_SECONDS)
 
     assert closed.code == HopClose.NORMAL
     assert service.closes == ["closed"]
@@ -658,7 +661,7 @@ def test_a_browser_that_leaves_mid_hearing_closes_the_service_socket_quietly(
     service.realtime = sending_then_reading(service)
     with (
         a_speech_instance(engine, SpeechScenario(service=service)) as instance,
-        recorded_logs() as logged,
+        recording_logs() as logs,
         instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket,
     ):
         socket.send_bytes(_THE_FIRST_FRAME)
@@ -667,9 +670,10 @@ def test_a_browser_that_leaves_mid_hearing_closes_the_service_socket_quietly(
         # block alone would cancel the app's task, which no server does.
         socket.close()
         assert service.closed.wait(THREAD_WAIT_SECONDS)
+        assert logs.wait_for(_SESSION_ENDED, THREAD_WAIT_SECONDS)
 
-    assert _warnings(list(logged)) == []
-    assert not [record for record in logged if record.levelno >= logging.ERROR]
+    assert _warnings(logs.records) == []
+    assert not [record for record in logs.records if record.levelno >= logging.ERROR]
     assert _ended_as(_the_session_line(capsys)) == ("ok", "browser_left")
 
 
