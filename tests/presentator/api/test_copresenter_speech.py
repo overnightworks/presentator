@@ -268,7 +268,7 @@ def test_a_heard_and_answered_turn_gives_the_answer_start_figure(
             )
             recorded = logged.text
 
-    read = subprocess.run(
+    read = subprocess.run(  # noqa: S603 - the interpreter and this repository's own script
         [sys.executable, str(_ANSWER_START)],
         input=recorded,
         capture_output=True,
