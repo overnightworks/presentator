@@ -1,5 +1,5 @@
 claim_id = "5cb05f36880b455fbb9a3588b85caddf"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+agent = "Claude 8ee5fb01-f0ec-4dfd-8667-519e2cc2cc19"
 role = "builder"
 base = "664392f720c273f4aa99c744aa26235f86a7ac41"
 branch = "claude/issue-1263-the-object-store-s-failure-paths-tell-th"
