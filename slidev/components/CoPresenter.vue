@@ -466,8 +466,6 @@ onUnmounted(() => {
       <span
         class="track"
         :data-on="on"
-    :data-capturing="capturing"
-    :data-speaking="speaking"
       >
         <span class="thumb" />
       </span>

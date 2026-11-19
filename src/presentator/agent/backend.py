@@ -6,6 +6,7 @@ import asyncio
 import logging
 import time
 from contextlib import aclosing, asynccontextmanager
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, NoReturn, assert_never
 
@@ -113,12 +114,29 @@ def _unavailable() -> NoReturn:
 
 
 _RUN_EVENT: Final = "gateway_run.ended"
-_EVENT_COUNT_FIELDS: Final = {
-    AssistantTextEvent: "assistant_text_events",
-    ToolCallEvent: "tool_call_events",
-    ToolResultEvent: "tool_result_events",
-    FinalEvent: "final_events",
-}
+
+
+class _EventCount(StrEnum):
+    """The field of a run's line counting one kind of turn event."""
+
+    ASSISTANT_TEXT = "assistant_text_events"
+    TOOL_CALL = "tool_call_events"
+    TOOL_RESULT = "tool_result_events"
+    FINAL = "final_events"
+
+
+def _count_of(event: TurnEvent) -> _EventCount:
+    match event:
+        case AssistantTextEvent():
+            return _EventCount.ASSISTANT_TEXT
+        case ToolCallEvent():
+            return _EventCount.TOOL_CALL
+        case ToolResultEvent():
+            return _EventCount.TOOL_RESULT
+        case FinalEvent():
+            return _EventCount.FINAL
+        case _:
+            assert_never(event)
 
 
 class _RunSummary:
@@ -127,7 +145,7 @@ class _RunSummary:
     def __init__(self, clock: Callable[[], float]) -> None:
         self._clock = clock
         self._started = clock()
-        self._counts = dict.fromkeys(_EVENT_COUNT_FIELDS.values(), 0)
+        self._counts = dict.fromkeys(_EventCount, 0)
         self._first_move_ms: int | None = None
 
     def note_move(self) -> None:
@@ -135,7 +153,7 @@ class _RunSummary:
             self._first_move_ms = self._elapsed_ms()
 
     def note(self, event: TurnEvent) -> None:
-        self._counts[_EVENT_COUNT_FIELDS[type(event)]] += 1
+        self._counts[_count_of(event)] += 1
 
     @property
     def has_events(self) -> bool:
