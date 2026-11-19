@@ -45,6 +45,7 @@ from presentator.api.health import (
     add_health_route,
     always_ready,
 )
+from presentator.api.problems import install_error_answers
 from presentator.api.request_line import ClientAddressNoting, SignedInPersonNoting
 from presentator.api.session_api import language_of
 from presentator.application.decks import Decks
@@ -121,6 +122,7 @@ def create_talk(  # noqa: PLR0913 - the composition root's one call names each o
         return answer
 
     talk = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    install_error_answers(talk)
     install_web_auth_config(talk, auth.config)
     _install_talk_middleware(talk, auth, sessions)
     add_health_route(talk, readiness)

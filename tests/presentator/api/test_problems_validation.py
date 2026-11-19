@@ -1,9 +1,12 @@
-"""A lobby route's validation answer keeps its shape and repeats nothing sent."""
+"""Every host's validation answer keeps its shape and repeats nothing sent."""
 
+import logging
 from collections.abc import Iterator
+from dataclasses import dataclass
 from http import HTTPStatus
 from typing import cast
 
+import pytest
 from fastapi.openapi.utils import (
     validation_error_definition,
     validation_error_response_definition,
@@ -11,9 +14,28 @@ from fastapi.openapi.utils import (
 from httpx2 import Response
 from sqlalchemy import Engine
 
+from presentator.api.copresenter import CoPresenterSurface
 from presentator.contracts.preferences import ThemeChoice
-from tests.support.lobby import NEIGHBOUR, Lobby, a_lobby
+from tests.presentator.application.support.ask_leases import FakeAskLimiter
+from tests.support.copresenter_support import (
+    AN_ANSWER_DEADLINE_SECONDS,
+    ASK,
+    TALK_ORIGIN,
+    PrivateFakes,
+    a_use,
+    the_admins_decks,
+)
+from tests.support.lobby import (
+    A_BROWSERS_ADDRESS,
+    A_BROWSERS_HEADERS,
+    A_TALK_ADDRESS,
+    NEIGHBOUR,
+    Lobby,
+    a_lobby,
+)
+from tests.support.log_lines import request_lines
 from tests.support.sign_in_support import ADMIN, Scene, a_scene
+from tests.support.talk_support import Hosts, two_hosts
 
 _ADMIN_PEOPLE = "/api/admin/people/"
 _HAL = "hal-client"
@@ -139,3 +161,56 @@ def test_every_reference_of_the_generated_spec_resolves() -> None:
         target: object = spec
         for part in reference.removeprefix("#/").split("/"):
             target = cast("dict[str, object]", target)[part]
+
+
+def _both_hosts_with_a_copresenter(engine: Engine) -> Hosts:
+    surface = CoPresenterSurface(
+        use=a_use(PrivateFakes(), the_admins_decks()),
+        limiter=FakeAskLimiter(),
+        browser_origin=TALK_ORIGIN,
+        deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
+    )
+    return two_hosts(engine, copresenter=lambda _store, _sessions, _auth: surface)
+
+
+@dataclass(frozen=True, slots=True)
+class JsonSent:
+    """A JSON body one browser sends to one route."""
+
+    address: str
+    method: str
+    path: str
+    body: bytes
+
+
+@pytest.mark.parametrize(
+    "sent",
+    [
+        JsonSent(A_TALK_ADDRESS, "POST", ASK, rb'{"said": "Was ist \ud800 hier?"}'),
+        JsonSent(A_TALK_ADDRESS, "POST", ASK, rb'{"said": "Hier?", "\udfff": 1}'),
+        JsonSent(A_BROWSERS_ADDRESS, "PUT", _ACCOUNT, rb'{"theme": "\ud800"}'),
+    ],
+    ids=["ask-value", "ask-key", "lobby-value"],
+)
+def test_a_lone_surrogate_in_a_json_body_is_answered_422_without_the_input(
+    sent: JsonSent,
+    engine: Engine,
+    json_logging: None,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    del json_logging
+    caplog.set_level(logging.INFO)
+    browser = _both_hosts_with_a_copresenter(engine).signed_in_at(
+        sent.address, headers=A_BROWSERS_HEADERS
+    )
+
+    answer = browser.request(
+        sent.method,
+        sent.path,
+        content=sent.body,
+        headers={**_JSON, "content-type": "application/json"},
+    )
+
+    is_the_frameworks_validation_answer(answer, marker="\\ud")
+    (line,) = request_lines(caplog)
+    assert line["status"] == HTTPStatus.UNPROCESSABLE_ENTITY
