@@ -27,7 +27,6 @@ from presentator.adapters.worker_children import (
 )
 from presentator.host.environment import ConfigurationError
 from presentator.host.lifecycle import (
-    ServerEvent,
     StopLine,
     read_command_line,
     refuse_argument,
@@ -81,7 +80,6 @@ from presentator.host.worker_wire import SERVICE_NAME
 
 logger = logging.getLogger(__name__)
 
-START_REFUSED_EVENT: Final = ServerEvent.PROCESS_FAILED
 REFUSAL_EXIT_STATUS = 2
 _PORT: Final = "--port"
 _HIGHEST_PORT: Final = 65535

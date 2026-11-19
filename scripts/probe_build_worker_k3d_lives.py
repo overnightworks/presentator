@@ -21,7 +21,8 @@ from probe_build_worker_k3d_cluster import IN_NAMESPACE, Document, Run
 from probe_build_worker_k3d_manifests import INIT_CONTAINER, WORKER_CONTAINER
 
 from presentator.adapters.build_worker import CONNECT_WINDOW_SECONDS
-from presentator.host.worker import REFUSAL_EXIT_STATUS, START_REFUSED_EVENT
+from presentator.host.lifecycle import ServerEvent
+from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import Predicate
 
 WORKER_POD = "build-worker-0"
@@ -200,7 +201,7 @@ def watch_lives(run: Run, expected: Expectation) -> list[Life]:
 
 
 def refusal_line(message: str, refusal: Predicate) -> str | None:
-    """The message's `start.refused` line that carries the refusal's reason, if any."""
+    """The message's `process.failed` line that carries the refusal's reason, if any."""
     for line in message.splitlines():
         try:
             written: object = json.loads(line)
@@ -209,7 +210,7 @@ def refusal_line(message: str, refusal: Predicate) -> str | None:
         if isinstance(written, dict):
             fields = cast("dict[str, object]", written)
             if (
-                fields.get("event") == START_REFUSED_EVENT
+                fields.get("event") == ServerEvent.PROCESS_FAILED
                 and fields.get("reason") == refusal
             ):
                 return line.strip()
@@ -234,7 +235,7 @@ def _worker_reason(life: Life, expected: Expectation) -> str | None:
     wrong_status = f"the worker ended with exit status {ended.exit_code}" + (
         f": {said}" if said else ""
     )
-    no_line = f"no {START_REFUSED_EVENT} line for {expected.refusal} in {said}"
+    no_line = f"no {ServerEvent.PROCESS_FAILED} line for {expected.refusal} in {said}"
     reasons = (
         (ended.reason == LOST_SANDBOX_REASON, f"the worker ended as {ended.reason}"),
         (bool(life.restarts), f"restartCount is {life.restarts}, expected 0"),
