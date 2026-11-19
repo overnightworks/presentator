@@ -494,6 +494,7 @@ def pull_store(run: Run, store: ThrowawayStore) -> None:
         run("docker tag", store.pinned, store.local)
     finally:
         run("docker image rm", store.pinned, check=False)
+    say(f"{store.name} image {store.pinned} pulled as {store.local}")
 
 
 def require_store_in_node(run: Run, store: ThrowawayStore) -> None:
@@ -522,6 +523,7 @@ def import_store(run: Run, store: ThrowawayStore) -> None:
             f"{imported.stderr[-2000:]}"
         )
     require_store_in_node(run, store)
+    say(f"{store.name} image {store.local} imported into the node {run.node}")
 
 
 def drive(run: Run, released: ReleasedImage | None = None) -> None:

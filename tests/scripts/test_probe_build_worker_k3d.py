@@ -28,37 +28,9 @@ from tests.scripts.support.k3d_world import (
     Fixture,
     World,
     expected_ends,
-    fixture_maker,
     issued_commands,
     kubelet_config,
 )
-
-
-@pytest.fixture
-def cluster_module(load_script: Callable[..., ModuleType]) -> ModuleType:
-    return load_script("probe_build_worker_k3d_cluster")
-
-
-@pytest.fixture
-def lives_module(load_script: Callable[..., ModuleType]) -> ModuleType:
-    return load_script("probe_build_worker_k3d_lives")
-
-
-@pytest.fixture
-def driver_module(load_script: Callable[..., ModuleType]) -> ModuleType:
-    return load_script("probe_build_worker_k3d")
-
-
-@pytest.fixture
-def starts_module(load_script: Callable[..., ModuleType]) -> ModuleType:
-    return load_script("probe_build_worker_starts")
-
-
-@pytest.fixture
-def make_fixture(
-    load_script: Callable[..., ModuleType], tmp_path: Path
-) -> Callable[..., Fixture]:
-    return fixture_maker(load_script, tmp_path)
 
 
 def test_drive_refuses_a_checkout_that_is_not_the_pin_before_any_command(
