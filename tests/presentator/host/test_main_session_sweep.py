@@ -108,7 +108,7 @@ def test_the_sweep_keeps_a_session_ending_this_second_and_deletes_the_one_before
     seed_user(engine, _ADMIN)
     clock.advance(timedelta(microseconds=500_000))
     sessions = PostgresSessions(engine)
-    ending_now, ended_before = (
+    ending_now, _ended_before = (
         sessions.create(
             _ADMIN.id,
             session_id=a_session_id(),
@@ -124,4 +124,3 @@ def test_the_sweep_keeps_a_session_ending_this_second_and_deletes_the_one_before
     asyncio.run(instance.session_sweep.tick())
 
     assert stored_session_ids(engine) == {stored_key(ending_now.id)}
-    assert stored_key(ended_before.id) not in stored_session_ids(engine)
