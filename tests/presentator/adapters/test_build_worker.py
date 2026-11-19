@@ -52,6 +52,10 @@ from tests.support.log_lines import json_logged
 
 PROMPTLY = 10
 UNAVAILABLE = ToolchainUnavailable()
+PER_READ = WINDOW / 20
+# An attempt reads the clock at most five times: before its pause, for its
+# deadline, before connecting, before the first byte and once it timed out.
+ONE_ATTEMPT = 5 * PER_READ
 
 
 def nothing_to_reply(_connection: socket.socket, _step: StepHeader) -> None:
@@ -96,18 +100,18 @@ def silent_first(count: int, then: Script) -> Script:
 def test_a_worker_that_is_not_there_is_retried_until_the_window_ends(
     volume: Path, tmp_path: Path
 ) -> None:
-    clock = MovedClock(per_read=WINDOW / 20)
+    clock = MovedClock(per_read=PER_READ)
 
     result = toolchain(volume, clock=clock).ran(a_step(tmp_path))
 
     assert result == UNAVAILABLE
-    assert clock.seconds > WINDOW
+    assert WINDOW < clock.seconds <= WINDOW + ONE_ATTEMPT
 
 
 def test_a_worker_that_keeps_closing_is_retried_until_the_window_ends(
     volume: Path, tmp_path: Path
 ) -> None:
-    clock = MovedClock(per_read=WINDOW / 20)
+    clock = MovedClock(per_read=PER_READ)
     closings: list[None] = []
 
     def closing_unspoken(
@@ -119,7 +123,7 @@ def test_a_worker_that_keeps_closing_is_retried_until_the_window_ends(
         result = toolchain(volume, clock=clock).ran(a_step(tmp_path))
 
     assert result == UNAVAILABLE
-    assert clock.seconds > WINDOW
+    assert WINDOW < clock.seconds <= WINDOW + ONE_ATTEMPT
     assert len(closings) > 1
 
 
