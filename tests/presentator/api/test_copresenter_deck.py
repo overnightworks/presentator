@@ -87,7 +87,7 @@ def test_the_owner_asks_about_their_own_built_deck() -> None:
         pytest.param((SOURCELESS,), (), TARGET, id="source gone"),
         pytest.param((), (), "..", id="dot dot"),
         pytest.param((), (), "a/b", id="path with a slash"),
-        pytest.param((), (), "a\x00b", id="control character"),
+        pytest.param((), (), "a\x01b", id="control character"),
         pytest.param((), (), "x" * 255, id="at the length bound"),
     ],
 )

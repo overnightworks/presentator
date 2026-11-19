@@ -48,15 +48,24 @@ class Streamed:
     chunks_taken: int = 0
 
 
-def stream_to(
-    app: ASGIApp,
-    path: str,
-    headers: dict[str, str],
-    body: bytes,
-    method: str = "POST",
-) -> Streamed:
+@dataclass(frozen=True)
+class Upload:
+    """A body sent without a `Content-Length`.
+
+    One cut short promises more after its last chunk, then disconnects.
+    """
+
+    path: str
+    headers: dict[str, str]
+    body: bytes
+    method: str = "POST"
+    cut_short: bool = False
+
+
+def stream_to(app: ASGIApp, upload: Upload) -> Streamed:
     """Send the body to the app in 4 KiB chunks and count the chunks it takes."""
     streamed = Streamed()
+    body = upload.body
     parts = [body[start : start + _CHUNK] for start in range(0, len(body), _CHUNK)]
     chunks = iter(range(len(parts)))
 
@@ -68,7 +77,7 @@ def stream_to(
         return {
             "type": "http.request",
             "body": parts[index],
-            "more_body": index < len(parts) - 1,
+            "more_body": upload.cut_short or index < len(parts) - 1,
         }
 
     async def send(message: Message) -> None:
@@ -82,13 +91,13 @@ def stream_to(
         "type": "http",
         "asgi": {"version": "3.0"},
         "http_version": "1.1",
-        "method": method,
+        "method": upload.method,
         "scheme": "https",
-        "path": path,
-        "raw_path": path.encode(),
+        "path": upload.path,
+        "raw_path": upload.path.encode(),
         "query_string": b"",
         "headers": [(b"host", b"testserver")]
-        + [(name.encode(), value.encode()) for name, value in headers.items()],
+        + [(name.encode(), value.encode()) for name, value in upload.headers.items()],
         "server": ("testserver", 443),
         "client": ("127.0.0.1", 50000),
     }
@@ -134,7 +143,8 @@ def test_a_streamed_body_over_the_cap_on_the_back_channel_gets_413(
     body = padded_to_the_stream_size(urlencode({"logout_token": token}))
 
     streamed = stream_to(
-        scene.lobby.app, BACKCHANNEL_LOGOUT_PATH, {"content-type": _FORM}, body
+        scene.lobby.app,
+        Upload(BACKCHANNEL_LOGOUT_PATH, {"content-type": _FORM}, body),
     )
 
     assert streamed.status == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
@@ -143,7 +153,7 @@ def test_a_streamed_body_over_the_cap_on_the_back_channel_gets_413(
     assert scene.count("sessions") == 1
 
 
-def test_a_streamed_settings_write_over_the_cap_gets_400_and_saves_nothing() -> None:
+def test_a_streamed_settings_write_over_the_cap_gets_413_and_saves_nothing() -> None:
     admin = a_lobby()
     admin.sign_in()
     before = admin.client.get(_SETTINGS).text
@@ -151,18 +161,34 @@ def test_a_streamed_settings_write_over_the_cap_gets_400_and_saves_nothing() -> 
 
     streamed = stream_to(
         admin.app,
-        _SETTINGS,
-        a_browsers_headers(admin.client, _JSON),
-        body,
-        method="PUT",
+        Upload(_SETTINGS, a_browsers_headers(admin.client, _JSON), body, method="PUT"),
     )
 
-    assert streamed.status == HTTPStatus.BAD_REQUEST
+    assert streamed.status == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
     assert streamed.chunks_taken <= _FIRST_CHUNK_PASSING_THE_CAP
     assert admin.client.get(_SETTINGS).text == before
 
 
-def test_a_streamed_ask_over_the_cap_gets_400_and_reaches_no_private_service() -> None:
+def test_a_settings_write_the_client_cuts_short_saves_nothing() -> None:
+    admin = a_lobby()
+    admin.sign_in()
+    before = admin.client.get(_SETTINGS).text
+
+    stream_to(
+        admin.app,
+        Upload(
+            _SETTINGS,
+            a_browsers_headers(admin.client, _JSON),
+            a_settings_write(padding=0).encode(),
+            method="PUT",
+            cut_short=True,
+        ),
+    )
+
+    assert admin.client.get(_SETTINGS).text == before
+
+
+def test_a_streamed_ask_over_the_cap_gets_413_and_reaches_no_private_service() -> None:
     talk, private, _clock = a_copresenter_talk_host()
     talk.sign_in()
     asked = json.dumps(QUESTION)
@@ -170,12 +196,12 @@ def test_a_streamed_ask_over_the_cap_gets_400_and_reaches_no_private_service() -
 
     streamed = stream_to(
         talk.app,
-        _ASK,
-        a_browsers_headers(talk.client, _JSON, origin=A_TALK_ADDRESS),
-        body,
+        Upload(
+            _ASK, a_browsers_headers(talk.client, _JSON, origin=A_TALK_ADDRESS), body
+        ),
     )
 
-    assert streamed.status == HTTPStatus.BAD_REQUEST
+    assert streamed.status == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
     assert streamed.chunks_taken <= _FIRST_CHUNK_PASSING_THE_CAP
     assert private.answers.messages == []
 

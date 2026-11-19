@@ -12,11 +12,8 @@ from sqlalchemy import Engine
 from starlette.websockets import WebSocketDisconnect
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
-from presentator.api.copresenter import CoPresenterSurface
 from presentator.contracts.models import Role, User
-from tests.presentator.application.support.ask_leases import FakeAskLimiter
 from tests.support.copresenter_support import (
-    AN_ANSWER_DEADLINE_SECONDS,
     HEARING,
     POLICY_VIOLATION,
     QUESTION,
@@ -24,8 +21,7 @@ from tests.support.copresenter_support import (
     ManualDeadline,
     PrivateFakes,
     a_copresenter_talk_host,
-    a_use,
-    the_admins_decks,
+    two_hosts_with_a_copresenter,
     who,
 )
 from tests.support.lobby import (
@@ -202,15 +198,9 @@ def test_an_admin_demoted_while_signed_in_is_still_answered() -> None:
 def _talk_host_with_a_signed_in_admin(
     engine: Engine, deadline: ManualDeadline | None = None
 ) -> tuple[Hosts, TestClient, PrivateFakes]:
-    private = PrivateFakes()
-    surface = CoPresenterSurface(
-        use=a_use(private, the_admins_decks()),
-        limiter=FakeAskLimiter(),
-        browser_origin=TALK_ORIGIN,
-        deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
-        delay=asyncio.sleep if deadline is None else deadline.wait,
+    hosts, private = two_hosts_with_a_copresenter(
+        engine, asyncio.sleep if deadline is None else deadline.wait
     )
-    hosts = two_hosts(engine, copresenter=lambda _store, _sessions, _auth: surface)
     return hosts, hosts.signed_in_at(A_TALK_ADDRESS), private
 
 
