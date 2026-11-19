@@ -85,7 +85,7 @@ must answer on the pod's loopback and, with a NetworkPolicy of the probe's own
 admitting the web's pods to every port, still drop a connection from a web pod:
 it times out. The listener opens once the cluster enforces the probe's policy on the
 worker pods, which a web pod the cell relabels shows: its connection to the
-worker's build port, refused by the workers' own policy, times out and then
+worker's build port, which the workers' own policy rejects, is refused and then
 connects within the window once the probe's policy admits it. The policy and the
 relabelled pod are deleted when the connection ended.
 

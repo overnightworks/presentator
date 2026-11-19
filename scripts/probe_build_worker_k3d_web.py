@@ -73,6 +73,9 @@ POD_LOOPBACK = "127.0.0.1"
 CONNECTED = "connected"
 DROPPED = "EPERM"
 TIMED_OUT = "timeout"
+# The errno's name the inbound probe prints for a connection a NetworkPolicy
+# rejects: the cluster answers it with an ICMP port-unreachable.
+REFUSED = "ECONNREFUSED"
 
 
 def web_selector(deployment: Document) -> str:
@@ -411,9 +414,9 @@ def admission_problem(
 ) -> str | None:
     """Relabel the witness, apply the probe's policy; why the cluster took either not.
 
-    The witness is a web pod the workers' own NetworkPolicy refuses, so its
-    connection to a worker's build port times out until the probe's policy,
-    which admits it, is in force on the worker pods. The timeout first shows the
+    The witness is a web pod the workers' own NetworkPolicy rejects, so its
+    connection to a worker's build port is refused until the probe's policy,
+    which admits it, is in force on the worker pods. The refusal first shows the
     relabel and the workers' policy are in force, and the connection after it
     shows the probe's policy is.
     """
@@ -425,16 +428,17 @@ def admission_problem(
         "--overwrite",
         *IN_NAMESPACE,
     )
-    _, refused = poll(
+    first, refused = poll(
         run,
         lambda: reach_end(run, witness, WEB_CONTAINER, build_target),
-        lambda end: end == TIMED_OUT,
+        lambda end: end == REFUSED,
         "",
     )
     if not refused:
         return (
-            f"the workers' policy did not drop the relabelled web pod {name}'s "
-            f"connection to {build_target} within {TERMINATION_WINDOW_SECONDS} s"
+            f"the workers' policy did not refuse the relabelled web pod {name}'s "
+            f"connection to {build_target} within {TERMINATION_WINDOW_SECONDS} s: "
+            f"it ended {first}"
         )
     run(
         "kubectl apply --filename -",

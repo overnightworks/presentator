@@ -401,7 +401,7 @@ def test_cell_13_tries_the_connection_once_the_cluster_admits_a_relabelled_web_p
 ) -> None:
     lag = 2
     fixture = make_fixture(
-        World(connects_before_the_drop=lag, timeouts_before_the_admission=lag)
+        World(connects_before_the_refusal=lag, refusals_before_the_admission=lag)
     )
     fixture.drive()
     inbound = web_module.INBOUND_PROGRAM.read_text(encoding="utf-8")
@@ -435,8 +435,8 @@ def test_cell_13_tries_the_connection_once_the_cluster_admits_a_relabelled_web_p
 @pytest.mark.parametrize(
     ("world", "complaint"),
     [
-        (World(connects_before_the_drop=None), "did not drop the relabelled"),
-        (World(timeouts_before_the_admission=None), "did not admit the web pod"),
+        (World(connects_before_the_refusal=None), "did not refuse the relabelled"),
+        (World(refusals_before_the_admission=None), "did not admit the web pod"),
     ],
     ids=["no drop before", "no admission after"],
 )
