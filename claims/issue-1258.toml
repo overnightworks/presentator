@@ -1,8 +1,0 @@
-claim_id = "ea623d39004048adb96ae8caf423287d"
-agent = "Claude 8ee5fb01-f0ec-4dfd-8667-519e2cc2cc19"
-role = "builder"
-base = "eca956d598670088deba8bdf243474f9bb77ef79"
-branch = "claude/issue-1258-presentator-takes-webauth-0-41-1"
-scope = ["docs/ARCHITECTURE.md", "pyproject.toml", "src/presentator/api", "tests/presentator", "tests/support/speech_drive.py", "uv.lock"]
-opened_commit = "65456c507c2a065c80a3475c8aea16b00a23ee4f"
-whole_reason = "One dependency raise with the removal of the copy it replaces; apart they leave two owners of sub and ip."
