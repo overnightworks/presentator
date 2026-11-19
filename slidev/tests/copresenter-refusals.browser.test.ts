@@ -10,6 +10,7 @@ import {
 } from './presenter-bar-measures'
 import {
   type AnswerMode,
+  closeBrowser,
   openPresenter,
   registerOverlayHarness,
   saveEvidence,
@@ -39,6 +40,8 @@ describe('co-presenter refusals', () => {
     ['an issuer that is down (503)', 'unavailable', {}, 'noAnswer', [1024]],
     ['an error event with an unknown reason', 'error-event', { reason: 'unknown-reason' }, 'noAnswer', [1024]],
     ['a 401 whose body is not JSON', 'unreadable-401', {}, 'noAnswer', [1024]],
+    ['a 401 naming another detail', 'other-401', {}, 'noAnswer', [1024]],
+    ['an answer stream that breaks off after it began', 'broken-stream', {}, 'noAnswer', [1024]],
     ['a busy gateway naming 7 s', 'error-event', busy(7), { busyIn: '7' }, [1024, 390]],
     ['a busy gateway naming 2.2 s', 'error-event', busy(2.2), { busyIn: '3' }, [1024]],
     ['a busy gateway naming no wait', 'error-event', busy(), 'busySoon', [1024]],
@@ -62,12 +65,14 @@ describe('co-presenter refusals', () => {
       state.answerMode = mode
       state.errorEvent = errorEvent
       state.interfaceLanguage = language
+      const asksBefore = state.askBodies.length
       const { browser, page } = await openPresenter(width)
       try {
         const ai = page.getByRole('switch', { name: wordsOf[language]['controls.switch'] })
         await ai.waitFor({ state: 'visible', timeout: 2_000 })
         await ai.click({ timeout: 2_000 })
         await page.getByText(line, { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
+        expect(state.askBodies.length - asksBefore, 'the heard question is asked once').toBe(1)
         const otherLines = plainFaults.map((key) => wordsOf[language][`controls.${key}`]).filter((other) => other !== line)
         for (const other of otherLines) expect(await page.getByText(other, { exact: true }).count()).toBe(0)
         // The busy sentence, whatever number it names, shows exactly when this case raises it.
@@ -95,7 +100,7 @@ describe('co-presenter refusals', () => {
       } finally {
         state.answerMode = 'audio'
         state.errorEvent = {}
-        await browser.close()
+        await closeBrowser(browser)
       }
     }
   })
@@ -121,7 +126,7 @@ describe('co-presenter refusals', () => {
       expect(traces[1]?.[1]).not.toBe(heardTraceId)
     } finally {
       state.answerMode = 'audio'
-      await browser.close()
+      await closeBrowser(browser)
     }
   }, 30_000)
 
@@ -133,14 +138,12 @@ describe('co-presenter refusals', () => {
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
       await ai.click({ timeout: 2_000 })
       await page.getByText(en['controls.noAnswer'], { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
-      await page.evaluate(() => (window as unknown as {
-        __copresenter: { say: (text: string) => void }
-      }).__copresenter.say('And again?'))
+      sendHeard('And again?')
       await page.getByText('The second ask is answered.').waitFor({ state: 'visible', timeout: 5_000 })
       expect(await page.getByText(en['controls.noAnswer'], { exact: true }).count()).toBe(0)
     } finally {
       state.answerMode = 'audio'
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 })

@@ -2,6 +2,7 @@ import type { Page } from 'playwright-chromium'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  closeBrowser,
   openPageIn,
   openPresenter,
   openRoomBrowser,
@@ -93,7 +94,7 @@ async function inControls(language: Language, width: number, expectedWord: strin
     await show(page)
     await expectRendersWell(page, CONTROLS_ROOT, language, expectedWord)
   } finally {
-    await browser.close()
+    await closeBrowser(browser)
   }
 }
 
@@ -145,7 +146,7 @@ describe('the overlay render pass', () => {
         await window.locator(`[data-room-notice="${notice}"]`).waitFor({ state: 'visible', timeout: 15_000 })
         await expectRendersWell(window, NOTICE_ROOT, language, wordsOf[language][`roomNotice.${notice}`])
       } finally {
-        await browser.close()
+        await closeBrowser(browser)
       }
     },
   )
