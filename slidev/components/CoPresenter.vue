@@ -114,20 +114,6 @@ function publishRoomFacts() {
 // Synchronous, so a window that turns off has said so when its handler returns.
 watch([capturing, playing], publishRoomFacts, { flush: 'sync' })
 
-function snapshot() {
-  const tracks = mediaStream ? mediaStream.getTracks() : []
-  return {
-    on: on.value,
-    heard: heard.value,
-    answer: answer.value,
-    error: error.value,
-    speaking: speaking.value,
-    micLive: tracks.some((track) => track.readyState === 'live'),
-    capturing: capturing.value,
-    playing: playing.value,
-  }
-}
-
 function stillActive(generation) {
   return on.value && generation === activationGeneration
 }
@@ -443,7 +429,6 @@ function invalidatePlayback() {
 
 onMounted(() => {
   window.addEventListener('pagehide', turnOff)
-  window.__copresenter = { snapshot }
   void learnAccountLanguage()
 })
 onUnmounted(() => {
@@ -453,7 +438,6 @@ onUnmounted(() => {
   player = null
   // Vue stops this component's watchers before onUnmounted runs.
   publishRoomFacts()
-  delete window.__copresenter
 })
 </script>
 
@@ -462,6 +446,8 @@ onUnmounted(() => {
     class="copresenter"
     :lang="controlLanguage"
     :data-on="on"
+    :data-capturing="capturing"
+    :data-speaking="speaking"
     :aria-label="controlWords ? (on ? words['controls.presenterOn'] : words['controls.presenterOff']) : undefined"
   >
     <span
@@ -480,6 +466,8 @@ onUnmounted(() => {
       <span
         class="track"
         :data-on="on"
+    :data-capturing="capturing"
+    :data-speaking="speaking"
       >
         <span class="thumb" />
       </span>

@@ -438,6 +438,11 @@ async function readAskBody(request: import('node:http').IncomingMessage) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as { said: string, deck: string, language: string, slide: number }
 }
 
+// What the overlay shows of its own state on its root: whether it is on, captures or speaks.
+export async function overlayFlag(page: Page, name: 'on' | 'capturing' | 'speaking') {
+  return await page.locator('.copresenter').getAttribute(`data-${name}`) === 'true'
+}
+
 // A final transcript asks; one that is not final only shows as heard.
 export function sendHeard(text: string, final = true) {
   for (const socket of hearingSockets) socket.write(frame(JSON.stringify({ text, final, language: state.heardLanguage, traceparent: state.heardTraceparent })))
