@@ -136,6 +136,7 @@ from probe_build_worker_k3d_cluster import (
     IN_NAMESPACE,
     NAMESPACE,
     PLATFORM_COMMIT,
+    Completed,
     Document,
     Effects,
     Run,
@@ -497,16 +498,20 @@ def pull_store(run: Run, store: ThrowawayStore) -> None:
     say(f"{store.name} image {store.pinned} pulled as {store.local}")
 
 
+def node_look(run: Run, local: str) -> Completed:
+    """Ask the node's runtime for the image the way the kubelet resolves its name."""
+    return run("docker exec", run.node, "crictl", "inspecti", local, check=False)
+
+
 def require_store_in_node(run: Run, store: ThrowawayStore) -> None:
-    """Refuse unless the node's runtime holds the store's image under its local name.
+    """Refuse unless the node's runtime still holds the store's image.
 
     The store's pod never pulls, so a missing image would only show as a web
-    that never turns Ready; the runtime resolves the name the way the kubelet
-    does. The node is asked right after the import, and again before the web
-    cells apply the pod: the cluster starts with image garbage collection and
-    eviction held off, and this look proves it held.
+    that never turns Ready. The web cells ask right before they apply the pod:
+    the cluster starts with image garbage collection and eviction held off, and
+    this look proves it held.
     """
-    found = run("docker exec", run.node, "crictl", "inspecti", store.local, check=False)
+    found = node_look(run, store.local)
     if found.returncode:
         refuse(
             f"{store.name} image {store.local} is not in the cluster's node "
@@ -514,16 +519,43 @@ def require_store_in_node(run: Run, store: ThrowawayStore) -> None:
         )
 
 
-def import_store(run: Run, store: ThrowawayStore) -> None:
-    """Put the store's image into the cluster; teardown removes the local name."""
-    imported = run("k3d image import", store.local, "--cluster", run.name, check=False)
-    if imported.returncode:
-        refuse(
-            f"{store.name} image {store.local} did not import: "
-            f"{imported.stderr[-2000:]}"
+IMPORTS_PER_IMAGE = 2
+
+
+def import_into_node(run: Run, title: str, local: str) -> None:
+    """Import the image into the cluster and prove the node's runtime holds it.
+
+    k3d's default tools mode only logs a `ctr image import` that fails in the
+    node and still exits 0, so the exit proves nothing. An import the node
+    lacks prints what k3d said and runs once more; if the node still lacks the
+    image, the run stops naming it, the import exits and the node's images as
+    the kubelet and as containerd list them.
+    """
+    exits: list[int] = []
+    for _ in range(IMPORTS_PER_IMAGE):
+        imported = run("k3d image import", local, "--cluster", run.name, check=False)
+        exits.append(imported.returncode)
+        if imported.returncode:
+            refuse(f"{title} image {local} did not import: {imported.stderr[-2000:]}")
+        found = node_look(run, local)
+        if not found.returncode:
+            say(f"{title} image {local} imported into the node {run.node}")
+            return
+        say(
+            f"{title} image {local} is missing from the node {run.node} after an "
+            f"import that exited 0: {found.stderr[-500:]}\n"
+            f"k3d said:\n{imported.stdout[-2000:]}{imported.stderr[-2000:]}"
         )
-    require_store_in_node(run, store)
-    say(f"{store.name} image {store.local} imported into the node {run.node}")
+    kubelet_view = run("docker exec", run.node, "crictl", "images", check=False)
+    containerd_view = run(
+        "docker exec", run.node, "ctr", "images", "ls", "-q", check=False
+    )
+    refuse(
+        f"{title} image {local} is not in the cluster's node {run.node} after "
+        f"{len(exits)} imports, which exited {exits}; crictl images:\n"
+        f"{kubelet_view.stdout}{kubelet_view.stderr}\nctr images ls:\n"
+        f"{containerd_view.stdout}{containerd_view.stderr}"
+    )
 
 
 def drive(run: Run, released: ReleasedImage | None = None) -> None:
@@ -545,9 +577,9 @@ def drive(run: Run, released: ReleasedImage | None = None) -> None:
             pull_store(run, store)
         start_cluster(run, k3s_version)
         prove_label_filter(run)
-        run("k3d image import", run.tag, "--cluster", run.name)
+        import_into_node(run, "probe", run.tag)
         for store in throwaway_stores(run):
-            import_store(run, store)
+            import_into_node(run, store.name, store.local)
         namespace = json.dumps(namespace_document(run.platform))
         run("kubectl apply --filename -", stdin=namespace)
         problems = drive_cells(run, overlay)

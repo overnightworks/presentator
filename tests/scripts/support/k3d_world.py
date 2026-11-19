@@ -84,10 +84,12 @@ class World:
     # The error `docker pull` ends with; the pull passes if empty.
     pull_error: str = ""
     # The store whose image `k3d image import` and the node's runtime fail on, by
-    # its place in store_images: the import's error (passes if empty), and how
-    # many looks into the node find it (every look if None).
+    # its place in store_images: the import's error (passes if empty), how many
+    # of its imports exit 0 yet leave the node without it, and how many looks
+    # into the node find it once an import kept it (every look if None).
     failing_store: int = 0
     store_import_error: str = ""
+    store_imports_lost: int = 0
     store_found_in_node: int | None = None
     twin_pod: str = ""
     twin_log: str = "the twin's mount list"
@@ -190,12 +192,18 @@ class World:
 
     def node_image_answer(self, image: str) -> tuple[int, str, str]:
         """How the node's runtime answers a look for the image, by its looks so far."""
+        missing = 1, "", f'no such image "{image}" present'
+        if image != self.failing_store_image:
+            return 0, "{}", ""
+        imports = len(self.issued("k3d", "image", "import", image))
+        if imports <= self.store_imports_lost:
+            return missing
         looks = len(
             self.issued("docker", "exec", self.node_name, "crictl", "inspecti", image)
         )
         found = self.store_found_in_node
-        if image == self.failing_store_image and found is not None and looks > found:
-            return 1, "", f'no such image "{image}" present'
+        if found is not None and looks - self.store_imports_lost > found:
+            return missing
         return 0, "{}", ""
 
     @property
