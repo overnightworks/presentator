@@ -85,12 +85,6 @@ class LifeEnd(StrEnum):
     CANCELLED = "cancelled"
 
 
-class HelloRefusal(StrEnum):
-    """Why a connection's hello did not start a life."""
-
-    NOT_PROVEN = "hello_not_proven"
-
-
 class PhaseFailure(StrEnum):
     """Why a phase's child never reached an exit and no life end names it."""
 
@@ -661,17 +655,19 @@ def _served_connection(
     """Serve one accepted connection and sweep after it; None keeps the life.
 
     The connection's line carries what ended the life, and a refused hello as
-    its refusal; the consumed end is the line's success.
+    its refusal named by the hello's fault; the consumed end is the line's success.
     """
     with StepTimer(CONNECTION_EVENT, logger) as line:
         with connection:
             life_end = None
-            if build_wire.verify_hello(connection, key, seconds=HELLO_SECONDS):
+            try:
+                build_wire.verify_hello(connection, key, seconds=HELLO_SECONDS)
+            except build_wire.HelloRefusedError as refused:
+                line.refuse(refused.fault)
+            else:
                 life_end = hand_over(
                     connection, serving, accepted_at, listener=listener
                 )
-            else:
-                line.refuse(HelloRefusal.NOT_PROVEN)
         if life_end is None and not serving.sweep(accepted_at + SWEEP_SECONDS):
             life_end = LifeEnd.SWEEP
         if life_end not in (None, LifeEnd.CONSUMED):

@@ -124,8 +124,8 @@ def proven(script: Script, key: bytes = KEY) -> Script:
     """A worker that runs the script only for a client whose hello verifies."""
 
     def serve(connection: socket.socket, seen: Seen, uploads: Path) -> None:
-        if verify_hello(connection, key, seconds=HELLO_SECONDS):
-            script(connection, seen, uploads)
+        verify_hello(connection, key, seconds=HELLO_SECONDS)
+        script(connection, seen, uploads)
 
     return serve
 

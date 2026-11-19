@@ -81,8 +81,21 @@ class WireClosedError(WireRefusedError, ConnectionError):
     """
 
 
+class HelloFault(StrEnum):
+    """Why a keyed hello was not proven; never what the key is."""
+
+    KEY = "key"
+    VERSION = "version"
+    CLOSE = "close"
+    TIMEOUT = "timeout"
+
+
 class HelloRefusedError(WireRefusedError):
     """The peer of a keyed hello did not prove that it holds the key."""
+
+    def __init__(self, fault: HelloFault) -> None:
+        super().__init__(fault)
+        self.fault = fault
 
 
 class HelloDirection(bytes, Enum):
@@ -200,42 +213,52 @@ def hello_tag(
     return hmac.digest(key, direction + controller_nonce + web_nonce, hashlib.sha256)
 
 
-def verify_hello(connection: socket.socket, key: bytes, *, seconds: float) -> bool:
+@contextmanager
+def _hello_exchange() -> Generator[None]:
+    """Name a timeout or an ended connection during the hello as its fault."""
+    try:
+        yield
+    except TimeoutError as error:
+        raise HelloRefusedError(HelloFault.TIMEOUT) from error
+    except OSError as error:
+        raise HelloRefusedError(HelloFault.CLOSE) from error
+
+
+def verify_hello(connection: socket.socket, key: bytes, *, seconds: float) -> None:
     """Run the controller's side of the keyed hello within the seconds.
 
     The controller sends a nonce; the web answers with its own and a tag over
     the label "web to worker" and both; the controller answers with a tag under
-    the other label, so no tag of one direction passes for the other. True only
-    for a peer that holds the key, and only then is the connection blocking
-    again. Whatever the peer does, this reads nothing but the fixed lengths.
+    the other label, so no tag of one direction passes for the other. Returns
+    only for a peer that holds the key, and only then is the connection blocking
+    again; any other peer raises HelloRefusedError naming its fault. Whatever
+    the peer does, this reads nothing but the fixed lengths.
     """
     deadline = time.monotonic() + seconds
     nonce = secrets.token_bytes(NONCE_BYTES)
-    try:
+    with _hello_exchange():
         _arm(connection, deadline)
         connection.sendall(bytes([HELLO_VERSION]) + nonce)
         answer = _read_exactly_by(connection, ANSWER_BYTES, deadline)
-        web_nonce = answer[1 : 1 + NONCE_BYTES]
-        expected = hello_tag(key, HelloDirection.WEB_TO_WORKER, nonce, web_nonce)
-        if answer[0] != HELLO_VERSION or not hmac.compare_digest(
-            answer[1 + NONCE_BYTES :], expected
-        ):
-            return False
+    if answer[0] != HELLO_VERSION:
+        raise HelloRefusedError(HelloFault.VERSION)
+    web_nonce = answer[1 : 1 + NONCE_BYTES]
+    expected = hello_tag(key, HelloDirection.WEB_TO_WORKER, nonce, web_nonce)
+    if not hmac.compare_digest(answer[1 + NONCE_BYTES :], expected):
+        raise HelloRefusedError(HelloFault.KEY)
+    with _hello_exchange():
         _arm(connection, deadline)
         connection.sendall(
             hello_tag(key, HelloDirection.WORKER_TO_WEB, nonce, web_nonce)
         )
-    except OSError, WireRefusedError:
-        return False
     connection.settimeout(None)
-    return True
 
 
 def answer_hello(connection: socket.socket, key: bytes) -> None:
     """Run the web's side of the keyed hello; raise unless the peer proves the key."""
     challenge = _read_exactly(connection, CHALLENGE_BYTES)
     if challenge[0] != HELLO_VERSION:
-        raise HelloRefusedError
+        raise HelloRefusedError(HelloFault.VERSION)
     nonce = challenge[1:]
     web_nonce = secrets.token_bytes(NONCE_BYTES)
     connection.sendall(
@@ -246,10 +269,10 @@ def answer_hello(connection: socket.socket, key: bytes) -> None:
     try:
         proof = _read_exactly(connection, TAG_BYTES)
     except WireRefusedError as closed:
-        raise HelloRefusedError from closed
+        raise HelloRefusedError(HelloFault.CLOSE) from closed
     expected = hello_tag(key, HelloDirection.WORKER_TO_WEB, nonce, web_nonce)
     if not hmac.compare_digest(proof, expected):
-        raise HelloRefusedError
+        raise HelloRefusedError(HelloFault.KEY)
 
 
 def _validated[Header](adapter: TypeAdapter[Header], header: bytes) -> Header:
