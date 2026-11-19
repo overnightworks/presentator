@@ -34,7 +34,7 @@ from tests.support.sign_in_support import ADMIN, MEMBER
 from tests.support.two_processes import TwoProcesses, two_modules
 
 _CHILD: Final = "tests.presentator.host.support.app_process"
-_CONSOLE_ENTRY_POINT: Final = Path(sys.executable).parent / "presentator"
+CONSOLE_ENTRY_POINT: Final = Path(sys.executable).parent / "presentator"
 _START_SECONDS: Final = 60
 _REQUEST_SECONDS: Final = 30
 _OUTPUT_END_SECONDS: Final = 30
@@ -345,6 +345,22 @@ def serving_apps(
                 second.stop()
 
 
+def presentator_environment(
+    database_url: str, directory: Path, port: int, environment: Mapping[str, str]
+) -> dict[str, str]:
+    """All a `presentator` process on `port` reads, with `environment` added.
+
+    Its mirrors and builds are directories of its own under `directory`.
+    """
+    return {
+        "PATH": os.environ["PATH"],
+        **_environment(database_url, directory, environment),
+        "PRESENTATOR_PORT": str(port),
+        "PRESENTATOR_MIRRORS": str(directory / "mirrors"),
+        "PRESENTATOR_BUILDS": str(directory / "builds"),
+    }
+
+
 @contextmanager
 def serving_presentator(
     database_url: str, directory: Path, environment: Mapping[str, str]
@@ -355,15 +371,9 @@ def serving_presentator(
     deployment's process does; none outlives the block.
     """
     port, _ = two_free_ports()
-    served = {
-        **_environment(database_url, directory, environment),
-        "PRESENTATOR_PORT": str(port),
-        "PRESENTATOR_MIRRORS": str(directory / "mirrors"),
-        "PRESENTATOR_BUILDS": str(directory / "builds"),
-    }
     with subprocess.Popen(  # noqa: S603 - the command is this repository's own
-        [str(_CONSOLE_ENTRY_POINT)],
-        env={"PATH": os.environ["PATH"], **served},
+        [str(CONSOLE_ENTRY_POINT)],
+        env=presentator_environment(database_url, directory, port, environment),
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,

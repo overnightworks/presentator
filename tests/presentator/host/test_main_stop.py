@@ -1,23 +1,40 @@
 """A stop ends the chores before the instance closes and the process stops."""
 
 import signal
+import subprocess
 import threading
 import time
+from collections.abc import Callable, Generator
 from datetime import timedelta
+from functools import partial
 from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, text
+from sqlalchemy import Connection, Engine, TextClause, text
 
+from presentator.adapters.postgres.locks import (
+    MIGRATION_LOCK,
+    hold_until_transaction_ends,
+)
 from presentator.host.main import Instance, served_by_host
 from presentator.host.polling import ChoreCode, Schedule
 from presentator.host.stopping_server import interrupt_ends_as_a_stop
 from tests.presentator.application.support.fakes import PATIENCE
-from tests.presentator.host.support.app_processes import serving_presentator
+from tests.presentator.host.support.app_processes import (
+    CONSOLE_ENTRY_POINT,
+    presentator_environment,
+    serving_presentator,
+    two_free_ports,
+)
 from tests.support.lobby import a_settings
-from tests.support.log_lines import json_lines, json_lines_among
+from tests.support.log_lines import (
+    events_of,
+    json_lines,
+    json_lines_among,
+    json_logged,
+)
 from tests.support.postgres import engine_on
 
 _STATEMENT_TIMEOUT_SECONDS = 1
@@ -28,6 +45,12 @@ _POLL_SECONDS = 0.05
 _A_POLL_WAITS_FOR_THE_LOCK = text(
     "SELECT count(*) FROM pg_locks WHERE relation = 'sources'::regclass AND NOT granted"
 )
+_A_STATEMENT_WAITS_FOR_A_LOCK = text(
+    "SELECT count(*) FROM pg_locks WHERE NOT granted"
+    " AND database = (SELECT oid FROM pg_database WHERE datname = current_database())"
+)
+# Longer than the wait for the lock, so the interrupt and not the timeout ends it.
+_LONG_STATEMENT_SECONDS = 60
 
 
 def test_leaving_the_lifespan_stops_the_chores_before_it_closes_the_instance() -> None:
@@ -60,14 +83,14 @@ def test_leaving_the_lifespan_stops_the_chores_before_it_closes_the_instance() -
     assert happened[-1] == "closed"
 
 
-def _wait_until_a_poll_waits_for_the_lock(engine: Engine) -> None:
+def _wait_until_a_statement_waits(engine: Engine, waiting: TextClause) -> None:
     deadline = time.monotonic() + PATIENCE.total_seconds()
     while time.monotonic() < deadline:
         with engine.connect() as connection:
-            if connection.execute(_A_POLL_WAITS_FOR_THE_LOCK).scalar_one():
+            if connection.execute(waiting).scalar_one():
                 return
         time.sleep(_POLL_SECONDS)
-    pytest.fail("no source poll ever waited for the lock")
+    pytest.fail("no statement ever waited for the lock")
 
 
 @pytest.mark.usefixtures("environment")
@@ -90,7 +113,7 @@ def test_a_sigterm_during_a_locked_source_poll_writes_its_failure_before_the_sto
             engine.connect() as holder,
         ):
             holder.execute(text("LOCK TABLE sources IN ACCESS EXCLUSIVE MODE"))
-            _wait_until_a_poll_waits_for_the_lock(engine)
+            _wait_until_a_statement_waits(engine, _A_POLL_WAITS_FOR_THE_LOCK)
             signalled = time.monotonic()
             app.process.send_signal(signal.SIGTERM)
             exit_code = app.process.wait(timeout=PATIENCE.total_seconds())
@@ -119,14 +142,97 @@ def test_a_sigint_ends_a_served_process_in_its_stop_line_alone(
 
     events = [line["event"] for line in json_lines(output)]
     assert exit_code == -signal.SIGINT
-    assert "process.stopped" in events
+    assert events.count("process.stopped") == 1
     assert "process.crashed" not in events
 
 
-def test_an_interrupt_ends_the_process_by_sigint_at_its_default_action(
-    monkeypatch: pytest.MonkeyPatch,
+def _lock_the_schema_version(holder: Connection) -> None:
+    holder.execute(text("LOCK TABLE alembic_version IN ACCESS EXCLUSIVE MODE"))
+
+
+def _lock_the_pins(holder: Connection) -> None:
+    holder.execute(text("LOCK TABLE host_key_pins IN ACCESS EXCLUSIVE MODE"))
+
+
+@pytest.mark.parametrize(
+    ("arguments", "hold"),
+    [
+        pytest.param(
+            [],
+            _lock_the_schema_version,
+            id="the start, checking the schema",
+        ),
+        pytest.param(
+            ["migrate"],
+            partial(hold_until_transaction_ends, lock=MIGRATION_LOCK),
+            id="migrate, waiting for another migration",
+        ),
+        pytest.param(
+            ["unpin-host", "git.example"],
+            _lock_the_pins,
+            id="unpin-host, waiting for the pins",
+        ),
+    ],
+)
+@pytest.mark.usefixtures("environment")
+def test_a_sigint_before_any_serving_ends_the_process_in_its_stop_line_alone(
+    database_url: str,
+    tmp_path: Path,
+    arguments: list[str],
+    hold: Callable[[Connection], None],
 ) -> None:
-    # The raise is recorded, not done: the signal would end the test run.
+    engine = engine_on(database_url)
+    port, _ = two_free_ports()
+    try:
+        with engine.connect() as holder:
+            hold(holder)
+            with subprocess.Popen(  # noqa: S603 - the command is this repository's own
+                [str(CONSOLE_ENTRY_POINT), *arguments],
+                env=presentator_environment(
+                    database_url,
+                    tmp_path,
+                    port,
+                    {
+                        "PRESENTATOR_DATABASE_STATEMENT_TIMEOUT_SECONDS": str(
+                            _LONG_STATEMENT_SECONDS
+                        )
+                    },
+                ),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            ) as process:
+                try:
+                    _wait_until_a_statement_waits(engine, _A_STATEMENT_WAITS_FOR_A_LOCK)
+                    process.send_signal(signal.SIGINT)
+                    output, errors = process.communicate(
+                        timeout=PATIENCE.total_seconds()
+                    )
+                finally:
+                    process.kill()
+            holder.rollback()
+    finally:
+        engine.dispose()
+
+    events = [line["event"] for line in json_lines(output)]
+    # The default action of SIGINT, which a shell or a container runtime reports as 130.
+    assert process.returncode == -signal.SIGINT
+    assert events[-1] == "process.stopped"
+    assert events.count("process.stopped") == 1
+    assert "process.failed" not in events
+    assert "process.crashed" not in events
+    assert errors == ""
+
+
+@pytest.fixture
+def raised_signals(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Generator[list[tuple[int, object]]]:
+    """The signals raised, with SIGINT's handler then; recorded, not done.
+
+    The signal would end the test run.
+    """
     raised: list[tuple[int, object]] = []
 
     def recorded(signal_number: int) -> None:
@@ -135,9 +241,31 @@ def test_an_interrupt_ends_the_process_by_sigint_at_its_default_action(
     monkeypatch.setattr(signal, "raise_signal", recorded)
     handler = signal.getsignal(signal.SIGINT)
     try:
-        with interrupt_ends_as_a_stop():
-            raise KeyboardInterrupt
+        yield raised
     finally:
         signal.signal(signal.SIGINT, handler)
 
-    assert raised == [(signal.SIGINT, signal.SIG_DFL)]
+
+def test_an_interrupt_ends_the_process_by_sigint_at_its_default_action(
+    raised_signals: list[tuple[int, object]],
+) -> None:
+    with interrupt_ends_as_a_stop():
+        raise KeyboardInterrupt
+
+    assert raised_signals == [(signal.SIGINT, signal.SIG_DFL)]
+
+
+@pytest.mark.parametrize(
+    "server_wrote_its_line",
+    [pytest.param(False, id="before serving"), pytest.param(True, id="after serving")],
+)
+@pytest.mark.usefixtures("raised_signals")
+def test_an_interrupt_ends_in_one_stop_line_wherever_it_lands(
+    capsys: pytest.CaptureFixture[str], *, server_wrote_its_line: bool
+) -> None:
+    with json_logged(capsys) as logged, interrupt_ends_as_a_stop() as stop_line:
+        if server_wrote_its_line:
+            stop_line.write()
+        raise KeyboardInterrupt
+
+    assert len(events_of(logged, "process.stopped")) == 1
