@@ -6,6 +6,7 @@ import asyncio
 import logging
 import time
 from contextlib import aclosing, asynccontextmanager
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, NoReturn, assert_never
 
@@ -112,34 +113,60 @@ def _unavailable() -> NoReturn:
     raise_without_chain(CoPresenterUnavailableError())
 
 
+_RUN_EVENT: Final = "gateway_run.ended"
+
+
+class _EventCount(StrEnum):
+    """The field of a run's line counting one kind of turn event."""
+
+    ASSISTANT_TEXT = "assistant_text_events"
+    TOOL_CALL = "tool_call_events"
+    TOOL_RESULT = "tool_result_events"
+    FINAL = "final_events"
+
+
+def _count_of(event: TurnEvent) -> _EventCount:
+    match event:
+        case AssistantTextEvent():
+            return _EventCount.ASSISTANT_TEXT
+        case ToolCallEvent():
+            return _EventCount.TOOL_CALL
+        case ToolResultEvent():
+            return _EventCount.TOOL_RESULT
+        case FinalEvent():
+            return _EventCount.FINAL
+        case _:
+            assert_never(event)
+
+
 class _RunSummary:
     """What a run showed, without a word of its content."""
 
     def __init__(self, clock: Callable[[], float]) -> None:
         self._clock = clock
         self._started = clock()
-        self._events: dict[str, int] = {}
+        self._counts = dict.fromkeys(_EventCount, 0)
         self._first_move_ms: int | None = None
 
     def note_move(self) -> None:
         if self._first_move_ms is None:
             self._first_move_ms = self._elapsed_ms()
 
-    def note(self, event: object) -> None:
-        name = type(event).__name__
-        self._events[name] = self._events.get(name, 0) + 1
+    def note(self, event: TurnEvent) -> None:
+        self._counts[_count_of(event)] += 1
 
     @property
     def has_events(self) -> bool:
-        return bool(self._events)
+        return any(self._counts.values())
 
     def log(self) -> None:
-        moved = "" if self._first_move_ms is None else f" move_ms={self._first_move_ms}"
         _LOGGER.info(
-            "gateway run summary: events=%s end_ms=%d%s",
-            ",".join(f"{name}:{count}" for name, count in self._events.items()),
-            self._elapsed_ms(),
-            moved,
+            _RUN_EVENT,
+            extra={
+                **self._counts,
+                "end_ms": self._elapsed_ms(),
+                "move_ms": self._first_move_ms,
+            },
         )
 
     def _elapsed_ms(self) -> int:

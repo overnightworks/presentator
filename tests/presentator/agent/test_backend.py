@@ -418,20 +418,30 @@ async def test_a_refusal_logs_its_closed_values_and_no_run_summary(
     )
 
 
+def the_run_line(logged: LoggedText) -> LogLine:
+    (line,) = [one for one in logged.lines if one["event"] == "gateway_run.ended"]
+    return line
+
+
 @on_an_event_loop
-async def test_a_run_logs_its_event_types_and_times_and_no_text(
-    caplog: pytest.LogCaptureFixture,
+async def test_a_run_logs_one_literal_event_counting_its_event_types_and_no_text(
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """The summary names what happened, never what was said."""
-    caplog.set_level(logging.DEBUG)
+    """The summary counts what happened in fields, never what was said."""
+    with json_logged(capsys) as logged:
+        await spoken(answerer_over(FakeGateway(completion("Geheime Worte."))))
 
-    await spoken(answerer_over(FakeGateway(completion("Geheime Worte."))))
-
-    (line,) = [r.getMessage() for r in caplog.records if r.name == LOGGER]
-    assert "AssistantTextEvent:1" in line
-    assert "FinalEvent:1" in line
-    assert "Geheime" not in line
-    assert THE_QUESTION not in line
+    line = the_run_line(logged)
+    assert (
+        line["assistant_text_events"],
+        line["tool_call_events"],
+        line["tool_result_events"],
+        line["final_events"],
+        line["move_ms"],
+    ) == (1, 0, 0, 1, None)
+    assert isinstance(line["end_ms"], int)
+    assert "Geheime" not in logged.text
+    assert THE_QUESTION not in logged.text
 
 
 @on_an_event_loop
@@ -546,21 +556,21 @@ async def test_a_tool_rounds_pieces_come_before_its_slide_move() -> None:
 
 @on_an_event_loop
 async def test_every_slide_move_of_a_run_reaches_the_window_in_order(
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A second move in one run is not dropped, and the move time stays the first's."""
-    caplog.set_level(logging.DEBUG)
     gateway = FakeGateway(
         tool_round(tool_call("call-1", "show_slide", {"number": 2})),
         tool_round(tool_call("call-2", "show_slide", {"number": 5})),
         completion("Gut."),
     )
 
-    events = await answered(answerer_on_a_ticking_clock(gateway))
+    with json_logged(capsys) as logged:
+        events = await answered(answerer_on_a_ticking_clock(gateway))
 
-    (line,) = [r.getMessage() for r in caplog.records if r.name == LOGGER]
+    first_look_after_the_start_ms = 1000
     assert events == [ShowSlide(number=2), ShowSlide(number=5), "Gut."]
-    assert " move_ms=1000" in line
+    assert the_run_line(logged)["move_ms"] == first_look_after_the_start_ms
 
 
 @pytest.mark.parametrize(
@@ -578,16 +588,3 @@ async def test_a_bad_slide_number_is_an_error_result_and_moves_nothing(
     second = json.dumps(json.loads(gateway.requests[1].content)["messages"])
     assert events == ["Gut."]
     assert "at least 1" in second
-
-
-@on_an_event_loop
-async def test_the_run_summary_logs_the_time_to_the_first_move(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """The move time is measured beside the run's end."""
-    caplog.set_level(logging.DEBUG)
-
-    await answered(answerer_over(FakeGateway(*a_slide_round({"number": 2}))))
-
-    (line,) = [r.getMessage() for r in caplog.records if r.name == LOGGER]
-    assert " move_ms=" in line

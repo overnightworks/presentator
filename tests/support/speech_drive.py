@@ -58,6 +58,7 @@ from tests.support.copresenter_support import (
     a_good_gateway,
     nothing_happens,
     the_refresh_token_is_revoked,
+    the_session_ends_at_the_reopening,
     the_session_ends_during_the_grant,
     the_token_thread_fails,
 )
@@ -90,7 +91,9 @@ from tests.support.speech_service import (
     after_the_first_audio,
     busy_at_the_upgrade,
     denying,
+    draining,
     nobody_listens,
+    one_after_another,
 )
 from tests.support.talk_support import A, Hosts, two_hosts
 
@@ -373,6 +376,13 @@ def a_speech_instance(
 @contextmanager
 def recorded_logs() -> Generator[list[logging.LogRecord]]:
     """Every record raised in the block, the host's logging at DEBUG."""
+    with recording_logs() as logs:
+        yield logs.records
+
+
+@contextmanager
+def recording_logs() -> Generator[RecordingLogs]:
+    """The handler recording every record raised in the block, logging at DEBUG."""
     logs = RecordingLogs()
     root = logging.getLogger()
     named = [logging.getLogger(name) for name in _WIDE_OPEN_LOGGERS]
@@ -383,7 +393,7 @@ def recorded_logs() -> Generator[list[logging.LogRecord]]:
         for logger in named:
             logger.setLevel(logging.DEBUG)
         try:
-            yield logs.records
+            yield logs
         finally:
             for logger, level in zip(named, levels, strict=True):
                 logger.setLevel(level)
@@ -693,6 +703,16 @@ LEAK_HEARINGS: Final[dict[str, LeakHearing]] = {
     **_failing(_refused_before_any_service_is_asked()),
     _SESSION_ENDS_DURING_THE_GRANT: LeakHearing(
         _arranged(the_session_ends_during_the_grant), HopClose.NORMAL
+    ),
+    "session-ends-at-the-reopening": LeakHearing(
+        lambda: SpeechScenario(
+            gateway=the_marked_answer,
+            service=FakeSpeechService(
+                realtime=one_after_another(draining(), _hearing_the_words())
+            ),
+            arrange=the_session_ends_at_the_reopening,
+        ),
+        HopClose.NORMAL,
     ),
 }
 

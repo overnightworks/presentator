@@ -25,6 +25,7 @@ import {
   installCspGuard,
   launchBrowser,
   openPageIn,
+  overlayFlag,
   openPresenter,
   openPresenterAt,
   openRoomBrowser,
@@ -87,14 +88,9 @@ describe('presenter controls', () => {
       await page.getByText(en['controls.noAnswer'], { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
       expect(await page.getByText('Then the second one fails.').count()).toBeGreaterThan(0)
       // The fake player never ends on its own; ending it lets the next question be heard.
-      type Snapshot = { speaking: boolean }
-      await page.waitForFunction(() => (window as unknown as {
-        __copresenter: { snapshot: () => Snapshot }
-      }).__copresenter.snapshot().speaking)
+      await expect.poll(() => overlayFlag(page, 'speaking')).toBe(true)
       await page.evaluate(() => (window as unknown as { __fakes: { endPlayback: () => void } }).__fakes.endPlayback())
-      await page.waitForFunction(() => !(window as unknown as {
-        __copresenter: { snapshot: () => Snapshot }
-      }).__copresenter.snapshot().speaking)
+      await expect.poll(() => overlayFlag(page, 'speaking')).toBe(false)
       sendHeard('The first sentence is voiced.')
       sendHeard('Then the second one fails.')
       await expect.poll(() => state.askBodies.length).toBe(2)
@@ -188,9 +184,7 @@ describe('presenter controls', () => {
       const [onRed, onGreen, onBlue] = (await readPaintedColours(page)).track
       expect(onGreen, 'on is green').toBeGreaterThan(Math.max(onRed, onBlue) + 20)
       expect(await ai.getAttribute('aria-checked')).toBe('true')
-      await expect.poll(async () => (await page.evaluate(() => (window as unknown as {
-        __copresenter: { snapshot: () => { capturing: boolean } }
-      }).__copresenter.snapshot().capturing))).toBe(true)
+      await expect.poll(async () => (await overlayFlag(page, 'capturing'))).toBe(true)
       expect(await ai.innerText()).toBe(en['controls.switch'])
       expect((await bar.innerText()).trim()).toBe(en['controls.switch'])
       expect(await page.getByText('local', { exact: false }).count()).toBe(0)
@@ -276,9 +270,7 @@ describe('presenter controls', () => {
       const ai = page.getByRole('switch', { name: en['controls.switch'] })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
       await ai.click({ timeout: 2_000 })
-      await expect.poll(() => page.evaluate(() => (window as unknown as {
-        __copresenter: { snapshot: () => { speaking: boolean } }
-      }).__copresenter.snapshot().speaking), { timeout: 5_000 }).toBe(true)
+      await expect.poll(() => overlayFlag(page, 'speaking'), { timeout: 5_000 }).toBe(true)
       await page.getByText('Where does the handoff slow down?').waitFor({ state: 'visible', timeout: 5_000 })
       expect(state.media.trackStopped).toBe(false)
       expect(state.media.playbackStarted).toBe(true)
@@ -343,11 +335,7 @@ describe('presenter controls', () => {
       if (mode === 'fails-after-capture') {
         // The end must land after capture is live, so it proves the end of a
         // running capture releases the microphone.
-        await expect.poll(() => page.evaluate(
-          () => (window as unknown as {
-            __copresenter: { snapshot: () => { capturing: boolean } }
-          }).__copresenter.snapshot().capturing,
-        )).toBe(true)
+        await expect.poll(() => overlayFlag(page, 'capturing')).toBe(true)
         endHearings(HopClose.SERVICE_FAILED)
       }
       await page.getByText(message).waitFor({ state: 'visible', timeout: 5_000 })
@@ -378,9 +366,7 @@ describe('presenter controls', () => {
     const { browser, page } = await openPresenter(1024)
     try {
       await page.getByRole('switch', { name: en['controls.switch'] }).click({ timeout: 2_000 })
-      await expect.poll(() => page.evaluate(() => (window as unknown as {
-        __copresenter: { snapshot: () => { capturing: boolean } }
-      }).__copresenter.snapshot().capturing)).toBe(true)
+      await expect.poll(() => overlayFlag(page, 'capturing')).toBe(true)
       const heard = page.locator('.copresenter .heard')
       sendHeard('Where does the', false)
       await expect.poll(async () => (await heard.textContent())?.trim()).toBe('Where does the')
@@ -402,9 +388,7 @@ describe('presenter controls', () => {
       const ai = page.getByRole('switch', { name: en['controls.switch'] })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
       await ai.click({ timeout: 2_000 })
-      const capturing = () => page.evaluate(() => (window as unknown as {
-        __copresenter: { snapshot: () => { capturing: boolean } }
-      }).__copresenter.snapshot().capturing)
+      const capturing = () => overlayFlag(page, 'capturing')
       await expect.poll(capturing).toBe(true)
       endHearings(HopClose.NORMAL)
       await expect.poll(capturing, { timeout: 1_000 }).toBe(false)
@@ -436,9 +420,7 @@ describe('presenter controls', () => {
         expect(state.hearingOpened).toBe(openedBefore)
       } else {
         await expect.poll(() => state.hearingOpened, { timeout: 5_000 }).toBe(openedBefore + 1)
-        await expect.poll(() => page.evaluate(() => (window as unknown as {
-          __copresenter: { snapshot: () => { capturing: boolean } }
-        }).__copresenter.snapshot().capturing)).toBe(true)
+        await expect.poll(() => overlayFlag(page, 'capturing')).toBe(true)
         expect(await page.getByText(en['controls.noHearing'], { exact: true }).count()).toBe(0)
         expect(state.media.trackStopped).toBe(false)
       }
@@ -673,18 +655,12 @@ describe('presenter controls', () => {
         expect(await ai.count()).toBe(1)
         expect(await home.count()).toBe(1)
         await ai.click({ timeout: 2_000 })
-        // `capturing` (snapshot()) is true only once the package's worklet node
+        // `data-capturing` is true only once the package's worklet node
         // runs, which happens after `addModule` resolved against the worklet
         // emitted under `<base>assets/`, under the production CSP; a blocked
         // or missing module ends the capture instead and the component says
         // it has no hearing.
-        await page.waitForFunction(
-          () => (window as unknown as {
-            __copresenter: { snapshot: () => { capturing: boolean } }
-          }).__copresenter.snapshot().capturing,
-          undefined,
-          { timeout: 5_000 },
-        )
+        await expect.poll(() => overlayFlag(page, 'capturing'), { timeout: 5_000 }).toBe(true)
         expect(await page.getByText(en['controls.noHearing']).count()).toBe(0)
         const workletLoads = () => page.evaluate(() => (window as unknown as { __workletLoads: string[] }).__workletLoads)
         await expect.poll(workletLoads).toHaveLength(1)

@@ -105,25 +105,49 @@ describe('co-presenter refusals', () => {
     }
   })
 
-  it('asks each turn under its own trace: the heard turn\'s, then a new one after the turn failed', async () => {
-    const heardTraceId = '4bf92f3577b34da6a3ce929d0e0e4736'
+  it('asks each turn under its own trace: a valid heard one\'s with its flags, else a new one with flags 00', async () => {
+    const traceOf = (digit: string) => digit.repeat(32)
+    const span = '00f067aa0ba902b7'
+    // The first turn is asked on connect and fails; every later one is answered.
+    const turns: [string, string | null, { continues: boolean, flags: string }][] = [
+      ['a sampled one', `00-${traceOf('1')}-${span}-01`, { continues: true, flags: '01' }],
+      ['none, after the failed turn', null, { continues: false, flags: '00' }],
+      ['an unsampled one', `00-${traceOf('2')}-${span}-00`, { continues: true, flags: '00' }],
+      ['a higher version', `cc-${traceOf('3')}-${span}-01-what-comes-later`, { continues: true, flags: '01' }],
+      ['a malformed one', `00-${traceOf('4')}-${span}`, { continues: false, flags: '00' }],
+      ['an all-zero trace id', `00-${traceOf('0')}-${span}-01`, { continues: false, flags: '00' }],
+      ['an all-zero parent id', `00-${traceOf('5')}-${'0'.repeat(16)}-01`, { continues: false, flags: '00' }],
+      ['the invalid version ff', `ff-${traceOf('6')}-${span}-01`, { continues: false, flags: '00' }],
+      ['a version 00 with a fifth field', `00-${traceOf('7')}-${span}-01-more`, { continues: false, flags: '00' }],
+    ]
     state.answerMode = 'refused-then-answered'
-    state.heardTraceparent = `00-${heardTraceId}-00f067aa0ba902b7-01`
+    state.heardTraceparent = turns[0]?.[1] ?? null
     const { browser, page } = await openPresenter(1024)
     try {
       const ai = page.getByRole('switch', { name: en['controls.switch'] })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
       await ai.click({ timeout: 2_000 })
       await page.getByText(en['controls.noAnswer'], { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
-      state.heardTraceparent = null
-      sendHeard('And again?')
-      await page.getByText('The second ask is answered.').waitFor({ state: 'visible', timeout: 5_000 })
-      const traces = state.askTraceparents.map((value) => /^00-([0-9a-f]{32})-([0-9a-f]{16})-01$/.exec(value ?? ''))
-      expect(traces).toHaveLength(2)
-      expect(traces[0]?.[1]).toBe(heardTraceId)
-      expect(traces[0]?.[2]).not.toBe('00f067aa0ba902b7')
-      expect(traces[1]?.[1]).toMatch(/^[0-9a-f]{32}$/)
-      expect(traces[1]?.[1]).not.toBe(heardTraceId)
+      for (const [index, [, heard]] of turns.entries()) {
+        if (index === 0) continue
+        state.heardTraceparent = heard
+        sendHeard(`Question number ${index}?`)
+        await expect.poll(() => state.askTraceparents.length, { timeout: 5_000 }).toBe(index + 1)
+      }
+      const sent = state.askTraceparents.map((value) => /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/.exec(value ?? ''))
+      for (const [index, [heardAs, heard, expected]] of turns.entries()) {
+        const [, traceId, spanId, flags] = sent[index] ?? []
+        const heardTraceId = heard?.split('-')[1]
+        expect(flags, heardAs).toBe(expected.flags)
+        expect(spanId, heardAs).toMatch(/^(?!0{16})[0-9a-f]{16}$/)
+        expect(spanId, heardAs).not.toBe(span)
+        if (expected.continues) expect(traceId, heardAs).toBe(heardTraceId)
+        else {
+          expect(traceId, heardAs).toMatch(/^(?!0{32})[0-9a-f]{32}$/)
+          expect(traceId, heardAs).not.toBe(heardTraceId)
+          expect(traceId, heardAs).not.toBe(traceOf('1'))
+        }
+      }
     } finally {
       state.answerMode = 'audio'
       await closeBrowser(browser)
