@@ -376,6 +376,22 @@ def a_copresenter_talk_host(  # noqa: PLR0913 - each is one thing a scenario var
     return browser, private, people.clock
 
 
+def two_hosts_with_a_copresenter(
+    engine: Engine, delay: Callable[[float], Awaitable[None]] = asyncio.sleep
+) -> tuple[Hosts, PrivateFakes]:
+    """Both hosts, the talk host serving the co-presenter over private fakes."""
+    private = PrivateFakes()
+    surface = CoPresenterSurface(
+        use=a_use(private, the_admins_decks()),
+        limiter=FakeAskLimiter(),
+        browser_origin=TALK_ORIGIN,
+        deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
+        delay=delay,
+    )
+    hosts = two_hosts(engine, copresenter=lambda _store, _sessions, _auth: surface)
+    return hosts, private
+
+
 def ask(client: TestClient, body: Mapping[str, object] = QUESTION) -> Response:
     return client.post("/copresenter/ask", json=body)
 

@@ -14,17 +14,8 @@ from fastapi.openapi.utils import (
 from httpx2 import Response
 from sqlalchemy import Engine
 
-from presentator.api.copresenter import CoPresenterSurface
 from presentator.contracts.preferences import ThemeChoice
-from tests.presentator.application.support.ask_leases import FakeAskLimiter
-from tests.support.copresenter_support import (
-    AN_ANSWER_DEADLINE_SECONDS,
-    ASK,
-    TALK_ORIGIN,
-    PrivateFakes,
-    a_use,
-    the_admins_decks,
-)
+from tests.support.copresenter_support import ASK, two_hosts_with_a_copresenter
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
@@ -35,7 +26,6 @@ from tests.support.lobby import (
 )
 from tests.support.log_lines import request_lines
 from tests.support.sign_in_support import ADMIN, Scene, a_scene
-from tests.support.talk_support import Hosts, two_hosts
 
 _ADMIN_PEOPLE = "/api/admin/people/"
 _HAL = "hal-client"
@@ -163,16 +153,6 @@ def test_every_reference_of_the_generated_spec_resolves() -> None:
             target = cast("dict[str, object]", target)[part]
 
 
-def _both_hosts_with_a_copresenter(engine: Engine) -> Hosts:
-    surface = CoPresenterSurface(
-        use=a_use(PrivateFakes(), the_admins_decks()),
-        limiter=FakeAskLimiter(),
-        browser_origin=TALK_ORIGIN,
-        deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
-    )
-    return two_hosts(engine, copresenter=lambda _store, _sessions, _auth: surface)
-
-
 @dataclass(frozen=True, slots=True)
 class JsonSent:
     """A JSON body one browser sends to one route."""
@@ -200,9 +180,8 @@ def test_a_lone_surrogate_in_a_json_body_is_answered_422_without_the_input(
 ) -> None:
     del json_logging
     caplog.set_level(logging.INFO)
-    browser = _both_hosts_with_a_copresenter(engine).signed_in_at(
-        sent.address, headers=A_BROWSERS_HEADERS
-    )
+    hosts, _ = two_hosts_with_a_copresenter(engine)
+    browser = hosts.signed_in_at(sent.address, headers=A_BROWSERS_HEADERS)
 
     answer = browser.request(
         sent.method,
