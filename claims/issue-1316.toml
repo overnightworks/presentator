@@ -1,0 +1,8 @@
+claim_id = "26ed9c0c46614b69842fd6c1f51ce652"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "4a70dd96ee41643ffec50fbb77fb4d3cb01a0b7e"
+branch = "claude/issue-1316-an-answer-stream-that-ends-without-done"
+scope = ["slidev/components/CoPresenter.vue", "slidev/tests"]
+opened_commit = "e05f92f8f99cd8529fac6fce5ce7b8abe806e91b"
+whole_reason = "the overlay component and its browser tests"
