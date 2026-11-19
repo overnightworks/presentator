@@ -3,6 +3,6 @@ agent = "Claude 8ee5fb01-f0ec-4dfd-8667-519e2cc2cc19"
 role = "builder"
 base = "eca956d598670088deba8bdf243474f9bb77ef79"
 branch = "claude/issue-1243-a-further-co-presenter-language-needs-no"
-scope = ["docs/configuration.md", "docs/decks.md", "src/presentator/api/copresenter.py", "src/presentator/application", "src/presentator/contracts/voice.py", "src/presentator/host/config.py", "tests/presentator"]
+scope = ["docs/co-presenter.md", "docs/configuration.md", "docs/decks.md", "docs/runbooks/run-from-a-checkout.md", "src/presentator/adapters/speech.py", "src/presentator/api/copresenter.py", "src/presentator/application", "src/presentator/contracts/__init__.py", "src/presentator/contracts/copresenter.py", "src/presentator/contracts/voice.py", "src/presentator/host/config.py", "src/presentator/host/main.py", "tests/presentator", "tests/support/copresenter_support.py", "tests/support/lobby.py"]
 opened_commit = "cf99dd0ae6104852ef196060d4a1f4811a7ac320"
 whole_reason = "One decision, the co-presenter's language set and fallback, spread over the contract, the settings, the prompt, the hear route and their documents."
