@@ -1,5 +1,8 @@
 """The runs in the object store, through the real client against the run's Garage."""
 
+import socket
+import threading
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -9,6 +12,8 @@ from tests.support.log_lines import events_of, json_logged
 from tests.support.object_store import ObjectStore, no_object_store_environment
 
 _FAILED = "object_store.failed"
+# Well inside a front proxy's request bound, so a deck view still answers.
+_A_VIEWS_PATIENCE_SECONDS = 15
 
 
 def a_run(directory: Path, name: str) -> tuple[Path, Path]:
@@ -119,3 +124,29 @@ def test_a_bucket_the_store_does_not_hold_fails_a_put_with_one_line(
 
     assert not taken
     assert [line["operation"] for line in events_of(logged, _FAILED)] == ["put"]
+
+
+def test_a_listing_on_a_store_that_never_answers_fails_within_a_views_patience(
+    tmp_path: Path, bare_environment: pytest.MonkeyPatch
+) -> None:
+    with closing(socket.socket()) as silent:
+        silent.bind(("127.0.0.1", 0))
+        silent.listen()
+        credentials = tmp_path / "credentials"
+        credentials.write_text(
+            "[default]\naws_access_key_id = a\naws_secret_access_key = b\n"
+        )
+        endpoint = f"http://127.0.0.1:{silent.getsockname()[1]}"
+        bare_environment.setenv("AWS_ENDPOINT_URL_S3", endpoint)
+        bare_environment.setenv("AWS_DEFAULT_REGION", "garage")
+        bare_environment.setenv("AWS_SHARED_CREDENTIALS_FILE", str(credentials))
+        runs = StoredRuns(client=object_store_client(), bucket="a-bucket")
+        listed: list[frozenset[str] | None] = []
+        listing = threading.Thread(
+            target=lambda: listed.append(runs.names()), daemon=True
+        )
+        listing.start()
+        listing.join(_A_VIEWS_PATIENCE_SECONDS)
+
+        assert not listing.is_alive()
+        assert listed == [None]

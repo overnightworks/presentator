@@ -38,9 +38,16 @@ def object_store_client() -> S3Client:
     A session of its own, not boto3's default one, which keeps the key and the
     configuration files it read first for the rest of the process.
     """
-    client: S3Client = boto3.session.Session().client(
-        "s3", config=Config(s3={"addressing_style": "path"})
+    # A deck view lists the store on every request and trusts its record when
+    # the listing fails, so a store that accepts and never answers fails within
+    # seconds, not after botocore's minute per read, retried.
+    config = Config(
+        s3={"addressing_style": "path"},
+        connect_timeout=2,
+        read_timeout=5,
+        retries={"mode": "standard", "total_max_attempts": 2},
     )
+    client: S3Client = boto3.session.Session().client("s3", config=config)
     return client
 
 
