@@ -296,6 +296,19 @@ jobs:
           retention-days: 7
           overwrite: true
 
+      # Coverage names a stack's data file finished (its `.H<hash>h` suffix)
+      # only once it has written all of it; combining an unfinished one would
+      # drop that stack's lines without a word.
+      - name: Check that every stack finished its Python coverage data
+        if: ${{ !cancelled() }}
+        working-directory: .
+        run: |
+          unfinished=$(find reports/python-coverage -name 'python.*' ! -name '*.H*h')
+          if [ -n "$unfinished" ]; then
+            echo "::error::A stack stopped before its coverage data was written: $unfinished"
+            exit 1
+          fi
+
       # The drive's stacks count the Python they run; the coverage job adds
       # it to pytest's.
       - name: Upload the drive's Python coverage data
