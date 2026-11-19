@@ -1,0 +1,8 @@
+claim_id = "2a56dfc2433b4d3589a91774b5180eb3"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "5140b87aa1dea8ad492cb1763c7c1e8281d40dd6"
+branch = "claude/issue-1285-a-deck-whose-run-is-gone-reads-ready-and"
+scope = ["docs/runbooks", "src/presentator/adapters", "src/presentator/application", "tests/presentator"]
+opened_commit = "7a132cc6f366f11add809be4f1c3b6d90b4250aa"
+whole_reason = "adapters and application hold the deck state and the build root; one item"
