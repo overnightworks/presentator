@@ -1,0 +1,8 @@
+claim_id = "b9c5dc9cd23a4834bc910203c4943c55"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "7728fb3df251bc53b320487ade2e54bc14942eb9"
+branch = "claude/issue-1333-the-worker-s-refusal-has-one-event-name"
+scope = ["docs/ARCHITECTURE.md", "docs/configuration.md", "scripts/probe_build_worker_k3d.py", "scripts/probe_build_worker_k3d_lives.py", "src/presentator/adapters/build_wire.py", "src/presentator/adapters/build_worker.py", "src/presentator/host", "tests/presentator/adapters", "tests/presentator/host", "tests/scripts"]
+opened_commit = "72f1b19a3a9f156684ef20250eda9e996329783f"
+whole_reason = "the worker's refusal event spans the host package, the k3d probes, their tests and two documents"
