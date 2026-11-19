@@ -167,6 +167,7 @@ from presentator.adapters.worker_children import (
 )
 from presentator.host import worker
 from presentator.host.worker_serving import Serving, StepEffects
+from presentator.host.lifecycle import StopLine
 from presentator.host.worker_termination import FaultHandlerWatchdog
 
 log = open(sys.argv[2], "a")
@@ -217,6 +218,7 @@ sys.exit(
         port=int((Path(sys.argv[1]) / "port").read_text()),
         key=(Path(sys.argv[1]) / "key").read_bytes(),
         serving=serving,
+        stop_line=StopLine(),
     )
 )
 """

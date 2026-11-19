@@ -10,7 +10,9 @@ import pytest
 
 from presentator.host import worker
 from presentator.host.config import MINIMUM_KEY_LENGTH
+from presentator.host.lifecycle import StopLine
 from presentator.host.worker import StartRefusal
+from presentator.host.worker_serving import Serving
 from tests.presentator.host.support.worker_boundary import LOADED_SETTINGS
 from tests.presentator.host.support.worker_lines import refusal_reasons
 from tests.support.log_lines import json_logged
@@ -120,7 +122,12 @@ def test_no_socket_can_be_allocated_refuses_the_start(
     monkeypatch.setattr(worker.socket, "socket", exhausted)
 
     with json_logged(capsys) as logged:
-        status = worker.serve(port=PORT, key=KEY, serving=ScriptedLife().serving())
+        status = worker.serve(
+            port=PORT,
+            key=KEY,
+            serving=ScriptedLife().serving(),
+            stop_line=StopLine(),
+        )
 
     assert status == worker.REFUSAL_EXIT_STATUS
     assert refusal_reasons(logged) == [StartRefusal.BIND]
@@ -211,8 +218,43 @@ def test_a_key_the_real_boundary_refuses_ends_the_start_before_binding(
 ) -> None:
     with json_logged(capsys) as logged:
         status = worker.REAL_BOUNDARY.serve(
-            port=PORT, key_file=tmp_path / "missing", settings=LOADED_SETTINGS
+            port=PORT,
+            key_file=tmp_path / "missing",
+            settings=LOADED_SETTINGS,
+            stop_line=StopLine(),
         )
 
     assert status == worker.REFUSAL_EXIT_STATUS
     assert refusal_reasons(logged) == [StartRefusal.KEY]
+
+
+def test_the_real_boundary_serves_the_port_with_the_key_bounded_by_the_settings(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    served: dict[str, object] = {}
+
+    def recording_serve(**arguments: object) -> int:
+        served.update(arguments)
+        return 0
+
+    def reading(_key_file: Path, *, controller_uid: int) -> bytes:
+        assert controller_uid == 0
+        return KEY
+
+    monkeypatch.setattr(worker, "read_key", reading)
+    monkeypatch.setattr(worker, "serve", recording_serve)
+
+    status = worker.REAL_BOUNDARY.serve(
+        port=PORT,
+        key_file=tmp_path / "key",
+        settings=LOADED_SETTINGS,
+        stop_line=StopLine(),
+    )
+
+    assert status == 0
+    assert (served["port"], served["key"]) == (PORT, KEY)
+    assert isinstance(served["serving"], Serving)
+    assert (
+        served["serving"].build_timeout_seconds,
+        served["serving"].build_output_megabytes,
+    ) == (45.0, 7)

@@ -14,6 +14,7 @@ from presentator.host.config import (
     load_worker_settings,
     worker_settings_variables,
 )
+from presentator.host.lifecycle import StopLine
 from presentator.host.worker_scratch import (
     QUEUE_MOUNT,
     SHARED_MEMORY_MOUNT,
@@ -21,7 +22,6 @@ from presentator.host.worker_scratch import (
     scratch_empty,
 )
 from presentator.host.worker_self_check import Predicate, Snapshot
-from presentator.host.worker_serving import Serving
 from tests.presentator.host.support.audit_recording import (
     LAUNCH_EVENTS,
     READ_EVENTS,
@@ -49,7 +49,6 @@ from tests.presentator.host.support.worker_lines import refusal_reasons
 from tests.support.log_lines import LoggedText, events_of
 
 SENDS_READ = "probes read"
-KEY = b"k" * 32
 READS_BEFORE_SENDS = 8
 
 
@@ -250,6 +249,7 @@ def test_start_serves_the_port_and_key_file_bounded_by_the_settings() -> None:
 
     worker.main(SERVE, boundary_over(sealed_snapshot(), [], served))
 
+    assert isinstance(served.pop("stop_line"), StopLine)
     assert served == {
         "port": int(SERVE[1]),
         "key_file": Path(SERVE[3]),
@@ -363,35 +363,6 @@ def test_the_loglines_release_and_level_keys_pass_the_environment_predicate() ->
     )(sealed_snapshot())
 
     assert worker_self_check.first_failing_predicate(snapshot) is None
-
-
-def test_the_real_boundary_serves_the_port_with_the_key_bounded_by_the_settings(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    served: dict[str, object] = {}
-
-    def recording_serve(**arguments: object) -> int:
-        served.update(arguments)
-        return 0
-
-    def reading(_key_file: Path, *, controller_uid: int) -> bytes:
-        assert controller_uid == 0
-        return KEY
-
-    monkeypatch.setattr(worker, "read_key", reading)
-    monkeypatch.setattr(worker, "serve", recording_serve)
-
-    status = worker.REAL_BOUNDARY.serve(
-        port=7100, key_file=tmp_path / "key", settings=LOADED_SETTINGS
-    )
-
-    assert status == 0
-    assert (served["port"], served["key"]) == (7100, KEY)
-    assert isinstance(served["serving"], Serving)
-    assert (
-        served["serving"].build_timeout_seconds,
-        served["serving"].build_output_megabytes,
-    ) == (45.0, 7)
 
 
 def test_failing_prctl_refuses_before_reading_anything() -> None:

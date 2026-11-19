@@ -5,7 +5,6 @@ import os
 import queue
 import socket
 import subprocess
-import sys
 import threading
 import time
 from collections.abc import Callable, Generator, Mapping
@@ -31,10 +30,9 @@ from tests.support.object_store import no_object_store_environment
 from tests.support.postgres import database_environment
 from tests.support.redis import emptied_database_url
 from tests.support.sign_in_support import ADMIN, MEMBER
-from tests.support.two_processes import TwoProcesses, two_modules
+from tests.support.two_processes import CONSOLE_ENTRY_POINT, TwoProcesses, two_modules
 
 _CHILD: Final = "tests.presentator.host.support.app_process"
-CONSOLE_ENTRY_POINT: Final = Path(sys.executable).parent / "presentator"
 _START_SECONDS: Final = 60
 _REQUEST_SECONDS: Final = 30
 _OUTPUT_END_SECONDS: Final = 30

@@ -223,6 +223,16 @@ forbidden_modules = [
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
+id = "worker-loads-no-web-stack"
+name = "The sealed build worker imports no web stack from presentator"
+type = "forbidden"
+# The worker serves its one wire on a raw socket; every module it loads is code
+# inside the sealed container. External packages are leaves here, so a web
+# framework one of them loads stays outside this contract.
+source_modules = ["presentator.host.worker"]
+forbidden_modules = ["uvicorn", "fastapi", "starlette"]
+
+[[tool.importlinter.contracts]]
 id = "route-vocabulary"
 name = "Routes name no port type"
 type = "forbidden"
