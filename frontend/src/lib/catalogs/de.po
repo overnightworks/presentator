@@ -149,6 +149,10 @@ msgctxt "deck.failedStore"
 msgid "Dieser Build konnte nicht abgelegt werden, weil der Speicher der Builds ihn nicht angenommen hat. Die nächste Aktualisierung versucht es erneut."
 msgstr ""
 
+msgctxt "deck.failedInterrupted"
+msgid "Dieser Build endete mit dem Prozess, der ihn ausführte. Die nächste Aktualisierung versucht es erneut."
+msgstr ""
+
 msgctxt "deck.failedLastTalkStands"
 msgid "Der zuletzt gebaute Vortrag lässt sich weiterhin in beiden Ansichten öffnen."
 msgstr ""

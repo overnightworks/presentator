@@ -414,7 +414,8 @@ test.describe('as an admin', () => {
 	});
 
 	// Cell 23.
-	test('a 500 of any other shape fails loud, keeps the dialog and enables the buttons', async ({
+	// A removal that outwaits a refresh is answered this way.
+	test('a bare 500 fails loud, keeps the dialog, says in it that the request failed and enables the buttons', async ({
 		page
 	}, testInfo) => {
 		const words = await wordsOf(page);
@@ -422,14 +423,17 @@ test.describe('as an admin', () => {
 		const failures: Error[] = [];
 		page.on('pageerror', (failure) => failures.push(failure));
 		await opensTheDialog(page, words);
-		await page.route(deletePath(name), (route) => route.fulfill({ status: 500, json: {} }));
+		await page.route(deletePath(name), (route) =>
+			route.fulfill({ status: 500, contentType: 'text/plain', body: 'Internal Server Error' })
+		);
 
 		await confirmOf(page, words).click();
 
 		await expect.poll(() => failures.length).toBe(1);
-		await expect(dialogOf(page)).toBeVisible();
+		await expect(dialogOf(page).getByRole('status')).toHaveText(words['source.requestFailed']);
 		await expect(confirmOf(page, words)).toBeEnabled();
 		await expect(cancelOf(page, words)).toBeEnabled();
+		await page.screenshot({ path: testInfo.outputPath('remove-failed.png') });
 		expect(await sourceNames(page)).toContain(name);
 	});
 

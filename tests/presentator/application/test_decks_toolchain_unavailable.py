@@ -147,23 +147,28 @@ def test_a_deck_page_says_building_only_while_the_worker_is_asked() -> None:
     assert page_of(decks, "kundenfeedback").state is DeckState.NEVER_BUILT
 
 
-def test_an_attempt_given_up_on_stays_failed_when_its_next_build_never_started() -> (
+def test_an_interrupted_attempt_stays_failed_until_a_toolchain_builds_it_again() -> (
     None
 ):
     store = a_store_that_was_left_building()
     builder = FakeBuildRunner(unavailable=True)
     decks = decks_over(
-        a_folder("kundenfeedback", commit=_A_LATER_COMMIT),
+        a_folder("kundenfeedback"),
         fakes=DecksFakes(store=store, builder=builder),
     )
 
     decks.refresh()
+    interrupted = page_of(decks, "kundenfeedback")
+    builder.unavailable = False
+    decks.refresh()
 
-    page = page_of(decks, "kundenfeedback")
-    assert page.state is DeckState.FAILED
-    assert page.attempt is not None
-    assert page.attempt.failure == BuildFailure.without_words()
-    assert page.attempt.commit == SHORT_COMMIT
+    assert interrupted.state is DeckState.FAILED
+    assert interrupted.attempt is not None
+    assert interrupted.attempt.failure == BuildFailure(
+        reason=BuildFailureReason.INTERRUPTED
+    )
+    assert interrupted.attempt.commit == SHORT_COMMIT
+    assert page_of(decks, "kundenfeedback").state is DeckState.READY
 
 
 def standing_build(store: FakeDeckStore) -> Build:

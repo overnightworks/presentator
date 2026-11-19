@@ -32,6 +32,9 @@ _log = logging.getLogger(__name__)
 _REFRESH_COMPLETED: Final = "refresh.completed"
 _REFRESH_REFUSED: Final = "refresh.refused"
 _OWNERSHIP_LOST: Final = "ownership_lost"
+_SAYS_NOTHING_ABOUT_THE_COMMIT: Final = frozenset(
+    {BuildFailureReason.STORE, BuildFailureReason.INTERRUPTED}
+)
 
 
 def log_refresh(fetches: Sequence[SourceFetch]) -> None:
@@ -96,7 +99,8 @@ class DeckBuilds:
         only that deck is rebuilt, and a toolchain change moves every deck's. A
         folder at a standing talk's commit and toolchain whose run is kept needs
         no build. A commit and toolchain tried are not tried again, so a deck that
-        cannot build costs one build, not one per refresh. A commit another
+        cannot build costs one build, not one per refresh; a build its process
+        did not live to finish was no try and is built again. A commit another
         toolchain built or tried is left to it while a process of that toolchain
         runs, so a rollout and a rollback never rebuild each other's decks; once
         none runs, this toolchain builds it. A vanished run is rebuilt: the store
@@ -143,7 +147,8 @@ class DeckBuilds:
     def _was_already_tried(self, deck: Deck, toolchain: ToolchainIdentity) -> bool:
         """Whether a build was already started for this commit under this toolchain.
 
-        One the store did not take says nothing about the commit, so it is tried again.
+        One the store did not take, and one whose process ended under it, say
+        nothing about the commit, so it is tried again.
         """
         attempt = deck.attempt
         return (
@@ -151,7 +156,7 @@ class DeckBuilds:
             and _made_for(attempt, deck, toolchain)
             and (
                 attempt.failure is None
-                or attempt.failure.reason is not BuildFailureReason.STORE
+                or attempt.failure.reason not in _SAYS_NOTHING_ABOUT_THE_COMMIT
             )
         )
 
@@ -174,12 +179,14 @@ class DeckBuilds:
         Builds follow one another inside the one refresh that holds the lock, so
         an attempt the walk reads as running belongs to a holder that is gone,
         however recently it began. Nobody may read that as a deck building for
-        ever, and it left no words to show.
+        ever, and the failure says it was interrupted, not that the deck failed.
         """
         attempt = deck.attempt
         if attempt is None or attempt.outcome is not BuildOutcome.RUNNING:
             return deck
-        failed = self._failed(deck, attempt, BuildFailure.without_words())
+        failed = self._failed(
+            deck, attempt, BuildFailure(reason=BuildFailureReason.INTERRUPTED)
+        )
         return deck.carrying(failed)
 
     def _switch_over(

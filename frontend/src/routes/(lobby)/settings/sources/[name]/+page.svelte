@@ -381,10 +381,7 @@
 			disabled={pending}
 			onclick={askRemoval}
 		/>
-		{#if outcome?.request === 'count' || outcome?.request === 'remove'}<StatusLine
-				shape={outcome.shape}
-				text={outcome.text}
-			/>{/if}
+		{#if outcome?.request === 'count'}<StatusLine shape={outcome.shape} text={outcome.text} />{/if}
 	</div>
 </section>
 
@@ -422,6 +419,11 @@
 				disabled={pending}
 				onclick={confirmRemoval}
 			/>
+			<!-- The modal dialog covers the page, so a failed removal says so inside it. -->
+			{#if outcome?.request === 'remove'}<StatusLine
+					shape={outcome.shape}
+					text={outcome.text}
+				/>{/if}
 		</div>
 	{/if}
 </dialog>
