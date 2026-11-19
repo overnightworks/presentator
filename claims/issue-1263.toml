@@ -3,6 +3,6 @@ agent = "Claude 8ee5fb01-f0ec-4dfd-8667-519e2cc2cc19"
 role = "builder"
 base = "664392f720c273f4aa99c744aa26235f86a7ac41"
 branch = "claude/issue-1263-the-object-store-s-failure-paths-tell-th"
-scope = ["docs/decks.md", "docs/people.md", "src/presentator", "tests/presentator"]
+scope = ["docs/decks.md", "docs/people.md", "frontend/src/lib/api/openapi.json", "frontend/src/lib/api/types.ts", "src/presentator", "tests/presentator", "tests/support/run_objects.py"]
 opened_commit = "bd7075af5f78ccb2f100c68a7d001884a448868c"
 whole_reason = "Three truth fixes in the object store's failure paths across API, labels and log."
