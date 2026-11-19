@@ -183,7 +183,7 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
   credential it must not reach.
 - Processes share state only through Postgres and Redis. Every write that needs one winner takes an
   advisory lock. The refresh is one such winner: a session advisory lock on a pinned connection
-  (re-taken by the tick when it dies) holds it, each new holder bumps an epoch in `refresh_owner`, and
+  (re-taken by the next refresh, fetch or removal when it dies) holds it, each new holder bumps an epoch in `refresh_owner`, and
   every refresh and removal write, a removal's file deletion and the sweep read that epoch `FOR SHARE`,
   so a holder whose connection ended is refused. The same connection holds a key per toolchain, which keeps a pod from
   rebuilding what a running pod of another toolchain built. The ask lease is a Redis key taken with `SET NX PX`, lasting the agent's deadline plus a margin, never renewed:
