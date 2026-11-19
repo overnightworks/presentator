@@ -1,0 +1,8 @@
+claim_id = "9d82c821d37a40d592f232d2758fdaf0"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "d479d32a9a5d1dc96448d49754e042a5d819444f"
+branch = "claude/issue-1331-cell-11-holds-the-replacement-by-cordon"
+scope = ["scripts/probe_build_worker/web_client.py", "scripts/probe_build_worker_k3d.py", "scripts/probe_build_worker_k3d_web.py", "scripts/probe_build_worker_web.py", "tests/scripts"]
+opened_commit = "db8c0c9d8ecb61c42edb85095e66da848d7b903b"
+whole_reason = "the k3d probe, its web client and their tests"
