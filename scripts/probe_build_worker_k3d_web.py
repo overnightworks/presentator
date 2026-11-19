@@ -4,9 +4,10 @@ Cell 10 starts the web with no worker anywhere and expects it Ready, and a
 build in it to end as an outage. Cell 11 applies the workers' Service and two
 worker pods, runs two web pods and builds hello-deck in each through the one
 Service: the first build's two steps land on two different pods, and the second
-step is admitted while the first pod is not Ready, proven by a sample of the
-pods taken at or after the admission, so it reaches the idle worker while the
-first restarts. Cell 12 sends the
+step's first attempt begins while the first pod is not Ready, proven by a
+sample of the pods taken at or after that attempt, so it sought the idle worker
+while the first restarted; a retry may admit it after the replacement is Ready
+again. Cell 12 sends the
 workers a hello under a wrong key and one that reflects the worker's own
 direction, and expects both refused and no pod spent. Cell 13 shows, from inside
 a worker pod, that the build and wire users reach nothing off the loopback, and,
