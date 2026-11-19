@@ -17,7 +17,11 @@ from presentator.contracts.decks import (
     DeckState,
 )
 from presentator.contracts.models import Role
-from tests.presentator.application.support.fakes import FakeDeckStore, FrozenClock
+from tests.presentator.application.support.fakes import (
+    FakeBuildRunner,
+    FakeDeckStore,
+    FrozenClock,
+)
 from tests.support.deck_page_support import SLUG, a_build, a_deck_store
 from tests.support.lobby import (
     A_TALK_ADDRESS,
@@ -212,6 +216,25 @@ def test_a_deck_never_built_has_the_sources_commit_and_nothing_delivered() -> No
     assert view.attempt is None
     assert view.views_open is False
     assert view.commit == a_build().commit[:7]
+
+
+def test_a_deck_whose_run_is_gone_reads_never_built_like_its_missing_talk() -> None:
+    gone = FakeBuildRunner(gone=frozenset({a_build().run}))
+    lobby = a_lobby(
+        given=GivenDecks(
+            store=a_deck_store(built=a_build()),
+            source=a_configured_source(_ADDRESS),
+            builder=gone,
+        )
+    )
+    lobby.sign_in()
+
+    view = deck_of(lobby)
+
+    assert view.state is DeckState.NEVER_BUILT
+    assert view.built_at is None
+    assert view.views_open is False
+    assert lobby.client.get(f"/deck/{SLUG}/pdf").status_code == HTTPStatus.NOT_FOUND
 
 
 def test_the_instants_carry_their_offset_as_stored() -> None:

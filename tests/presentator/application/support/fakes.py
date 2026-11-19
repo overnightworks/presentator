@@ -707,6 +707,8 @@ class FakeBuildRunner:
     store_answers: bool = True
     # A run's talk and PDF where a test laid them down outside the root.
     served: dict[BuildRun, Artefacts] = field(default_factory=dict[BuildRun, Artefacts])
+    # The runs gone from the store and the disk, so asking for one fetches nothing.
+    gone: frozenset[BuildRun] = frozenset()
 
     def toolchain_identity(self) -> ToolchainIdentity:
         return self.identity
@@ -740,6 +742,8 @@ class FakeBuildRunner:
 
     def kept(self, build: Build) -> Artefacts | None:
         # Fetching is the real adapter's concern; a run here is where it was laid.
+        if build.run in self.gone:
+            return None
         return self.served.get(build.run) or _artefacts_of(build.run, under=self.root)
 
     def read(self, written: Path) -> BinaryIO | None:

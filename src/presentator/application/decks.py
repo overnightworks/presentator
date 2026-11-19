@@ -8,7 +8,7 @@ git, TOML, SQL, and the build toolchain stay outside.
 import hmac
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from enum import StrEnum
 from functools import partial
@@ -604,11 +604,15 @@ class Decks:
         The commit named is the one the delivered talk was built from, not the
         one the source carries now: a person reads it to see whether their push
         is in what is on the screen (line 7), and while nothing is built there
-        is nothing on the screen but what the source last carried.
+        is nothing on the screen but what the source last carried. A build
+        whose run left the store and the disk delivers nothing, so the page
+        reads as if none had been built.
         """
-        deck = self._owned(slug, viewer)
-        if deck is None:
+        owned = self._owned(slug, viewer)
+        if owned is None:
             return None
+        served = self._artefacts_of(owned) is not None
+        deck = owned if served else replace(owned, build=None)
         built = deck.build
         return DeckPage(
             slug=deck.slug,
@@ -661,9 +665,11 @@ class Decks:
     def _kept(self, slug: str, viewer: str) -> Artefacts | None:
         """What the viewer's deck's build left, fetched from the store on first ask."""
         deck = self._owned(slug, viewer)
-        if deck is None or deck.build is None:
-            return None
-        return self.builder.kept(deck.build)
+        return None if deck is None else self._artefacts_of(deck)
+
+    def _artefacts_of(self, deck: Deck) -> Artefacts | None:
+        """What that deck's build left, fetched from the store on first ask."""
+        return None if deck.build is None else self.builder.kept(deck.build)
 
     def open_build_file(self, written: Path) -> BinaryIO | None:
         """A file a build wrote, opened to be delivered, or nothing if it is not one."""
