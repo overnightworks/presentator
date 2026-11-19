@@ -5,6 +5,7 @@ import threading
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Literal
 
 from fastapi import FastAPI
@@ -204,24 +205,17 @@ def a_scene(  # noqa: PLR0913
     )
     sessions = PostgresSessions(engine)
 
-    def lobby_app(trusted_proxies: str | None) -> FastAPI:
-        app, _ = a_lobby_app(
-            agent=an_agent_front(auth),
-            texts=texts,
-            people=people,
-            preferences=preferences,
-            signing_in=SigningIn(
-                sessions=sessions,
-                auth=auth,
-                decks=decks,
-            ),
-            admin_people=_admin_of(token_clients),
-            trusted_proxies=trusted_proxies,
-        )
-        return app
-
+    lobby_over_the_stores = partial(
+        a_lobby_app,
+        agent=an_agent_front(auth),
+        texts=texts,
+        people=people,
+        preferences=preferences,
+        signing_in=SigningIn(sessions=sessions, auth=auth, decks=decks),
+        admin_people=_admin_of(token_clients),
+    )
     lobby = a_browser_at(
-        lobby_app(""),
+        lobby_over_the_stores(trusted_proxies="")[0],
         people=people,
         base_url=A_BROWSERS_ADDRESS,
         headers=A_BROWSERS_HEADERS,
@@ -236,7 +230,7 @@ def a_scene(  # noqa: PLR0913
         relying_party=auth.relying_party,
         config=auth.config,
         clock=people.clock,
-        lobby_for_a_host=lambda: lobby_app(None),
+        lobby_for_a_host=lambda: lobby_over_the_stores(trusted_proxies=None)[0],
     )
 
 
