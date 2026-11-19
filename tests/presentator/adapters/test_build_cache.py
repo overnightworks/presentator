@@ -10,6 +10,7 @@ import pytest
 
 from presentator.adapters.build_cache import BuildCache, RunObjects
 from presentator.adapters.build_runs import ARRIVING_PREFIX
+from presentator.application import build_retention
 from presentator.contracts.decks import (
     DECK_DIRECTORY,
     MANIFEST_FILE,
@@ -23,6 +24,7 @@ from tests.presentator.adapters.support.build_support import (
     builds_under,
     on_this_machine,
 )
+from tests.presentator.application.support.fakes import FakeDeckStore, FakeSourceStore
 from tests.support.log_lines import json_logged
 from tests.support.object_store import ObjectStore
 from tests.support.run_objects import A_CACHE_BOUND, DirectoryRunObjects
@@ -156,6 +158,21 @@ def test_a_process_that_never_made_its_root_drops_nothing_and_warns_of_nothing(
 
     assert not builds.cache.root.exists()
     assert [one["level"] for one in logged.lines] == []
+
+
+def test_a_sweep_over_a_root_never_made_takes_the_runs_no_row_names(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    builds = builds_under(tmp_path, toolchain=on_this_machine(tmp_path))
+    built_run(builds.cache, "unnamed")
+    assert builds.cache.keep("unnamed")
+    shutil.rmtree(builds.cache.root)
+
+    with json_logged(capsys) as logged:
+        build_retention.sweep(builds, FakeSourceStore(), FakeDeckStore())
+
+    assert builds.cache.store.names() == frozenset()
+    assert [line["event"] for line in logged.lines] == ["build_sweep.completed"]
 
 
 @dataclass
