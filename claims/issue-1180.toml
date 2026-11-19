@@ -3,6 +3,6 @@ agent = "Claude 8ee5fb01-f0ec-4dfd-8667-519e2cc2cc19"
 role = "builder"
 base = "eca956d598670088deba8bdf243474f9bb77ef79"
 branch = "claude/issue-1180-the-build-worker-s-self-check-and-k3d-pr"
-scope = ["scripts/probe_build_worker_k3d.py", "src/presentator/host/worker.py", "src/presentator/host/worker_self_check.py", "tests/presentator/host"]
+scope = ["docs/ARCHITECTURE.md", "scripts/probe_build_worker_k3d.py", "scripts/probe_build_worker_k3d_manifests.py", "scripts/probe_build_worker_k3d_web.py", "src/presentator/host/worker.py", "src/presentator/host/worker_self_check.py", "tests/presentator/host", "tests/scripts/support/k3d_world.py", "tests/scripts/test_probe_build_worker_k3d_web.py"]
 opened_commit = "ab035c54a1fae718faad8a0a2e0602ed69122179"
 whole_reason = "One item's four named gaps of the build worker's self-check and its k3d proof."
