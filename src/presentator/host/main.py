@@ -50,8 +50,10 @@ from presentator.adapters.postgres.migrate import (
     MIGRATIONS_DIRECTORY,
     DatabaseRefusedError,
     RefusalReason,
+    StoreFault,
     cap_alembic_logging,
     database_is_ready,
+    driver_error_name,
     migration_history,
     serving_refusal,
 )
@@ -706,8 +708,9 @@ def main(
     """Migrate the database or unpin a host when asked to, else serve the lobby.
 
     Each runs on the configuration the environment carries. A refused
-    configuration ends any of them, and a refused database a migration or a
-    start, in one line and exit status 1.
+    configuration ends any of them, a refused database a migration or a start,
+    and a statement the database fails any of them, in one line and exit
+    status 1.
     """
     configure_logging(SERVICE_NAME)
     cap_alembic_logging()
@@ -731,6 +734,8 @@ def main(
         end_failed(
             ServerReason.CONFIGURATION_REFUSED, setting=",".join(refused.variables)
         )
+    except StoreFault as fault:
+        end_failed(ServerReason.STORE_UNAVAILABLE, error_type=driver_error_name(fault))
     asyncio.run(_serve(instance, settings))
 
 
