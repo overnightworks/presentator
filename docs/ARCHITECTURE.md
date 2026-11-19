@@ -100,9 +100,9 @@ running answer finish and writes `process.stopped`.
 
 A worker pod keeps a link that reaches only the web: its init container loads nftables rules that
 let nothing leave but the loopback and the replies of accepted connections, so a deck's code (the
-build and wire uids) reaches only the pod, and the self-check requires `EPERM` as each uid. The root
-controller verifies a keyed hello (nonces, HMAC-SHA256, a deadline) before it spawns anything. Each
-life ends the pod and the StatefulSet makes a fresh one.
+build and wire uids) reaches only the pod, and the self-check requires `EPERM` as each uid on IPv4
+and IPv6 (or no IPv6 route). The root controller verifies a keyed hello (nonces, HMAC-SHA256, a
+deadline) before it spawns anything. Each life ends the pod and the StatefulSet makes a fresh one.
 
 ## 5. Crosscutting Concepts
 

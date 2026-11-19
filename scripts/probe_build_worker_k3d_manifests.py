@@ -32,6 +32,7 @@ WORKER_KINDS = ("ConfigMap", "NetworkPolicy", "Service", "StatefulSet")
 WORKERS = "build-worker"
 WORKER_LABEL = "app.kubernetes.io/name"
 INBOUND_PROBE_POLICY = "probe-inbound-any-port"
+WITNESS = "probe-witness"
 WEB_KINDS = ("ConfigMap", "Deployment")
 WORKER_CONTAINER = "worker"
 WEB_CONTAINER = "web"
@@ -547,8 +548,11 @@ def inbound_probe_policy(deployment: Document) -> Document:
     """A NetworkPolicy admitting the web's pods to every TCP port of the workers' pods.
 
     Policies add up, so with this one applied beside the workers' own, which
-    admits the build port alone, the pod's packet filter is all that can drop a
-    web pod's connection to another port of a worker pod.
+    admits the build port to the web's pods alone, the pod's packet filter is all
+    that can drop a web pod's connection to another port of a worker pod. It
+    admits the witness, a web pod the probe relabels, too: the workers' own
+    policy refuses that pod, so its connection to the build port shows when this
+    policy is in force.
     """
     web_labels = deployment["spec"]["selector"]["matchLabels"]
     return {
@@ -558,7 +562,14 @@ def inbound_probe_policy(deployment: Document) -> Document:
         "spec": {
             "podSelector": {"matchLabels": {WORKER_LABEL: WORKERS}},
             "policyTypes": ["Ingress"],
-            "ingress": [{"from": [{"podSelector": {"matchLabels": web_labels}}]}],
+            "ingress": [
+                {
+                    "from": [
+                        {"podSelector": {"matchLabels": web_labels}},
+                        {"podSelector": {"matchLabels": {WORKER_LABEL: WITNESS}}},
+                    ]
+                }
+            ],
         },
     }
 

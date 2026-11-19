@@ -20,6 +20,7 @@ from tests.scripts.support.k3d_pods import (
     K3S_VERSION,
     OWN,
     Document,
+    Issued,
     Version,
     lives_stream,
     node,
@@ -27,6 +28,7 @@ from tests.scripts.support.k3d_pods import (
     twin_answer,
 )
 from tests.scripts.support.k3d_render import as_yaml_stream, workload_documents
+from tests.scripts.support.k3d_witness import witness_end
 from tests.scripts.support.web_client_output import (
     client_output,
     delivered_outcome,
@@ -43,8 +45,6 @@ WORKER_POD_NAMES = ("build-worker-0", "build-worker-1")
 INBOUND_PORT = 40123
 # How long after its creation a fake pod turns Ready.
 READY_AFTER_SECONDS = 5
-
-Issued = tuple[tuple[str, ...], Mapping[str, str], str | None]
 
 
 def kubelet_config(**changes: object) -> Document:
@@ -128,6 +128,11 @@ class World:
     egress_loopback: str = "connected"
     egress_off_loopback: str = "EPERM"
     inbound_end: str = "timeout"
+    # How many connections of the relabelled web pod to a worker's build port
+    # connect before the cluster refuses them, and how many it refuses after the
+    # probe's policy is applied before it admits them; None when it never does.
+    connects_before_the_refusal: int | None = 1
+    refusals_before_the_admission: int | None = 1
     # How a connection to the listener ends from inside the worker pod itself.
     listener_loopback_end: str = "connected"
     copy_exit: int = 0
@@ -236,13 +241,29 @@ class World:
     def failing_store_image(self) -> str:
         return self.store_images[self.failing_store]
 
+    def reach_end(self, target: str) -> str:
+        """How a new connection to HOST:PORT ends, by what listens there."""
+        host, _, port = target.rpartition(":")
+        if host == "127.0.0.1":
+            return self.listener_loopback_end
+        if port == str(INBOUND_PORT):
+            return self.inbound_end
+        return self.witness_end(host)
+
+    def witness_end(self, host: str) -> str:
+        """How the relabelled web pod's connection to a worker's build port ends."""
+        return witness_end(
+            self.commands,
+            host,
+            connects_before_the_refusal=self.connects_before_the_refusal,
+            refusals_before_the_admission=self.refusals_before_the_admission,
+        )
+
     def exec_answer(self, command: tuple[str, ...]) -> tuple[int, str, str]:
         """What a program sent into a pod prints, by its container and arguments."""
         arguments = command[command.index("-") + 1 :]
         if arguments[:1] == ("reach",):
-            reached_inside = arguments[-1].startswith("127.0.0.1:")
-            end = self.listener_loopback_end if reached_inside else self.inbound_end
-            return 0, json.dumps({"end": end}), ""
+            return 0, json.dumps({"end": self.reach_end(arguments[-1])}), ""
         if command[command.index("--container") + 1] != "web":
             if arguments == ("listen",):
                 return 0, json.dumps({"port": INBOUND_PORT}), ""

@@ -120,8 +120,9 @@ def limits_file(soft: str, hard: str) -> str:
 
 
 def sealed_sends() -> tuple[str, ...]:
-    """What each probed identity meets: its datagram off the loopback is dropped."""
-    return (worker_self_check.SEND_DROPPED,) * len(worker_self_check.PROBED_IDENTITIES)
+    """What each probed identity meets: its datagrams off the loopback are dropped."""
+    dropped = worker_self_check.SEND_DROPPED
+    return (f"{dropped} {dropped}",) * len(worker_self_check.PROBED_IDENTITIES)
 
 
 def read_sealed_snapshot(
