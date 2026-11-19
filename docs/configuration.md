@@ -60,9 +60,9 @@ refused the password, the role or the database; `not_answering` means the host
 did not resolve or its port did not accept; `statement_cancelled` means the
 server cancelled a statement past its statement or lock timeout, as one behind
 another session's lock is; `store_unavailable` names any other statement the
-database failed, a connection lost under a statement among them. A store fault carries the driver's error class in
-`error_type`. The refusals and the log name the kind of failure and never the
-URL or the password.
+database failed, a connection lost under a statement among them. A store
+fault carries the driver's error class in `error_type`. The refusals and the
+log name the kind of failure and never the URL or the password.
 The tests find their server in `PRESENTATOR_TEST_POSTGRES_URL`, a URL of a
 server whose user may create databases; every test creates one of its own.
 The tests that reach Redis find theirs in `PRESENTATOR_TEST_REDIS_URL`; each
