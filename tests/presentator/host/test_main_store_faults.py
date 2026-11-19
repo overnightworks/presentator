@@ -12,9 +12,9 @@ from sqlalchemy.engine import make_url
 
 from presentator.adapters.postgres.locks import LockClass, lock_of, parameters
 from presentator.adapters.toolchain_identity import toolchain_identity_of
+from presentator.host import main
 from presentator.host.config import load_settings
-from tests.presentator.host.support.app_processes import Ended, ended_presentator
-from tests.support.log_lines import json_lines
+from tests.support.log_lines import json_lines, json_logged
 from tests.support.postgres import NO_DATABASE_HERE, engine_on, point_at
 
 _START: tuple[str, ...] = ()
@@ -29,15 +29,51 @@ _SHORT_BOUNDS = {
 }
 
 
-def _failed_line(ended: Ended) -> Mapping[str, object]:
-    """The one `process.failed` line of a run that wrote nothing but JSON lines."""
-    assert ended.exit_code == _FAILED
-    assert not ended.errors
-    (failed,) = [
-        line for line in json_lines(ended.output) if line["event"] == "process.failed"
-    ]
-    assert failed["level"] == "error"
-    return failed
+@dataclass(frozen=True, slots=True)
+class _Ended:
+    """The one `process.failed` line of a failed run, and all it wrote."""
+
+    failed: Mapping[str, object]
+    output: str
+
+
+@dataclass(frozen=True, slots=True)
+class _Commands:
+    """`presentator` run in this process, on this test's environment and output."""
+
+    environment: pytest.MonkeyPatch
+    directory: Path
+    capsys: pytest.CaptureFixture[str]
+
+    def point_at(self, database_url: str) -> None:
+        """Make the next command reach the database at `database_url`."""
+        point_at(self.environment, database_url, self.directory)
+
+    def ended_failed(self, arguments: tuple[str, ...]) -> _Ended:
+        """Run `presentator <arguments>` to its failed end, which writes no error."""
+        with json_logged(self.capsys), pytest.raises(SystemExit) as ended:
+            main.main(list(arguments))
+        written = self.capsys.readouterr()
+
+        assert ended.value.code == _FAILED
+        assert not written.err
+        (failed,) = [
+            one for one in json_lines(written.out) if one["event"] == "process.failed"
+        ]
+        assert failed["level"] == "error"
+        return _Ended(failed, written.out)
+
+
+@pytest.fixture
+def commands(
+    environment: pytest.MonkeyPatch,
+    redis_url: str,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> _Commands:
+    """The commands of an instance whose start reaches this test's Redis."""
+    environment.setenv("PRESENTATOR_REDIS_URL", redis_url)
+    return _Commands(environment, tmp_path, capsys)
 
 
 def _an_absent_role(database_url: str) -> str:
@@ -49,7 +85,6 @@ def _nowhere(_: str) -> str:
     return NO_DATABASE_HERE
 
 
-@pytest.mark.usefixtures("environment")
 @pytest.mark.parametrize(
     "arguments", [_START, _MIGRATE, _UNPIN_HOST], ids=["start", "migrate", "unpin-host"]
 )
@@ -63,12 +98,13 @@ def test_a_store_that_cannot_be_reached_reads_the_same_reason_at_every_command(
     reached_at: Callable[[str], str],
     reason: str,
     database_url: str,
-    tmp_path: Path,
+    commands: _Commands,
 ) -> None:
-    ended = ended_presentator(arguments, reached_at(database_url), tmp_path)
+    commands.point_at(reached_at(database_url))
 
-    failed = _failed_line(ended)
-    assert (failed["reason"], failed["error_type"]) == (
+    ended = commands.ended_failed(arguments)
+
+    assert (ended.failed["reason"], ended.failed["error_type"]) == (
         reason,
         psycopg.OperationalError.__name__,
     )
@@ -134,18 +170,15 @@ class _Cancelled:
     ids=["start", "unpin-host"],
 )
 def test_a_statement_the_server_cancels_behind_a_lock_reads_statement_cancelled(
-    cancelled: _Cancelled,
-    environment: pytest.MonkeyPatch,
-    database_url: str,
-    tmp_path: Path,
+    cancelled: _Cancelled, database_url: str, commands: _Commands
 ) -> None:
-    with cancelled.locked(database_url, environment, tmp_path):
-        ended = ended_presentator(
-            cancelled.arguments, database_url, tmp_path, _SHORT_BOUNDS
-        )
+    commands.point_at(database_url)
+    for name, value in _SHORT_BOUNDS.items():
+        commands.environment.setenv(name, value)
+    with cancelled.locked(database_url, commands.environment, commands.directory):
+        ended = commands.ended_failed(cancelled.arguments)
 
-    failed = _failed_line(ended)
-    assert (failed["reason"], failed["error_type"]) == (
+    assert (ended.failed["reason"], ended.failed["error_type"]) == (
         "statement_cancelled",
         cancelled.driver_error.__name__,
     )

@@ -13,6 +13,7 @@ from sqlalchemy import Engine, text
 
 from presentator.host.main import Instance, served_by_host
 from presentator.host.polling import ChoreCode, Schedule
+from presentator.host.stopping_server import interrupt_ends_as_a_stop
 from tests.presentator.application.support.fakes import PATIENCE
 from tests.presentator.host.support.app_processes import serving_presentator
 from tests.support.lobby import a_settings
@@ -120,3 +121,23 @@ def test_a_sigint_ends_a_served_process_in_its_stop_line_alone(
     assert exit_code == -signal.SIGINT
     assert "process.stopped" in events
     assert "process.crashed" not in events
+
+
+def test_an_interrupt_ends_the_process_by_sigint_at_its_default_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The raise is recorded, not done: the signal would end the test run.
+    raised: list[tuple[int, object]] = []
+
+    def recorded(signal_number: int) -> None:
+        raised.append((signal_number, signal.getsignal(signal.SIGINT)))
+
+    monkeypatch.setattr(signal, "raise_signal", recorded)
+    handler = signal.getsignal(signal.SIGINT)
+    try:
+        with interrupt_ends_as_a_stop():
+            raise KeyboardInterrupt
+    finally:
+        signal.signal(signal.SIGINT, handler)
+
+    assert raised == [(signal.SIGINT, signal.SIG_DFL)]
