@@ -20,6 +20,7 @@ import {
   closeBrowser,
   createMediaObservation,
   createOverlayDeckServer,
+  endAnswerSessions,
   endHearings,
   installCoverageReport,
   installCspGuard,
@@ -125,6 +126,26 @@ describe('presenter controls', () => {
         'And the next question?',
       ])
       expect(await noAnswer.count(), 'a stream that ends with done shows no word').toBe(0)
+    } finally {
+      state.answerMode = 'audio'
+      await closeBrowser(browser)
+    }
+  }, 30_000)
+
+  it('CP14: stops the playing and the queued sound within one second of an answer the session ends, with no fault word', async () => {
+    state.answerMode = 'session-ends'
+    const { browser, page } = await openPresenter(1024)
+    const playedSounds = () => page.evaluate(() => (window as unknown as { __fakes: { played: unknown[] } }).__fakes.played.length)
+    try {
+      const ai = page.getByRole('switch', { name: en['controls.switch'] })
+      await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      await ai.click({ timeout: 2_000 })
+      await expect.poll(playedSounds).toBe(1)
+      endAnswerSessions()
+      await expect.poll(() => overlayFlag(page, 'speaking'), { timeout: 1_000 }).toBe(false)
+      // The fake stops the playing sound with an `ended`, which would start a queued one.
+      expect(await playedSounds(), 'neither the playing nor the queued sound plays').toBe(0)
+      expect(await page.locator('.copresenter .fault').count(), 'no fault word shows').toBe(0)
     } finally {
       state.answerMode = 'audio'
       await closeBrowser(browser)
