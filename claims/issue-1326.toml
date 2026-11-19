@@ -1,8 +1,0 @@
-claim_id = "85eb4e6ee4264dcc98d872a07a498438"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "f142ec0624f568efdf920bd415ff1b23fbd6f8e5"
-branch = "claude/issue-1326-a-string-no-json-route-can-store-answers"
-scope = ["frontend/src/lib/api", "src/presentator/api", "src/presentator/contracts", "tests/presentator/api", "tests/support"]
-opened_commit = "b42c496e348478477de49c60a397add4f2b73a19"
-whole_reason = "one validation owner for every JSON body route and its tests"
