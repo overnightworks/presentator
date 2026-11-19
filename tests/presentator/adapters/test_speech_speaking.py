@@ -15,7 +15,7 @@ from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
     SpeechTokens,
 )
-from presentator.contracts.voice import SampleLanguage
+from presentator.contracts.words import LANGUAGES, Language
 from tests.support.lobby import the_speech_voices
 from tests.support.log_lines import json_logged
 from tests.support.speech_service import (
@@ -40,8 +40,8 @@ SENTENCE = "Ein Satz, bitte."
 
 def speak_against(
     fake: FakeSpeechService,
-    language: SampleLanguage = SampleLanguage.GERMAN,
-    voices: Mapping[SampleLanguage, wire.VoiceId] | None = None,
+    language: Language = "de",
+    voices: Mapping[Language, wire.VoiceId] | None = None,
 ) -> bytes:
     async def scenario() -> bytes:
         async with a_loopback_server(fake.app()) as origin:
@@ -67,9 +67,9 @@ def test_the_request_names_the_format_and_exactly_the_sentence() -> None:
     assert body["input"] == SENTENCE
 
 
-@pytest.mark.parametrize("language", list(SampleLanguage))
+@pytest.mark.parametrize("language", list(LANGUAGES))
 def test_the_request_names_the_voice_of_the_answers_language_and_that_language(
-    language: SampleLanguage,
+    language: Language,
 ) -> None:
     fake = FakeSpeechService()
 
@@ -81,12 +81,12 @@ def test_the_request_names_the_voice_of_the_answers_language_and_that_language(
     assert body["language"] == language
 
 
-@pytest.mark.parametrize("language", list(SampleLanguage))
+@pytest.mark.parametrize("language", list(LANGUAGES))
 def test_a_voice_of_several_languages_speaks_the_answers_language(
-    language: SampleLanguage,
+    language: Language,
 ) -> None:
     fake = FakeSpeechService()
-    voices = dict.fromkeys(SampleLanguage, wire.VoiceId.RYAN)
+    voices = dict.fromkeys(LANGUAGES, wire.VoiceId.RYAN)
 
     assert speak_against(fake, language, voices) == A_WAV
 

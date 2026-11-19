@@ -27,7 +27,6 @@ from presentator.contracts.copresenter import (
     HearingTranscript,
 )
 from presentator.contracts.models import Role, User
-from presentator.contracts.voice import SampleLanguage
 from presentator.contracts.words import SOURCE_LANGUAGE
 from tests.presentator.application.support.ask_leases import (
     FakeAskLimiter,
@@ -337,12 +336,8 @@ def test_binary_hearing_forwards_pcm_and_returns_only_typed_transcripts() -> Non
     client = lobby.client
     private.speech.hearing.events = [
         HearingTranscript(text="erste Antwort", final=False),
-        HearingTranscript(
-            text="second answer", final=True, language=SampleLanguage.ENGLISH
-        ),
-        HearingTranscript(
-            text="zweite Antwort", final=True, language=SampleLanguage.GERMAN
-        ),
+        HearingTranscript(text="second answer", final=True, language="en"),
+        HearingTranscript(text="zweite Antwort", final=True, language="de"),
         HearingTranscript(text="leere Antwort", final=False),
     ]
     lobby.sign_in()
@@ -718,8 +713,8 @@ def test_busy_local_hearing_stops_before_more_pcm_after_authoritative_loss(
     lobby, private, _clock = a_copresenter_talk_host(users=users, delay=deadline.wait)
     client = lobby.client
     private.speech.hearing.events = [
-        HearingTranscript(text="eins", final=True, language=SampleLanguage.GERMAN),
-        HearingTranscript(text="zwei", final=True, language=SampleLanguage.GERMAN),
+        HearingTranscript(text="eins", final=True, language="de"),
+        HearingTranscript(text="zwei", final=True, language="de"),
     ]
     lobby.sign_in()
 

@@ -114,14 +114,14 @@ def test_ask_accepts_the_limit_and_the_offered_languages(
 
 
 @pytest.mark.parametrize(
-    ("deck_language", "heard_language", "reads_in", "answer_language", "named"),
+    ("deck_language", "heard_language", "reads_in", "answer_language"),
     [
-        ("de", "de", "en", "de", "German"),
-        ("de", "en", "de", "en", "English"),
-        ("en", "de", "en", "de", "German"),
-        ("en", "en", "de", "en", "English"),
-        ("de", None, "en", "en", "English"),
-        ("en", None, "de", "de", "German"),
+        ("de", "de", "en", "de"),
+        ("de", "en", "de", "en"),
+        ("en", "de", "en", "de"),
+        ("en", "en", "de", "en"),
+        ("de", None, "en", "en"),
+        ("en", None, "de", "de"),
     ],
 )
 def test_answer_text_and_voice_follow_the_heard_language_else_the_persons_not_the_decks(
@@ -129,7 +129,6 @@ def test_answer_text_and_voice_follow_the_heard_language_else_the_persons_not_th
     heard_language: str | None,
     reads_in: str,
     answer_language: str,
-    named: str,
 ) -> None:
     """CP12: heard, else the person's language of the controls, never the deck's."""
     lobby, private, _clock = a_copresenter_talk_host()
@@ -144,7 +143,7 @@ def test_answer_text_and_voice_follow_the_heard_language_else_the_persons_not_th
 
     assert response.status_code == HTTPStatus.OK
     (message,) = private.answers.messages
-    assert named in message
+    assert message.endswith(f"BCP 47 tag is {answer_language}.")
     assert [language for _text, language in private.speaking.spoken] == [
         answer_language
     ]

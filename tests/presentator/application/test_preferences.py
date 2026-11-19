@@ -70,11 +70,20 @@ def test_saving_the_instance_settings_leaves_a_persons_own_choice_alone() -> Non
     assert lobby.appearance_for(_PERSON, language="en").theme is ThemeChoice.LIGHT
 
 
+# DK3
 @pytest.mark.parametrize(
     ("tag", "offered"),
-    [("de", "de"), ("en", "en"), ("fr", SOURCE_LANGUAGE), ("de-AT", SOURCE_LANGUAGE)],
+    [
+        ("de", "de"),
+        ("en", "en"),
+        ("fr", SOURCE_LANGUAGE),
+        ("de-AT", SOURCE_LANGUAGE),
+        ("EN", SOURCE_LANGUAGE),
+        ("", SOURCE_LANGUAGE),
+        (None, SOURCE_LANGUAGE),
+    ],
 )
 def test_a_tag_is_its_offered_language_else_the_catalog_source(
-    tag: str, offered: str
+    tag: str | None, offered: str
 ) -> None:
     assert offered_language(tag) == offered

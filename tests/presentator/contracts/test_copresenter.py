@@ -12,17 +12,12 @@ from presentator.contracts.copresenter import (
     Question,
     SpeechTokens,
 )
-from presentator.contracts.voice import SampleLanguage
 
 
 def test_copresenter_values_are_closed_and_immutable() -> None:
-    question = Question(
-        said="Was ist wichtig?", slide=3, language=SampleLanguage.GERMAN
-    )
+    question = Question(said="Was ist wichtig?", slide=3, language="de")
     readiness = CoPresenterReadiness(local_hearing_ready=True)
-    assert question == Question(
-        said="Was ist wichtig?", slide=3, language=SampleLanguage.GERMAN
-    )
+    assert question == Question(said="Was ist wichtig?", slide=3, language="de")
     assert readiness.local_hearing_ready is True
     with pytest.raises(FrozenInstanceError):
         question.slide = 4  # type: ignore[misc]

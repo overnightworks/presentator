@@ -47,7 +47,7 @@ from presentator.contracts.copresenter import (
     SpeechTokens,
     SpeechTokenSource,
 )
-from presentator.contracts.voice import SampleLanguage
+from presentator.contracts.words import LANGUAGES, Language
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Mapping
@@ -75,17 +75,17 @@ _HELD_LIMIT_BYTES: Final = 2 * 1024 * 1024
 _HEARING_DEADLINE_SECONDS: Final = 4 * 60 * 60.0
 
 
-def voice_speaks(voice: VoiceId, language: SampleLanguage) -> bool:
+def voice_speaks(voice: VoiceId, language: Language) -> bool:
     """Whether the service's catalogue has `voice` speak `language`."""
-    return _client_language(language) in wire.VOICES[voice].languages
+    return any(spoken.value == language for spoken in wire.VOICES[voice].languages)
 
 
-def _client_language(language: SampleLanguage) -> wire.Language:
-    return wire.Language(language.value)
-
-
-def _sample_language(language: wire.Language) -> SampleLanguage:
-    return SampleLanguage(language.value)
+def _offered(tag: str) -> Language:
+    """The offered language `tag` names; any other tag is a fault of its sender."""
+    if tag in LANGUAGES:
+        return tag
+    message = f"{tag!r} is no offered language"
+    raise ValueError(message)
 
 
 class SpeechSpeaking:
@@ -95,7 +95,7 @@ class SpeechSpeaking:
         self,
         origin: str,
         *,
-        voices: Mapping[SampleLanguage, VoiceId],
+        voices: Mapping[Language, VoiceId],
         bounded_speak: Callable[..., SpeakOutcome] = speak,
     ) -> None:
         """Keep the service's origin and the voice of each language."""
@@ -105,7 +105,7 @@ class SpeechSpeaking:
 
     async def speak(self, text: str, language: str, tokens: SpeechTokens) -> bytes:
         """The sentence as one whole WAV, exactly as the service sent it."""
-        spoken = SampleLanguage(language)
+        spoken = _offered(language)
         with StepTimer(
             "speak.ended", _LOGGER, language=language, character_count=len(text)
         ) as step:
@@ -115,7 +115,7 @@ class SpeechSpeaking:
                     self._origin,
                     text,
                     self._voices[spoken],
-                    language=_client_language(spoken),
+                    language=wire.Language(spoken),
                     response_format=wire.ResponseFormat.WAV,
                     workload_token=tokens.workload,
                     person_token=tokens.person,
@@ -182,7 +182,7 @@ class SpeechHearing:
         self,
         origin: str,
         *,
-        voices: Mapping[SampleLanguage, VoiceId],
+        voices: Mapping[Language, VoiceId],
         bounded_health_fetch: Callable[..., HealthOutcome] = fetch_health,
         hearing_deadline_seconds: float = _HEARING_DEADLINE_SECONDS,
         opening_seconds: float = OPENING_SECONDS,
@@ -434,7 +434,7 @@ def _hearing_callbacks(
             HearingTranscript(
                 text=utterance.text,
                 final=True,
-                language=_sample_language(utterance.language),
+                language=_offered(utterance.language.value),
                 traceparent=utterance.traceparent,
             )
         )

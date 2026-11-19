@@ -7,7 +7,8 @@ from dataclasses import dataclass
 
 from presentator.application.copresenter_prompt import user_message
 from presentator.application.own_decks import OwnDecks
-from presentator.application.spoken_answer import spoken_events, voice_language_of
+from presentator.application.preferences import offered_language
+from presentator.application.spoken_answer import spoken_events
 from presentator.contracts.copresenter import (
     AccessRefusal,
     AnswerEvent,
@@ -22,7 +23,7 @@ from presentator.contracts.copresenter import (
     SpeechTokenSource,
 )
 from presentator.contracts.models import Role
-from presentator.contracts.voice import SampleLanguage
+from presentator.contracts.words import Language
 from presentator.ports.copresenter import (
     AgentAnswers,
     AskLimiter,
@@ -68,8 +69,8 @@ class CoPresenterUse:
             decks=self.decks, sources=self.sources, texts=self.texts
         ).asked_deck(slug, viewer=viewer)
 
-    async def deck_language(self, asked: AskedDeck) -> SampleLanguage:
-        """The language the deck's manifest names, German when it names none.
+    async def deck_language(self, asked: AskedDeck) -> Language:
+        """The offered language the deck's manifest names, else the fallback.
 
         Raises CoPresenterUnavailableError when its words cannot be read.
         """
@@ -78,7 +79,7 @@ class CoPresenterUse:
         )
         if deck_text is None:
             raise CoPresenterUnavailableError
-        return voice_language_of(deck_text.language)
+        return offered_language(deck_text.language)
 
     async def readiness(self) -> CoPresenterReadiness:
         """Return speech's narrow readiness report."""

@@ -52,7 +52,7 @@ from presentator.contracts.copresenter import (
     SpeechTokenSource,
 )
 from presentator.contracts.decks import MAXIMUM_NAME_BYTES
-from presentator.contracts.voice import SampleLanguage
+from presentator.contracts.words import SOURCE_LANGUAGE, Language
 
 if TYPE_CHECKING:
     from webauth.ports import SessionRecordStore
@@ -64,7 +64,6 @@ if TYPE_CHECKING:
         PreparedAsk,
     )
     from presentator.contracts.models import Role, User
-    from presentator.contracts.words import Language
 
 _CHECK_INTERVAL_SECONDS: Final = 0.5
 _POLICY_VIOLATION: Final = 1008
@@ -149,7 +148,7 @@ class AskRequest(BaseModel, extra="forbid"):
     said: str = Field(min_length=1, max_length=MAX_SAID_LENGTH)
     slide: int = Field(ge=1)
     deck: str = Field(default="", max_length=MAXIMUM_NAME_BYTES)
-    language: SampleLanguage | None = None
+    language: Language | None = None
 
     @field_validator("language", mode="before")
     @staticmethod
@@ -195,7 +194,7 @@ def add_copresenter_routes(
 def _hear_route(
     surface: CoPresenterSurface, admission: Admission, guard: _SessionGuard
 ) -> Callable[[WebSocket, str], Awaitable[None]]:
-    async def _hear(socket: WebSocket, language: str = "de") -> None:
+    async def _hear(socket: WebSocket, language: str = SOURCE_LANGUAGE) -> None:
         if (
             socket.headers.get("origin") != surface.browser_origin
             or any(key != "language" for key in socket.query_params)
@@ -245,7 +244,7 @@ def _who_route(
             return _unavailable()
         return JSONResponse(
             {
-                "language": language.value,
+                "language": language,
                 "interface_language": interface_language(request),
                 "speech": {"hearing": {"ready": ready.local_hearing_ready}},
             },
@@ -590,7 +589,7 @@ async def _relay(
             {
                 "text": transcript.text,
                 "final": transcript.final,
-                "language": transcript.language and transcript.language.value,
+                "language": transcript.language,
                 "traceparent": transcript.traceparent,
             }
         )

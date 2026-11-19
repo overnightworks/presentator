@@ -7,7 +7,7 @@ from typing import Final
 
 from presentator.contracts.decks import Deck, Source
 from presentator.contracts.models import Role
-from presentator.contracts.voice import SampleLanguage
+from presentator.contracts.words import Language
 
 
 class CoPresenterUnavailableError(RuntimeError):
@@ -94,7 +94,7 @@ class Question:
 
     said: str
     slide: int
-    language: SampleLanguage
+    language: Language
 
 
 BUSY_RETRY_SECONDS: Final = 1
@@ -164,7 +164,7 @@ class HearingTranscript:
 
     text: str
     final: bool
-    language: SampleLanguage | None = None
+    language: Language | None = None
     traceparent: str | None = None
 
     def __post_init__(self) -> None:

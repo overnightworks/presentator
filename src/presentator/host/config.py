@@ -6,11 +6,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from functools import cached_property
 from pathlib import Path
-from typing import Annotated, Final, Self
+from typing import Annotated, Final, Self, cast
 from urllib.parse import urlsplit
 
 from pydantic import (
     AfterValidator,
+    BeforeValidator,
     Field,
     SecretStr,
     ValidationError,
@@ -22,7 +23,7 @@ from webauth.proxies import TrustedProxies
 from presentator.adapters.postgres.engine import LONGEST_TIMEOUT
 from presentator.adapters.speech import VoiceId, voice_speaks
 from presentator.agent.settings import AgentSettings
-from presentator.contracts.voice import SampleLanguage
+from presentator.contracts.words import LANGUAGES, Language
 from presentator.host.environment import (
     ENVIRONMENT_PREFIX,
     ConfigurationError,
@@ -43,6 +44,7 @@ _INVALID_PORT: Final = "has an invalid port"
 _SCOPE_TOKEN: Final = re.compile(r"[\x21\x23-\x5B\x5D-\x7E]+")
 _EMPTY_CLIENT_ID: Final = "token_clients: names an empty client id"
 _VOICE_SPEAKS_OTHER: Final = "names a voice that does not speak it"
+_NO_VOICE: Final = "names no voice for this offered language"
 _ONE_HOSTNAME: Final = "is another hostname than public_origin"
 _POSTGRES_HOLDS: Final = (
     "together with build_timeout_seconds is a timeout Postgres holds"
@@ -53,6 +55,10 @@ _WORKER_REACHED: Final = (
 )
 
 _NESTED: Final = "__"
+_SHIPPED_VOICES: Final[Mapping[Language, VoiceId]] = {
+    "de": VoiceId.THORSTEN,
+    "en": VoiceId.NORMAN,
+}
 # Room for a dozen talks at the bound one build may leave.
 DEFAULT_BUILD_CACHE_BYTES: Final = 4 * 1024**3
 
@@ -94,6 +100,14 @@ def worker_endpoint(address: str) -> tuple[str, int]:
 
 def _a_worker_address(given: str) -> str:
     worker_endpoint(given)
+    return given
+
+
+def _over_the_shipped_voices(given: object) -> object:
+    """Lay the voices a setting names over the shipped ones, language by language."""
+    if isinstance(given, Mapping):
+        # The field's own validation judges each entry after this.
+        return {**_SHIPPED_VOICES, **cast("Mapping[str, object]", given)}
     return given
 
 
@@ -367,10 +381,12 @@ class Settings(
     # not https.
     speech_service: Annotated[str, AfterValidator(_one_http_origin)]
     speech_service_scope: Annotated[str, AfterValidator(_one_scope_token)]
-    # The voice an answer is spoken in, one per language, each a catalogue voice
-    # that speaks that language.
-    speech_voice_de: VoiceId = VoiceId.THORSTEN
-    speech_voice_en: VoiceId = VoiceId.NORMAN
+    # The voice an answer is spoken in, by the offered language of the answer:
+    # each a catalogue voice that speaks that language. An entry set here takes
+    # the place of the shipped one; every offered language needs one.
+    speech_voices: Annotated[
+        Mapping[Language, VoiceId], BeforeValidator(_over_the_shipped_voices)
+    ] = _SHIPPED_VOICES
     # Empty: the client address is the ASGI peer. A list is the peers whose
     # X-Forwarded-For this instance believes.
     trusted_proxies: Annotated[str, AfterValidator(_a_proxy_list)] = ""
@@ -425,19 +441,14 @@ class Settings(
             return frozenset()
         return frozenset(_split_client_ids(self.token_clients))
 
-    def speech_voices(self) -> Mapping[SampleLanguage, VoiceId]:
-        """The voice an answer is spoken in, by the language of the answer."""
-        return {
-            SampleLanguage.GERMAN: self.speech_voice_de,
-            SampleLanguage.ENGLISH: self.speech_voice_en,
-        }
-
     @model_validator(mode="after")
     def _voices_speak_their_language(self) -> Self:
-        for language, voice in self.speech_voices().items():
-            if not voice_speaks(voice, language):
-                field = f"speech_voice_{language.value}"
-                raise _FieldRefusedError(_VOICE_SPEAKS_OTHER, field=field)
+        for language in LANGUAGES:
+            voice = self.speech_voices.get(language)
+            if voice is None or not voice_speaks(voice, language):
+                field = f"speech_voices{_NESTED}{language}"
+                rule = _NO_VOICE if voice is None else _VOICE_SPEAKS_OTHER
+                raise _FieldRefusedError(rule, field=field)
         return self
 
     @model_validator(mode="after")
