@@ -157,10 +157,8 @@ class _HowItWent:
     in_time: bool
 
 
-def slidev_arguments(
-    kind: StepKind, *, place: BuildPlace, slug: str
-) -> tuple[str, ...]:
-    """The arguments Slidev is given for one step of a deck's build."""
+def slidev_command(kind: StepKind, *, place: BuildPlace, slug: str) -> tuple[str, ...]:
+    """The command line of one step of a deck's build, wherever it is run."""
     entry = str(place.here / DECK_DIRECTORY / SLIDES_FILE)
     written = place.here / OUTPUT_DIRECTORY
     flags = {
@@ -172,7 +170,7 @@ def slidev_arguments(
         ),
         StepKind.EXPORT: ("--output", str(written / PDF_FILE)),
     }
-    return (entry, *flags[kind])
+    return (_TOOLCHAIN, "exec", _SLIDEV, kind, entry, *flags[kind])
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -187,7 +185,6 @@ class BuildStep:
     place: BuildPlace
     slug: str
     name: StepKind
-    arguments: tuple[str, ...]
     # Asked by a runner that writes into out/ itself, while the step runs and
     # when it ends: a build that has already written more than it may leave is
     # stopped there, because by the time it ends this machine is full. It
@@ -227,7 +224,7 @@ class HostToolchain:
     def ran(self, step: BuildStep) -> BuildFailure | None:
         """Run that step out of this machine's own toolchain project."""
         return _what_a_step_said(
-            (_TOOLCHAIN, "exec", _SLIDEV, step.name, *step.arguments),
+            slidev_command(step.name, place=step.place, slug=step.slug),
             step=step,
             how=_HowItIsRun(
                 in_directory=self.project,
@@ -518,7 +515,6 @@ class SlidevBuilds:
                 place=place,
                 slug=deck.slug,
                 name=kind,
-                arguments=slidev_arguments(kind, place=place, slug=deck.slug),
                 watched=lambda: self._more_than_it_may_leave(place, line),
                 line=line,
             ),
