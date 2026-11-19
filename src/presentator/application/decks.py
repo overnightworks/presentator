@@ -347,19 +347,18 @@ class Decks:
     ) -> SourceRemoval | SourceRemovalRefused | SourceRemovalStale | None:
         """Delete that source, its decks, its runs, and everything they built.
 
-        Waits for a refresh under way, in this process or another, so nothing of
-        this source is still building when its directories go (R1); a refresh
-        that outlasts the build bound raises `RefreshOwnershipTimedOutError` and
-        deletes nothing. The whole removal runs fenced: a process that lost the
-        refresh meanwhile raises `RefreshOwnershipLostError` before it deletes
-        a file, and none takes the refresh over until the removal ended. It
-        first makes sure the link to the other processes works. Name and
-        counts are read inside the lock: a source removed meanwhile is
-        unknown, and changed counts are handed back rather than deleted under a
+        Waits for a refresh under way, in this process or another, so nothing of this
+        source is still building when its directories go (R1); a refresh that outlasts
+        the build bound raises `RefreshOwnershipTimedOutError` and deletes nothing. The
+        whole removal runs fenced: a process that lost the refresh meanwhile raises
+        `RefreshOwnershipLostError` before it deletes a file, and none takes the refresh
+        over until the removal ended. It first replaces a lost link to the other
+        processes. Name and counts are read inside the lock: a source removed meanwhile
+        is unknown, and changed counts are handed back rather than deleted under a
         number nobody confirmed. Disk and store go first: if the mirror or a run
-        survives, no row is deleted and the refusal names what stayed, so the
-        source stays taken rather than a leftover becoming an address a later
-        add reopens with a new secret (R3); a clean disk frees the URL (R2).
+        survives, no row is deleted and the refusal names what stayed, so the source
+        stays taken rather than a leftover becoming an address a later add reopens with
+        a new secret (R3); a clean disk frees the URL (R2).
         """
         with self.one_at_a_time:
             self.ownership.recover()
@@ -689,12 +688,10 @@ class Decks:
     ) -> Answer:
         """Run that work, or answer `busy` while another refresh holds the lock.
 
-        The lock of this process is taken first, so the one connection to the
-        other processes is never used by two refreshes at once, and then that
-        connection is made sure to work, so a lost one is replaced at once
-        rather than at the next tick. Every turn drops the mirrors on this disk
-        that no source row names, and a process turned away by another drops
-        the copies of builds no row names.
+        The lock of this process is taken first, so the one connection to the other
+        processes is never used by two refreshes at once; a lost one is then replaced,
+        not left for the next tick. Every turn drops the mirrors on this disk no source
+        row names; a process turned away by another drops the build copies no row names.
         """
         if not self.one_at_a_time.acquire(blocking=False):
             return busy
