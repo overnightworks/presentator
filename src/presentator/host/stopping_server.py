@@ -1,7 +1,7 @@
 """The uvicorn server that marks a stop as begun the moment its signal arrives.
 
-It also owns the process's JSON log lines and the one line a failed start
-ends in.
+It also owns the process's JSON log lines, the one line a failed start
+ends in and the one line a stop ends in.
 """
 
 import logging
@@ -28,9 +28,10 @@ _LOG_LEVEL: Final = "LOG_LEVEL"
 
 
 class ServerEvent(StrEnum):
-    """The line a start refused by its configuration or its database ends in."""
+    """The lines a process ends in: a refused start, or a stop."""
 
     PROCESS_FAILED = "process.failed"
+    PROCESS_STOPPED = "process.stopped"
 
 
 class ServerReason(StrEnum):
@@ -68,18 +69,40 @@ def end_failed(reason: RefusalReason | ServerReason, **codes: str) -> NoReturn:
     raise SystemExit(1) from None
 
 
+class StopLine:
+    """The `process.stopped` line a process ends in, written once at most.
+
+    The server writes it once it has stopped serving; an interrupt writes it
+    wherever it lands, so a stop before serving or after it ends in one line.
+    """
+
+    def __init__(self) -> None:
+        """A line not written yet."""
+        self._written = False
+
+    def write(self) -> None:
+        """Say the process stopped, unless it said so already."""
+        if self._written:
+            return
+        self._written = True
+        _log.info(ServerEvent.PROCESS_STOPPED)
+
+
 @contextmanager
-def interrupt_ends_as_a_stop() -> Generator[None]:
+def interrupt_ends_as_a_stop() -> Generator[StopLine]:
     """End the process by SIGINT itself when one interrupts it, never as a crash.
 
-    uvicorn raises the signal that stopped it again once serving returns, and
-    Python turns a SIGINT into a KeyboardInterrupt, whose crash line would
-    follow the stop line. The default action ends the process as the signal
-    does, as a SIGTERM's does.
+    The block's stop line is written first, unless the server wrote it: uvicorn
+    raises the signal that stopped it again once serving returns, and Python
+    turns a SIGINT into a KeyboardInterrupt, whose crash line would follow the
+    stop line. The default action ends the process as the signal does, as a
+    SIGTERM's does, which a shell or a container runtime reports as 130.
     """
+    stop_line = StopLine()
     try:
-        yield
+        yield stop_line
     except KeyboardInterrupt:
+        stop_line.write()
         sys.stdout.flush()
         sys.stderr.flush()
         signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -96,10 +119,16 @@ class StoppingServer(uvicorn.Server):
     no ready line.
     """
 
-    def __init__(self, config: uvicorn.Config, stopping: Stopping) -> None:
-        """Serve `config`, marking `stopping` when a signal ends the server."""
+    def __init__(
+        self, config: uvicorn.Config, stopping: Stopping, stop_line: StopLine
+    ) -> None:
+        """Serve `config`, marking `stopping` when a signal ends the server.
+
+        Once it has stopped, it writes `stop_line`.
+        """
         super().__init__(config)
         self._stopping = stopping
+        self._stop_line = stop_line
 
     @override
     async def startup(self, sockets: list[socket.socket] | None = None) -> None:
@@ -117,7 +146,7 @@ class StoppingServer(uvicorn.Server):
         line after `serve`.
         """
         await super().shutdown(sockets)
-        _log.info("process.stopped")
+        self._stop_line.write()
 
     @override
     def handle_exit(self, sig: int, frame: FrameType | None) -> None:

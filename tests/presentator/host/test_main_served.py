@@ -9,6 +9,7 @@ from logline import RequestLineMiddleware
 
 from presentator.api.health import Stopping
 from presentator.host import main
+from presentator.host.stopping_server import StopLine
 from tests.support.lobby import A_BROWSERS_ADDRESS, A_BROWSERS_HEADERS
 
 pytestmark = pytest.mark.usefixtures("redis_environment", "served_database")
@@ -28,7 +29,10 @@ def served_by_main(environment: pytest.MonkeyPatch, json_logging: None) -> Serve
     stoppings: list[Stopping] = []
 
     class ServerThatOnlyRecordsWhatItGot:
-        def __init__(self, config: uvicorn.Config, stopping: Stopping) -> None:
+        def __init__(
+            self, config: uvicorn.Config, stopping: Stopping, stop_line: StopLine
+        ) -> None:
+            del stop_line
             assert isinstance(config.app, RequestLineMiddleware)
             configs.append(config)
             stoppings.append(stopping)

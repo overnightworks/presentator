@@ -126,6 +126,7 @@ from presentator.host.oidc import (
 from presentator.host.polling import ChoreCode, Schedule
 from presentator.host.stopping_server import (
     ServerReason,
+    StopLine,
     StoppingServer,
     configure_logging,
     end_failed,
@@ -710,11 +711,12 @@ def main(
 
     Each runs on the configuration the environment carries. A refused
     configuration, or a store fault, ends any of them in one line and exit
-    status 1; a SIGINT ends it as a stop.
+    status 1; a SIGINT, at any point, ends it as a stop in one
+    `process.stopped` line.
     """
     configure_logging(SERVICE_NAME)
     cap_alembic_logging()
-    with interrupt_ends_as_a_stop():
+    with interrupt_ends_as_a_stop() as stop_line:
         try:
             asked = command_line().parse_args(arguments)
             if asked.command == MIGRATE_COMMAND:
@@ -740,7 +742,7 @@ def main(
             end_failed(
                 ServerReason.CONFIGURATION_REFUSED, setting=",".join(refused.variables)
             )
-        asyncio.run(_serve(instance, settings))
+        asyncio.run(_serve(instance, settings, stop_line))
 
 
 def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddleware:
@@ -788,9 +790,9 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
     )
 
 
-async def _serve(instance: Instance, settings: Settings) -> None:
-    """Serve the instance until a signal stops it."""
+async def _serve(instance: Instance, settings: Settings, stop_line: StopLine) -> None:
+    """Serve the instance until a signal stops it, then write `stop_line`."""
     served = served_config(
         served_by_host(instance, settings), host=settings.host, port=settings.port
     )
-    await StoppingServer(served, instance.stopping).serve()
+    await StoppingServer(served, instance.stopping, stop_line).serve()
