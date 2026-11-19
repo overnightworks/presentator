@@ -403,8 +403,8 @@ function enqueueWav(b64) {
   const playback = player.play(bytes.buffer)
   handedOver.add(playback)
   speaking.value = true
-  void playback.started.then((state) => {
-    if (state === 'playing' && handedOver.has(playback)) {
+  void playback.started.then((start) => {
+    if (start.kind === 'playing' && handedOver.has(playback)) {
       playingSound = playback
       playing.value = true
     }
