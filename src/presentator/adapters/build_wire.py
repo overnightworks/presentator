@@ -94,6 +94,7 @@ class HelloRefusedError(WireRefusedError):
     """The peer of a keyed hello did not prove that it holds the key."""
 
     def __init__(self, fault: HelloFault) -> None:
+        """A refusal for the fault, which names its class and never the key."""
         super().__init__(fault)
         self.fault = fault
 
