@@ -110,6 +110,22 @@ def staging_of(step: BuildStep) -> Path:
 
 
 @dataclass
+class MovedClock:
+    """The client's monotonic clock, which only the test moves.
+
+    With `per_read`, every read moves it on by that much after answering.
+    """
+
+    seconds: float = 0.0
+    per_read: float = 0.0
+
+    def __call__(self) -> float:
+        now = self.seconds
+        self.seconds += self.per_read
+        return now
+
+
+@dataclass
 class Seen:
     """What the fake worker saw of its clients."""
 

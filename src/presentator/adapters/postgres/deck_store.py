@@ -16,11 +16,6 @@ from presentator.adapters.deck_store import (
     toolchain_column,
 )
 from presentator.adapters.postgres.engine import in_utc
-from presentator.adapters.postgres.locks import (
-    LockClass,
-    hold_until_transaction_ends,
-    lock_of,
-)
 from presentator.adapters.postgres.refresh_owner import RefreshFence, fenced_write
 from presentator.contracts.decks import Build, BuildAttempt, Deck
 
@@ -80,11 +75,9 @@ class PostgresDeckStore:
     """The `decks` table: a deck's row, its build and its last attempt.
 
     The slug is the primary key, so two processes writing one slug from two
-    sources get one winner and one refusal. Marking a source's decks removed
-    reads and writes the same rows twice, so it takes the source's own advisory
-    lock first: two processes marking one source leave what one of them would
-    alone, where interleaved statements could leave a mixture of the two. Every
-    write is the refresh holder's and asks the fence first.
+    sources get one winner and one refusal. Every write is the refresh holder's
+    and asks the fence first, so no second process writes a source's decks
+    beside it.
     """
 
     engine: Engine
@@ -160,9 +153,6 @@ class PostgresDeckStore:
         carried = sorted(present)
         with self.engine.begin() as connection:
             self.fence.check(connection)
-            hold_until_transaction_ends(
-                connection, lock_of(LockClass.DECK_MARKS, source_id)
-            )
             connection.execute(
                 _MARK_REMOVED,
                 {"at": at, "source_id": source_id, "present": carried},

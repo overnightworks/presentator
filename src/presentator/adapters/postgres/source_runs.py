@@ -8,11 +8,6 @@ from sqlalchemy import Engine, text
 
 from presentator.adapters.decks import stored_source_run
 from presentator.adapters.postgres.engine import in_utc
-from presentator.adapters.postgres.locks import (
-    LockClass,
-    hold_until_transaction_ends,
-    lock_of,
-)
 from presentator.adapters.postgres.refresh_owner import RefreshFence, fenced_write
 from presentator.contracts.decks import RECENT_SOURCE_RUNS, SourceRun
 
@@ -39,11 +34,9 @@ _NEWEST_ONLY: Final = 1
 class PostgresSourceRunStore:
     """The `source_runs` table: the newest polls of each source, bounded.
 
-    Recording is an insert and a prune that must see each other's work, so it
-    takes the source's own advisory lock first: two processes recording the same
-    source's runs one after another keep exactly the bound, where two prunes
-    that cannot see each other's insert would keep one more. Every write is the
-    refresh holder's and asks the fence first.
+    Recording is an insert and a prune in one transaction. Every write is the
+    refresh holder's and asks the fence first, so no second process records runs
+    beside it.
     """
 
     engine: Engine
@@ -53,9 +46,6 @@ class PostgresSourceRunStore:
         """Add the run and drop older ones of that source past the bound."""
         with self.engine.begin() as connection:
             self.fence.check(connection)
-            hold_until_transaction_ends(
-                connection, lock_of(LockClass.SOURCE_RUNS, run.source_id)
-            )
             connection.execute(
                 _RECORD_RUN,
                 {
