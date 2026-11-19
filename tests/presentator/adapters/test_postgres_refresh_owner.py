@@ -4,7 +4,6 @@ import time
 from collections.abc import Callable, Generator
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
-from pathlib import PurePosixPath
 
 import pytest
 from sqlalchemy import Engine, text
@@ -25,6 +24,7 @@ from presentator.adapters.secrets import secret_box
 from presentator.contracts.decks import (
     Build,
     BuildRun,
+    RunLeft,
     SourceRun,
     SourceRunOutcome,
     ToolchainIdentity,
@@ -388,7 +388,7 @@ class _BuildRunnerWatched(FakeBuildRunner):
 
     during_cleanup: Callable[[], None] = lambda: None
 
-    def remove(self, run: BuildRun) -> PurePosixPath | None:
+    def remove(self, run: BuildRun) -> RunLeft | None:
         self.during_cleanup()
         return super().remove(run)
 

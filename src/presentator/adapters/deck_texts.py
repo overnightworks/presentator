@@ -27,6 +27,7 @@ from presentator.contracts.decks import (
     DECK_DIRECTORY,
     MANIFEST_FILE,
     SLIDES_FILE,
+    BuildStoreUnavailableError,
     Deck,
     Source,
 )
@@ -54,7 +55,10 @@ class BuiltDeckTexts:
         del source
         if deck.build is None:
             return None
-        run = self.cache.local(deck.build.run.name)
+        try:
+            run = self.cache.local(deck.build.run.name)
+        except BuildStoreUnavailableError as unanswered:
+            raise CoPresenterUnavailableError from unanswered
         if run is None:
             raise CoPresenterUnavailableError
         under = self.cache.root.absolute()

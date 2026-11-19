@@ -1523,7 +1523,7 @@ export interface operations {
                         /** Detail */
                         detail?: string | null;
                         /** @enum {string} */
-                        reason: "disk-leftover";
+                        reason: "disk-leftover" | "store-unavailable";
                         /** Status */
                         status: number;
                         /** Title */

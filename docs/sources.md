@@ -43,4 +43,7 @@ about sources stand in [configuration](configuration.md) and the runbook to
 - **SR13** A source's mirror is a cache on each process's own disk, rebuilt
   from the source by its next pull there. A removal deletes the mirror on the
   process that runs it; a mirror of the removed source on another process's
-  disk goes at that process's next source poll tick.
+  disk goes at that process's next source poll tick. A removal that leaves a
+  mirror or build directory on disk, or that the store refuses, deletes no row
+  and answers 500 with a problem whose `reason` is `disk-leftover` or
+  `store-unavailable`, with no `leftover` key.

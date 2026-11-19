@@ -32,7 +32,11 @@ from starlette.types import Receive, Scope, Send
 from presentator.api.admission import gated_person
 from presentator.api.deck_api import deck_routes
 from presentator.application.decks import Decks
-from presentator.contracts.decks import DECK_PATH, TALK_PAGE
+from presentator.contracts.decks import (
+    DECK_PATH,
+    TALK_PAGE,
+    BuildStoreUnavailableError,
+)
 
 _DECK_PAGE: Final = f"{DECK_PATH}/{{slug}}"
 _DECK_PDF: Final = f"{_DECK_PAGE}/pdf"
@@ -57,7 +61,10 @@ class _DeckPdf:
         the slug is looked up in, and a slug that could not be a file's name has
         already stopped that lookup.
         """
-        export = self.decks.exported_pdf(slug, viewer=gated_person(request).id)
+        try:
+            export = self.decks.exported_pdf(slug, viewer=gated_person(request).id)
+        except BuildStoreUnavailableError:
+            return Response(status_code=HTTPStatus.SERVICE_UNAVAILABLE)
         file = None if export is None else self.decks.open_build_file(export)
         if file is None:
             return self.not_found(request)
@@ -91,9 +98,15 @@ class _BuiltTalk:
         set_route(scope, _DECK_PAGE)
         viewer = gated_person(Request(scope)).id
         # The first ask in this process fetches the talk from the store.
-        directory = await run_in_threadpool(
-            self.decks.built_talk, scope["path_params"]["slug"], viewer=viewer
-        )
+        try:
+            directory = await run_in_threadpool(
+                self.decks.built_talk, scope["path_params"]["slug"], viewer=viewer
+            )
+        except BuildStoreUnavailableError:
+            await Response(status_code=HTTPStatus.SERVICE_UNAVAILABLE)(
+                scope, receive, send
+            )
+            return
         if directory is None:
             await Response(status_code=HTTPStatus.NOT_FOUND)(scope, receive, send)
             return
