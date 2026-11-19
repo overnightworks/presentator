@@ -692,7 +692,7 @@ requires-dist = [
     { name = "overnightworks-agents", extras = ["backend", "mcp-server"], git = "https://github.com/overnightworks/agents?rev=v0.59.0" },
     { name = "overnightworks-logline", url = "https://github.com/overnightworks/logline/releases/download/v1.4.0/overnightworks_logline-1.4.0-py3-none-any.whl" },
     { name = "overnightworks-speech-client", git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.22.0" },
-    { name = "overnightworks-webauth", extras = ["redis"], git = "https://github.com/overnightworks/webauth?rev=v0.40.1" },
+    { name = "overnightworks-webauth", extras = ["redis"], git = "https://github.com/overnightworks/webauth?rev=v0.41.1" },
     { name = "psycopg", extras = ["binary"], specifier = "==3.3.9" },
     { name = "pydantic-settings", specifier = "==2.16.2" },
     { name = "sqlalchemy", specifier = "==2.1.8" },
@@ -728,12 +728,13 @@ dependencies = [
 
 [[package]]
 name = "overnightworks-webauth"
-version = "0.40.1"
-source = { git = "https://github.com/overnightworks/webauth?rev=v0.40.1#afdd45531ee0bd1b23724a3daef86bb4f9dc42eb" }
+version = "0.41.1"
+source = { git = "https://github.com/overnightworks/webauth?rev=v0.41.1#9c14a806c194fdb1726f2b916c372675ac449827" }
 dependencies = [
     { name = "anyio" },
     { name = "cryptography" },
     { name = "fastapi" },
+    { name = "overnightworks-logline" },
     { name = "pydantic" },
     { name = "pyjwt", extra = ["crypto"] },
     { name = "starlette" },
