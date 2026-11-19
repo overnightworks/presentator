@@ -408,11 +408,10 @@ def test_a_refused_workload_grant_closes_4502_with_no_upgrade_and_logs_its_reaso
     "arrange",
     [
         the_refresh_token_is_revoked,
-        the_session_ends_during_the_grant,
         the_token_endpoint_goes_down,
         the_token_thread_fails,
     ],
-    ids=["revoked", "session-ended", "issuer-down", "thread-raises"],
+    ids=["revoked", "issuer-down", "thread-raises"],
 )
 def test_any_refused_token_read_closes_4502_with_no_upgrade(
     engine: Engine, arrange: Callable[[Hosts], None]
@@ -423,6 +422,42 @@ def test_any_refused_token_read_closes_4502_with_no_upgrade(
     assert heard.frames == []
     assert heard.closed_with == HopClose.SERVICE_FAILED
     assert not instance.service.upgrades
+
+
+def _the_session_ends_at_the_reopening(hosts: Hosts) -> None:
+    first_opening_refreshed = False
+
+    def end_at_the_reopening_refresh() -> None:
+        nonlocal first_opening_refreshed
+        if hosts.issuer.grant_types[-1] != "refresh_token":
+            return
+        if first_opening_refreshed:
+            delete_the_sessions(hosts)
+        first_opening_refreshed = True
+
+    hosts.issuer.during_token_request = end_at_the_reopening_refresh
+
+
+@pytest.mark.parametrize(
+    ("arrange", "upgrades"),
+    [
+        (the_session_ends_during_the_grant, 0),
+        (_the_session_ends_at_the_reopening, 1),
+    ],
+    ids=["first-read", "reopening"],
+)
+def test_a_session_that_ends_as_the_hearing_reads_its_tokens_closes_1000(
+    engine: Engine, arrange: Callable[[Hosts], None], upgrades: int
+) -> None:
+    service = FakeSpeechService(
+        realtime=one_after_another(draining(), sending(a_completed("Wieder da.")))
+    )
+    scenario = SpeechScenario(service=service, arrange=arrange)
+    with a_speech_instance(engine, scenario) as instance:
+        heard = hear_and_record(instance)
+
+    assert heard.closed_with == HopClose.NORMAL
+    assert len(service.upgrades) == upgrades
 
 
 def test_one_hearing_makes_one_refresh_grant_and_one_workload_grant(
@@ -637,8 +672,10 @@ def test_a_browser_that_leaves_during_the_token_read_sends_no_audio_and_logs_no_
 def test_a_hearing_shows_no_marker_in_any_log_frame_close_or_stored_row(
     engine: Engine, case: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    with a_speech_instance(engine, LEAK_HEARINGS[case]()) as instance:
+    leak = LEAK_HEARINGS[case]
+    with a_speech_instance(engine, leak.scenario()) as instance:
         heard = hear_and_record(instance)
+        assert heard.closed_with == leak.close
         assert_nothing_shows(
             instance,
             heard.logged,

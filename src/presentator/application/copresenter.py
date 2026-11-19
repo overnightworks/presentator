@@ -17,6 +17,7 @@ from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
     HearingTranscript,
     Question,
+    SessionEndedError,
     SpeechTokens,
     SpeechTokenSource,
 )
@@ -125,14 +126,16 @@ class CoPresenterUse:
         """The session's speech tokens, read now, for the route to hold while it hears.
 
         The source gives these for the first opening of the service and tokens read
-        afresh for each later one. Raises CoPresenterUnavailableError when they
-        cannot be had.
+        afresh for each later one. Raises SessionEndedError when the session has
+        ended, and CoPresenterUnavailableError when they cannot be had otherwise.
         """
         first = await self._read_tokens(session_id)
         return _OpeningTokens(first, lambda: self._read_tokens(session_id))
 
     async def _read_tokens(self, session_id: str) -> SpeechTokens:
         tokens = await self.person_access.speech_tokens_of(session_id)
+        if tokens is AccessRefusal.SESSION_ENDED:
+            raise SessionEndedError
         if isinstance(tokens, AccessRefusal):
             raise CoPresenterUnavailableError
         return tokens
@@ -149,9 +152,11 @@ class CoPresenterUse:
         """Hear for the person whose tokens these are until the hearing ends."""
         await self.speech.relay(browser, language, tokens, ended=ended, heard=heard)
 
-    async def refuse_hearing(self, browser: HearingSocket) -> None:
-        """Close the browser as a hearing the service cannot give."""
-        await self.speech.refuse(browser)
+    async def refuse_hearing(
+        self, browser: HearingSocket, unavailable: CoPresenterUnavailableError
+    ) -> None:
+        """Close the browser on a hearing its tokens could not be read for."""
+        await self.speech.refuse(browser, unavailable)
 
 
 @dataclass(slots=True)
