@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Literal
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx2 import Response as BrowserAnswer
 from sqlalchemy import Engine, text
@@ -82,6 +83,8 @@ class Scene:
     relying_party: OidcRelyingParty
     config: WebAuthConfig
     clock: FrozenClock
+    lobby_for_a_host: Callable[[], FastAPI]
+    """Another app over the same stores, for `served_by_host` to write the client."""
 
     def browser(self, *, raise_server_exceptions: bool = True) -> TestClient:
         return TestClient(
@@ -200,20 +203,28 @@ def a_scene(  # noqa: PLR0913
         realm=realm,
     )
     sessions = PostgresSessions(engine)
-    app, _ = a_lobby_app(
-        agent=an_agent_front(auth),
-        texts=texts,
-        people=people,
-        preferences=preferences,
-        signing_in=SigningIn(
-            sessions=sessions,
-            auth=auth,
-            decks=decks,
-        ),
-        admin_people=_admin_of(token_clients),
-    )
+
+    def lobby_app(trusted_proxies: str | None) -> FastAPI:
+        app, _ = a_lobby_app(
+            agent=an_agent_front(auth),
+            texts=texts,
+            people=people,
+            preferences=preferences,
+            signing_in=SigningIn(
+                sessions=sessions,
+                auth=auth,
+                decks=decks,
+            ),
+            admin_people=_admin_of(token_clients),
+            trusted_proxies=trusted_proxies,
+        )
+        return app
+
     lobby = a_browser_at(
-        app, people=people, base_url=A_BROWSERS_ADDRESS, headers=A_BROWSERS_HEADERS
+        lobby_app(""),
+        people=people,
+        base_url=A_BROWSERS_ADDRESS,
+        headers=A_BROWSERS_HEADERS,
     )
     return Scene(
         lobby=lobby,
@@ -225,6 +236,7 @@ def a_scene(  # noqa: PLR0913
         relying_party=auth.relying_party,
         config=auth.config,
         clock=people.clock,
+        lobby_for_a_host=lambda: lobby_app(None),
     )
 
 

@@ -47,7 +47,6 @@ from tests.support.lobby import (
     an_installed_auth,
     hand_over_session_cookies,
     put_a_built_deck,
-    with_the_client_address,
 )
 from tests.support.people import a_session_id, seed_user
 
@@ -229,18 +228,16 @@ def _talk_over(
     copresenter: SurfaceFactory | None,
 ) -> FastAPI:
     """The talk host, its co-presenter surface made over this instance's store."""
-    return with_the_client_address(
-        create_talk(
-            sessions=sessions,
-            decks=decks,
-            auth=talk_auth,
-            lobby_origin=A_BROWSERS_ADDRESS,
-            copresenter=(
-                None
-                if copresenter is None
-                else copresenter(decks_store, sessions, talk_auth)
-            ),
-        )
+    return create_talk(
+        sessions=sessions,
+        decks=decks,
+        auth=talk_auth,
+        lobby_origin=A_BROWSERS_ADDRESS,
+        copresenter=(
+            None
+            if copresenter is None
+            else copresenter(decks_store, sessions, talk_auth)
+        ),
     )
 
 
@@ -277,6 +274,7 @@ def two_hosts(
     lobby, _ = a_lobby_app(
         people=people,
         signing_in=SigningIn(sessions=sessions, auth=lobby_auth, decks=decks),
+        trusted_proxies=None,
     )
     talk = _talk_over(
         PostgresSessions(database), decks, decks_store, talk_auth, copresenter

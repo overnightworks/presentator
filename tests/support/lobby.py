@@ -580,11 +580,18 @@ def an_agent_front(auth: InstalledAuth) -> AgentFront:
     )
 
 
-def with_the_client_address(app: FastAPI, trusted_proxies: str = "") -> FastAPI:
-    """`app` with the writer the host composition puts around its stacks."""
-    app.add_middleware(
-        ClientAddressMiddleware, trusted_proxies=TrustedProxies.parse(trusted_proxies)
-    )
+def with_the_client_address(app: FastAPI, trusted_proxies: str | None) -> FastAPI:
+    """`app` with the writer the host composition puts around its stacks.
+
+    `None` leaves the writer to `served_by_host`, for an app a host composition
+    wraps: its writer overwrites any record an inner one made, so a second writer
+    would replace the host's proxy policy with the builder's.
+    """
+    if trusted_proxies is not None:
+        app.add_middleware(
+            ClientAddressMiddleware,
+            trusted_proxies=TrustedProxies.parse(trusted_proxies),
+        )
     return app
 
 
@@ -598,12 +605,13 @@ def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
     agent: AgentFront | None = None,
     texts: DeckTexts | None = None,
     shell: LobbyShell = LOBBY_SHELL,
-    trusted_proxies: str = "",
+    trusted_proxies: str | None = "",
 ) -> tuple[FastAPI, FrozenClock]:
     """The whole lobby wiring, so a test that needs two clients shares one app.
 
     The app carries the client-address writer the host composition adds, for the
-    proxy network `trusted_proxies` names.
+    proxy network `trusted_proxies` names; `None` leaves it to the host that
+    serves the app.
     """
     crowd = a_crowd() if people is None else people
     clock = crowd.clock
@@ -640,7 +648,7 @@ def a_talk_app(
     *,
     people: FakePeople,
     copresenter: CoPresenterSurface | None = None,
-    trusted_proxies: str = "",
+    trusted_proxies: str | None = "",
 ) -> FastAPI:
     """The whole talk host over the lobby's people, with the co-presenter it serves."""
     clock = people.clock
