@@ -6,6 +6,7 @@ import subprocess
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -114,24 +115,36 @@ def interrupt_handlers_seen() -> Iterator[list[object]]:
 
 
 @pytest.mark.parametrize(
-    ("console_script", "program"),
+    "script_and_program",
     [
-        pytest.param(console.presentator, main, id="presentator"),
-        pytest.param(console.presentator_worker, worker, id="presentator-worker"),
+        pytest.param((console.presentator, main), id="presentator"),
+        pytest.param((console.presentator_worker, worker), id="presentator-worker"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("inherited", "seen"),
+    [
+        pytest.param(signal.default_int_handler, signal.SIG_DFL, id="interrupting"),
+        pytest.param(signal.SIG_IGN, signal.SIG_IGN, id="ignored by the parent"),
     ],
 )
 def test_a_console_script_runs_its_program_with_sigint_at_its_default_action(
     monkeypatch: pytest.MonkeyPatch,
     interrupt_handlers_seen: list[object],
-    console_script: Callable[[], object],
-    program: object,
+    *,
+    script_and_program: tuple[Callable[[], object], ModuleType],
+    inherited: signal.Handlers | Callable[..., object],
+    seen: signal.Handlers,
 ) -> None:
+    console_script, program = script_and_program
+
     def program_main() -> int:
         interrupt_handlers_seen.append(signal.getsignal(signal.SIGINT))
         return 0
 
     monkeypatch.setattr(program, "main", program_main)
+    signal.signal(signal.SIGINT, inherited)
 
     console_script()
 
-    assert interrupt_handlers_seen == [signal.SIG_DFL]
+    assert interrupt_handlers_seen == [seen]

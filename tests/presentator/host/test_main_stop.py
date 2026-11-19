@@ -301,6 +301,19 @@ def test_an_interrupt_ends_in_one_stop_line_wherever_it_lands(
 
 
 @pytest.mark.parametrize("stop_signal", _STOP_SIGNALS)
+@pytest.mark.usefixtures("raised_signals")
+def test_a_stop_signal_the_parent_ignores_stays_ignored_in_the_block(
+    stop_signal: signal.Signals,
+) -> None:
+    signal.signal(stop_signal, signal.SIG_IGN)
+
+    with signals_end_as_a_stop():
+        handler_in_the_block = signal.getsignal(stop_signal)
+
+    assert handler_in_the_block == signal.SIG_IGN
+
+
+@pytest.mark.parametrize("stop_signal", _STOP_SIGNALS)
 def test_the_stop_signals_get_their_handlers_back_after_the_block(
     stop_signal: signal.Signals,
 ) -> None:

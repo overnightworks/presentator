@@ -21,7 +21,9 @@ else:
 
 
 def _interrupt_at_its_default_action() -> None:
-    _signal.signal(_signal.SIGINT, _signal.SIG_DFL)
+    """Give SIGINT its default action, unless the parent process ignores it."""
+    if _signal.getsignal(_signal.SIGINT) != _signal.SIG_IGN:
+        _signal.signal(_signal.SIGINT, _signal.SIG_DFL)
 
 
 def presentator() -> None:

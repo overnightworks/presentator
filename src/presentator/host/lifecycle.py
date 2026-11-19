@@ -67,7 +67,8 @@ def signals_end_as_a_stop() -> Generator[StopLine]:
     raises the signal that stopped it again once serving returns, and Python
     turns a SIGINT into a KeyboardInterrupt, whose crash line would follow the
     stop line. The default action ends the process as the signal does, which a
-    shell or a container runtime reports as 130 or 143. After the block each
+    shell or a container runtime reports as 130 or 143. A signal the parent
+    process ignores stays ignored. After the block each
     signal has its handler from before back, which a console script set to the
     silent default action before its program's imports.
     """
@@ -83,8 +84,9 @@ def signals_end_as_a_stop() -> Generator[StopLine]:
     handlers = {number: signal.getsignal(number) for number in _STOP_SIGNALS}
     try:
         try:
-            for number in _STOP_SIGNALS:
-                signal.signal(number, interrupt)
+            for number, handler in handlers.items():
+                if handler != signal.SIG_IGN:
+                    signal.signal(number, interrupt)
             yield stop_line
         finally:
             for number, handler in handlers.items():
