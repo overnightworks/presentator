@@ -490,8 +490,10 @@ def test_an_audit_record_reaches_stdout_as_json_after_the_hosts_logging_setup(
 
     monkeypatch.setattr(main, "build_instance", an_instance_without_a_server)
 
-    async def without_serving(instance: SimpleNamespace, settings: object) -> None:
-        del instance, settings
+    async def without_serving(
+        instance: SimpleNamespace, settings: object, stop_line: object
+    ) -> None:
+        del instance, settings, stop_line
 
     monkeypatch.setattr(main, "_serve", without_serving)
 
