@@ -1,0 +1,8 @@
+claim_id = "dce9be697aa6432ba5525fb8537d2d7e"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "b5726cec762b78baddab00734ee834e5cf18129c"
+branch = "claude/issue-1182-the-overlay-takes-speech-browser-v0-21-0"
+scope = ["slidev", "slidev/package.json", "slidev/pnpm-lock.yaml"]
+opened_commit = "4f94d4c891a9ed9c893f34e9c051940dca8e4dea"
+whole_reason = "the item's own files across CI, scripts and its tests"
