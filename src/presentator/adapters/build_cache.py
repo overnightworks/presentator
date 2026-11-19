@@ -50,7 +50,10 @@ class RunObjects(Protocol):
 
     @abstractmethod
     def fetch(self, run: str, *, archive: Path, pdf: Path) -> bool:
-        """Write that run's archive and PDF to these files, or say it could not."""
+        """Write that run's archive and PDF to these files, or say the store has none.
+
+        A store that does not answer raises `BuildStoreUnavailableError`.
+        """
 
     @abstractmethod
     def names(self) -> frozenset[str] | None:
@@ -99,7 +102,8 @@ class BuildCache:
         """That run's directory on this disk, fetched first where it is not here.
 
         Asking counts as serving it, so it is the last the bound takes. Nothing
-        while the store holds no such run or does not answer.
+        while the store holds no such run; a store that does not answer raises
+        `BuildStoreUnavailableError`.
         """
         run = self.root / name
         if not run.is_dir() and not self._fetched(name):

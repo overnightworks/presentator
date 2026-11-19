@@ -476,6 +476,13 @@ class RunLeft:
     in_store: bool
 
 
+class BuildStoreUnavailableError(Exception):
+    """The store did not answer for a run this process holds no copy of.
+
+    The run may well exist: what is asked for is unavailable, not missing.
+    """
+
+
 class UnplacedBuildError(ValueError):
     """A stored build whose run is no single name under the builds root."""
 

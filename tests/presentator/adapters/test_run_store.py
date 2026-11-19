@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from presentator.adapters.run_store import StoredRuns, object_store_client
+from presentator.contracts.decks import BuildStoreUnavailableError
 from tests.support.log_lines import events_of, json_logged
 from tests.support.object_store import ObjectStore, no_object_store_environment
 
@@ -61,14 +62,12 @@ def test_a_store_that_refuses_the_key_fails_every_call_with_one_line_each(
     archive, pdf = a_run(tmp_path / "put", "run-1")
 
     with json_logged(capsys) as logged:
-        answers = (
-            runs.put("run-1", archive=archive, pdf=pdf),
-            runs.fetch("run-1", archive=tmp_path / "a.tar", pdf=tmp_path / "a.pdf"),
-            runs.names(),
-            runs.delete("run-1"),
-        )
+        put = runs.put("run-1", archive=archive, pdf=pdf)
+        with pytest.raises(BuildStoreUnavailableError):
+            runs.fetch("run-1", archive=tmp_path / "a.tar", pdf=tmp_path / "a.pdf")
+        answers = (put, runs.names(), runs.delete("run-1"))
 
-    assert answers == (False, False, None, False)
+    assert answers == (False, None, False)
     failed = events_of(logged, _FAILED)
     assert [line["operation"] for line in failed] == ["put", "fetch", "list", "delete"]
 
@@ -83,7 +82,7 @@ def test_a_client_reaches_the_store_its_environment_names_when_it_is_made(
     assert refused.names() is None
 
 
-def test_a_key_the_store_does_not_know_fails_a_fetch_with_one_line(
+def test_a_key_the_store_does_not_know_makes_a_fetch_unavailable_with_one_line(
     tmp_path: Path,
     object_store: ObjectStore,
     bare_environment: pytest.MonkeyPatch,
@@ -98,12 +97,9 @@ def test_a_key_the_store_does_not_know_fails_a_fetch_with_one_line(
     bare_environment.setenv("AWS_SHARED_CREDENTIALS_FILE", str(unknown))
     refused = StoredRuns(client=object_store_client(), bucket=object_store.runs.bucket)
 
-    with json_logged(capsys) as logged:
-        fetched = refused.fetch(
-            "run-1", archive=tmp_path / "talk.tar", pdf=tmp_path / "deck.pdf"
-        )
+    with json_logged(capsys) as logged, pytest.raises(BuildStoreUnavailableError):
+        refused.fetch("run-1", archive=tmp_path / "talk.tar", pdf=tmp_path / "deck.pdf")
 
-    assert not fetched
     assert [line["operation"] for line in events_of(logged, _FAILED)] == ["fetch"]
 
 

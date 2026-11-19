@@ -331,8 +331,8 @@ class BuildRunner(Protocol):
     def kept(self, build: Build) -> Artefacts | None:
         """That build's talk and PDF on this process's disk, fetched where missing.
 
-        Nothing is a run the store does not hold, or a store that does not
-        answer while this process holds no copy.
+        Nothing is a run the store does not hold; a store that does not answer
+        while this process holds no copy raises `BuildStoreUnavailableError`.
         """
 
     @abstractmethod

@@ -19,6 +19,7 @@ from presentator.contracts.decks import (
     SLIDES_FILE,
     TALK_DIRECTORY,
     BuildRun,
+    BuildStoreUnavailableError,
     RunLeft,
 )
 from tests.presentator.adapters.support.build_support import (
@@ -106,7 +107,8 @@ def test_a_store_that_does_not_answer_serves_what_the_disk_holds_and_nothing_els
     store.answering = False
 
     assert serving.local("run-1") == tmp_path / "b" / "run-1"
-    assert a_cache(tmp_path / "c", store).local("run-1") is None
+    with pytest.raises(BuildStoreUnavailableError):
+        a_cache(tmp_path / "c", store).local("run-1")
 
 
 def test_a_run_the_store_did_not_take_is_not_kept(

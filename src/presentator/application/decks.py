@@ -625,7 +625,11 @@ class Decks:
         )
 
     def built_talk(self, slug: str, *, viewer: str) -> Path | None:
-        """The directory the viewer's deck's talk is delivered from, while built."""
+        """The directory the viewer's deck's talk is delivered from, while built.
+
+        A store that does not answer for a run this process holds no copy of
+        raises `BuildStoreUnavailableError`, here and for the PDF.
+        """
         kept = self._kept(slug, viewer)
         return None if kept is None else kept.directory
 
