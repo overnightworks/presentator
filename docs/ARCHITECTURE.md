@@ -133,9 +133,9 @@ Postgres). JSON lives under `/api/` as typed models. The one signed-out path is 
 Problems follow RFC 9457 with `tag:` URI types, as an https address breaks when its page moves.
 
 **Logging.** logline owns it, configured first in each process: every line is one JSON object. One line per HTTP
-request names the route template, never the path, with `sub` and the client address from webauth's decisions
-(`api/request_line.py`). Every other line is a literal `<noun>.<verb_past>` event of ids, counts and codes: the web
-writes `process.started`, `process.ready`, `process.stopped` and one `store_connection.ended` per store, the worker
+request names the route template, never the path, with `sub` and the client address, which webauth sets (its
+gates and sign-in callback the person, its `ClientAddressMiddleware` the address). Every other line is a literal
+`<noun>.<verb_past>` event of ids, counts and codes: the web writes `process.started`, `process.ready`, `process.stopped` and one `store_connection.ended` per store, the worker
 the same process lines with one `connection.ended` per connection and one `wire_phase.ended` per phase, and a
 co-presenter ask `access_token.ended`, `speak.ended` and `answer.ended` (with `first_output_ms`) under the request's
 trace, which the overlay takes from the heard turn; a hearing writes `hearing_session.ended` and one
