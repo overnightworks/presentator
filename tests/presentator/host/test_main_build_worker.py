@@ -1,6 +1,7 @@
 """The composition root builds a deck through the runner it is told to."""
 
 import asyncio
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -58,6 +59,24 @@ def test_an_instance_starts_with_no_worker_answering_and_holds_the_workers_bound
     assert toolchain.megabytes == OUTPUT_MEGABYTES
     assert toolchain.reply_bound_seconds == emergency_end(0.0, BUILD_TIMEOUT_SECONDS)
     assert KEY.decode() not in repr(toolchain)
+
+
+def test_the_instances_worker_client_reads_and_waits_on_the_process_monotonic_clock(
+    environment: pytest.MonkeyPatch, key_file: Path
+) -> None:
+    a_worker_run(environment, key_file)
+    settings = load_settings()
+    client = main.the_build_worker(settings, bound=main.build_bound_of(settings))
+    client_time = client.time
+    a_short_wait = 0.001
+
+    before = time.monotonic()
+    read = client_time.now()
+    after = time.monotonic()
+    client_time.wait(a_short_wait)
+
+    assert before <= read <= after
+    assert time.monotonic() - after >= a_short_wait
 
 
 @pytest.mark.parametrize(
