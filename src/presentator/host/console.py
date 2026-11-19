@@ -11,9 +11,10 @@ script owns SIGINT is the import of its two parent packages' docstrings.
 """
 
 # `signal` imports `enum`, and `typing` costs more: windows of milliseconds a
-# SIGINT lands in. `_signal`, which `signal` wraps, has no stub of its own.
+# SIGINT lands in. `_signal`, which `signal` wraps, has no stub of its own, so
+# pyright reads it as `signal`; the scanners read this local flag as constant.
 TYPE_CHECKING = False
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # NOSONAR(S5797, S2589)
     import signal as _signal
 else:
     import _signal
