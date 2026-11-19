@@ -87,11 +87,17 @@ class World:
     # The store whose image `k3d image import` and the node's runtime fail on, by
     # its place in store_images: the import's error (passes if empty), how many
     # of its imports exit 0 yet leave the node without it, and how many looks
-    # into the node find it once an import kept it (every look if None).
+    # into the node find it once an import kept it (every look if None, at
+    # least one: an import the node never holds is a lost import).
     failing_store: int = 0
     store_import_error: str = ""
     store_imports_lost: int = 0
     store_found_in_node: int | None = None
+    # The lines every `k3d image import` that exits 0 writes, in order.
+    import_log: tuple[str, ...] = (
+        "INFO[0000] Importing image(s) into cluster\n",
+        "INFO[0001] Successfully imported 1 image(s) into 1 cluster(s)\n",
+    )
     twin_pod: str = ""
     twin_log: str = "the twin's mount list"
     # What the web and the workers do: whether they become Ready, the web's
@@ -159,11 +165,18 @@ class World:
     # How many commands had been issued each time the signals were held.
     holds: list[int] = field(default_factory=list[int])
 
+    def __post_init__(self) -> None:
+        """Refuse a second knob for a lost import."""
+        if self.store_found_in_node == 0:
+            message = "a node that never holds the image is store_imports_lost"
+            raise ValueError(message)
+
     def __call__(
         self,
         command: tuple[str, ...],
         environment: Mapping[str, str],
         stdin: str | None,
+        stderr_into_stdout: bool,  # noqa: FBT001 - Effects.run's positional shape
     ) -> tuple[int, str, str]:
         self.commands.append((command, environment, stdin))
         kubeconfig = Path(environment["KUBECONFIG"])
@@ -177,10 +190,8 @@ class World:
         match command:
             case ("docker", "pull", *_) if self.pull_error:
                 return 1, "", self.pull_error
-            case ("k3d", "image", "import", image, *_) if (
-                self.store_import_error and image == self.failing_store_image
-            ):
-                return 1, "", self.store_import_error
+            case ("k3d", "image", "import", image, *_):
+                return self.import_answer(command, image, stderr_into_stdout)
             case ("docker", "exec", _, "crictl", "inspecti", image):
                 return self.node_image_answer(image)
             case ("timeout", _, "kubectl", "cp", *_):
@@ -190,6 +201,19 @@ class World:
             case _:
                 answer = self.answer(command)
                 return (1, "", "") if answer is None else (0, answer, "")
+
+    def import_answer(
+        self,
+        command: tuple[str, ...],
+        image: str,
+        stderr_into_stdout: bool,  # noqa: FBT001 - Effects.run's positional shape
+    ) -> tuple[int, str, str]:
+        """How `k3d image import` ends and what it writes, merged or split."""
+        if self.store_import_error and image == self.failing_store_image:
+            failed = (f"ERRO[0000] {self.store_import_error}\n",)
+            return 1, *k3d_output(failed, stderr_into_stdout=stderr_into_stdout)
+        self.container_effect(command)
+        return 0, *k3d_output(self.import_log, stderr_into_stdout=stderr_into_stdout)
 
     def node_image_answer(self, image: str) -> tuple[int, str, str]:
         """How the node's runtime answers a look for the image, by its looks so far."""
@@ -542,6 +566,18 @@ class World:
         ]
 
 
+def k3d_output(log: tuple[str, ...], *, stderr_into_stdout: bool) -> tuple[str, str]:
+    """The stdout and stderr of a k3d command that writes the log's lines in order.
+
+    k3d writes its ERRO and WARN lines to stderr and the rest to stdout.
+    """
+    if stderr_into_stdout:
+        return "".join(log), ""
+    errors = [line for line in log if line.startswith(("ERRO", "WARN"))]
+    rest = [line for line in log if line not in errors]
+    return "".join(rest), "".join(errors)
+
+
 @dataclass
 class Fixture:
     """A run over a fake world, with the driver that drives it."""
@@ -604,9 +640,14 @@ def fake_effects(
         ticks[0] += seconds
 
     def run_command(
-        command: tuple[str, ...], environment: Mapping[str, str], stdin: str | None
+        command: tuple[str, ...],
+        environment: Mapping[str, str],
+        stdin: str | None,
+        stderr_into_stdout: bool,  # noqa: FBT001 - Effects.run's positional shape
     ) -> object:
-        returncode, stdout, stderr = world(command, environment, stdin)
+        returncode, stdout, stderr = world(
+            command, environment, stdin, stderr_into_stdout
+        )
         return cluster_module.Completed(returncode, stdout, stderr)
 
     def which(tool: str) -> str | None:

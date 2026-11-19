@@ -529,22 +529,33 @@ def import_into_node(run: Run, title: str, local: str) -> None:
     node and still exits 0, so the exit proves nothing. An import the node
     lacks prints what k3d said and runs once more; if the node still lacks the
     image, the run stops naming it, the import exits and the node's images as
-    the kubelet and as containerd list them.
+    the kubelet and as containerd list them. k3d writes its errors to stderr
+    and the rest to stdout; one pipe keeps its lines in the order it wrote them.
     """
     exits: list[int] = []
     for _ in range(IMPORTS_PER_IMAGE):
-        imported = run("k3d image import", local, "--cluster", run.name, check=False)
+        imported = run(
+            "k3d image import",
+            local,
+            "--cluster",
+            run.name,
+            check=False,
+            stderr_into_stdout=True,
+        )
+        said = imported.stdout[-2000:]
         exits.append(imported.returncode)
         if imported.returncode:
-            refuse(f"{title} image {local} did not import: {imported.stderr[-2000:]}")
+            refuse(
+                f"{title} image {local} did not import, k3d image import ended "
+                f"{imported.returncode}: {said}"
+            )
         found = node_look(run, local)
         if not found.returncode:
             say(f"{title} image {local} imported into the node {run.node}")
             return
         say(
             f"{title} image {local} is missing from the node {run.node} after an "
-            f"import that exited 0: {found.stderr[-500:]}\n"
-            f"k3d said:\n{imported.stdout[-2000:]}{imported.stderr[-2000:]}"
+            f"import that exited 0: {found.stderr[-500:]}\nk3d said:\n{said}"
         )
     kubelet_view = run("docker exec", run.node, "crictl", "images", check=False)
     containerd_view = run(

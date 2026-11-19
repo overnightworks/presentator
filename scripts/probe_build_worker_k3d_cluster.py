@@ -83,14 +83,20 @@ class SubprocessRunner:
         command: tuple[str, ...],
         environment: Mapping[str, str],
         stdin: str | None,
+        stderr_into_stdout: bool = False,  # noqa: FBT001, FBT002 - Effects.run's positional shape
     ) -> Completed:
-        """Run the command to its end with exactly this environment."""
+        """Run the command to its end with exactly this environment.
+
+        With `stderr_into_stdout`, both streams share one pipe, so stdout holds
+        the lines in the order the command wrote them and stderr stays empty.
+        """
         piped = subprocess.PIPE if stdin is not None else subprocess.DEVNULL
-        with self._start(command, environment, piped, subprocess.PIPE) as child:
+        errors = subprocess.STDOUT if stderr_into_stdout else subprocess.PIPE
+        with self._start(command, environment, piped, errors) as child:
             self.children.append(child)
             stdout, stderr = child.communicate(stdin)
         self.children.remove(child)
-        return Completed(child.returncode, stdout, stderr)
+        return Completed(child.returncode, stdout, stderr or "")
 
     def stream(
         self, command: tuple[str, ...], environment: Mapping[str, str]
@@ -134,7 +140,7 @@ class SubprocessRunner:
 class Effects:
     """Every way the driver reaches outside itself."""
 
-    run: Callable[[tuple[str, ...], Mapping[str, str], str | None], Completed]
+    run: Callable[[tuple[str, ...], Mapping[str, str], str | None, bool], Completed]
     watch: Callable[[tuple[str, ...], Mapping[str, str]], Generator[str]]
     which: Callable[[str], str | None]
     platform_head: Callable[[Path], str]
@@ -211,16 +217,22 @@ class Run:
         }
 
     def __call__(
-        self, words: str, *arguments: str, stdin: str | None = None, check: bool = True
+        self,
+        words: str,
+        *arguments: str,
+        stdin: str | None = None,
+        check: bool = True,
+        stderr_into_stdout: bool = False,
     ) -> Completed:
         """Run the fixed `words` and `arguments` in the run's environment.
 
         A failing command refuses unless `check` is off.
         """
         command = (*words.split(), *arguments)
-        done = self.effects.run(command, self.environment, stdin)
+        done = self.effects.run(command, self.environment, stdin, stderr_into_stdout)
         if check and done.returncode:
-            refuse(f"{words} ended {done.returncode}: {done.stderr[-2000:]}")
+            output = done.stderr or done.stdout
+            refuse(f"{words} ended {done.returncode}: {output[-2000:]}")
         return done
 
     def watch(self, words: str, *arguments: str) -> Generator[str]:
