@@ -122,10 +122,13 @@ def test_an_unknown_presentator_key_in_a_dot_env_refuses_the_start(
 
 @pytest.mark.usefixtures("environment", "served_database")
 def test_the_lobby_starts_with_no_mcp_setting_and_serves_the_front() -> None:
-    instance = main.build_instance(load_settings())
+    settings = load_settings()
+    instance = main.build_instance(settings)
 
     metadata = TestClient(
-        instance.lobby, base_url=A_BROWSERS_ADDRESS, headers=A_BROWSERS_HEADERS
+        main.served_by_host(instance, settings),
+        base_url=A_BROWSERS_ADDRESS,
+        headers=A_BROWSERS_HEADERS,
     ).get(f"/.well-known/oauth-protected-resource{MCP_ENDPOINT_PATH}")
 
     assert metadata.status_code == HTTPStatus.OK

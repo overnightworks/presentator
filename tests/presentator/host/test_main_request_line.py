@@ -19,6 +19,8 @@ from tests.support.log_lines import LogLine
 
 _THE_CLIENT = "203.0.113.7"
 _THE_PROXY = "127.0.0.1"
+_A_NETWORK_NOT_THE_PEERS = "10.0.0.0/8"
+_A_HOST_NOBODY_SERVES = "nobody.example"
 _A_RELEASE = "1.2.3"
 _THE_CALLERS_TRACE = "4bf92f3577b34da6a3ce929d0e0e4736"
 _THE_CALLERS_PARENT = f"00-{_THE_CALLERS_TRACE}-00f067aa0ba902b7-01"
@@ -47,6 +49,18 @@ def app(
     environment: pytest.MonkeyPatch, database_url: str, tmp_path: Path
 ) -> Iterator[App]:
     environment.setenv("PRESENTATOR_TRUSTED_PROXIES", _THE_PROXY)
+    with serving_apps(database_url, tmp_path, {"SERVICE_VERSION": _A_RELEASE}) as (
+        first,
+        _second,
+    ):
+        yield first
+
+
+@pytest.fixture
+def app_that_trusts_other_proxies(
+    environment: pytest.MonkeyPatch, database_url: str, tmp_path: Path
+) -> Iterator[App]:
+    environment.setenv("PRESENTATOR_TRUSTED_PROXIES", _A_NETWORK_NOT_THE_PEERS)
     with serving_apps(database_url, tmp_path, {"SERVICE_VERSION": _A_RELEASE}) as (
         first,
         _second,
@@ -99,3 +113,27 @@ def test_a_mounted_files_request_line_names_the_mount_and_never_the_file_path(
     assert isinstance(line["route"], str)
     assert path.startswith(line["route"])
     assert line["route"] != path
+
+
+def test_the_routers_own_404_names_the_forwarded_client(
+    app: App,
+) -> None:
+    answer = app.request("GET", "/", _BEHIND_THE_PROXY, host=_A_HOST_NOBODY_SERVES)
+    line = app.log_line_where(_request_line_with(HTTPStatus.NOT_FOUND))
+
+    assert answer.status_code == HTTPStatus.NOT_FOUND
+    assert line["ip"] == _THE_CLIENT
+
+
+def test_the_routers_404_for_an_untrusted_peer_names_the_peer_not_the_forwarded_client(
+    app_that_trusts_other_proxies: App,
+) -> None:
+    answer = app_that_trusts_other_proxies.request(
+        "GET", "/", _BEHIND_THE_PROXY, host=_A_HOST_NOBODY_SERVES
+    )
+    line = app_that_trusts_other_proxies.log_line_where(
+        _request_line_with(HTTPStatus.NOT_FOUND)
+    )
+
+    assert answer.status_code == HTTPStatus.NOT_FOUND
+    assert line["ip"] == _THE_PROXY

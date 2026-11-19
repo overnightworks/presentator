@@ -279,7 +279,6 @@ def a_config_reading(now: datetime) -> WebAuthConfig:
     return replace(
         web_auth_config_for(
             SecretStr("t" * 32),
-            trusted_proxies="",
             origin="https://testserver",
             rate_limits=in_process_rate_limits(),
         ),

@@ -272,7 +272,6 @@ def _driven_lobby(build: Path, origin: str) -> FastAPI:
     config = replace(
         web_auth_config_for(
             _SECRET,
-            trusted_proxies="",
             origin=origin,
             rate_limits=AdmitEveryRequest(),
         ),

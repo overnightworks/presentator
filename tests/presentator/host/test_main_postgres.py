@@ -62,9 +62,13 @@ def test_health_is_ok_while_the_database_may_be_served_and_unavailable_when_not(
 ) -> None:
     point_at(environment, database_url, tmp_path)
     environment.setenv("PRESENTATOR_REDIS_URL", redis_url)
-    instance = main.build_instance(load_settings())
-    app = instance.lobby if address == A_BROWSERS_ADDRESS else instance.talk
-    browser = TestClient(app, base_url=address, headers=A_BROWSERS_HEADERS)
+    settings = load_settings()
+    instance = main.build_instance(settings)
+    browser = TestClient(
+        main.served_by_host(instance, settings),
+        base_url=address,
+        headers=A_BROWSERS_HEADERS,
+    )
     engine = engine_on(database_url)
     try:
         before = browser.get("/health").status_code
@@ -91,9 +95,13 @@ def test_health_is_unavailable_while_redis_cannot_be_reached(
     point_at(environment, database_url, tmp_path)
     with relay_in_front_of(redis_url) as redis:
         environment.setenv("PRESENTATOR_REDIS_URL", redis.url)
-        instance = main.build_instance(load_settings())
-        app = instance.lobby if address == A_BROWSERS_ADDRESS else instance.talk
-        browser = TestClient(app, base_url=address, headers=A_BROWSERS_HEADERS)
+        settings = load_settings()
+        instance = main.build_instance(settings)
+        browser = TestClient(
+            main.served_by_host(instance, settings),
+            base_url=address,
+            headers=A_BROWSERS_HEADERS,
+        )
         try:
             before = browser.get("/health").status_code
             redis.sever()

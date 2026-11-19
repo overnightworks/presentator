@@ -22,6 +22,7 @@ from logline import RequestLineMiddleware
 from pydantic import SecretStr
 from starlette.routing import Host, Route, Router
 from webauth.config import SessionLifetime, WebAuthConfig
+from webauth.middleware import ClientAddressMiddleware
 from webauth.oidc import OidcClientConfig, OidcRelyingParty
 from webauth.ports import RateLimitBackend, SignInTransaction
 from webauth.proxies import TrustedProxies
@@ -593,7 +594,6 @@ def installed_auths(
     lobby = InstalledAuth(
         config=web_auth_config_for(
             settings.secret_key,
-            trusted_proxies=settings.trusted_proxies,
             origin=settings.public_origin,
             rate_limits=redis.rate_limits(RateLimitedHost.LOBBY),
         ),
@@ -608,7 +608,6 @@ def installed_auths(
         lobby,
         config=web_auth_config_for(
             SecretStr(talk_session_secret(settings.secret_key.get_secret_value())),
-            trusted_proxies=settings.trusted_proxies,
             origin=settings.talk_origin,
             rate_limits=redis.rate_limits(RateLimitedHost.TALK),
         ),
@@ -636,7 +635,6 @@ def _session_sweep(sessions: PostgresSessions, clock: SystemClock) -> Schedule:
 def web_auth_config_for(
     secret: SecretStr,
     *,
-    trusted_proxies: str,
     origin: str,
     rate_limits: RateLimitBackend,
 ) -> WebAuthConfig:
@@ -650,7 +648,6 @@ def web_auth_config_for(
     lifetime_seconds = int(SESSION_LIFETIME.total_seconds())
     return WebAuthConfig(
         session_secret=secret,
-        trusted_proxies=TrustedProxies.parse(trusted_proxies),
         rate_limits=rate_limits,
         allowed_hosts_exact=frozenset({str(urlsplit(origin).hostname)}),
         session_lifetime=SessionLifetime(
@@ -718,6 +715,9 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
     answer 405. The talk hostname stays the talk app's alone, so the path is a
     404 there. Nothing the caller sent builds a redirect.
 
+    One writer of the client address wraps the router, so the stacks behind it
+    and the router's own 404 and 405 name the client the trusted proxies resolve.
+
     While the app runs, it polls the sources and sweeps the sessions; its end
     waits for a chore in flight, then closes the instance.
     """
@@ -742,14 +742,19 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
                 instance.close()
 
     return RequestLineMiddleware(
-        Router(
-            routes=[
-                Host(str(urlsplit(settings.public_origin).hostname), instance.lobby),
-                Host(str(urlsplit(settings.talk_origin).hostname), instance.talk),
-                Route(BACKCHANNEL_LOGOUT_PATH, instance.lobby, methods=["POST"]),
-            ],
-            redirect_slashes=False,
-            lifespan=lifespan,
+        ClientAddressMiddleware(
+            Router(
+                routes=[
+                    Host(
+                        str(urlsplit(settings.public_origin).hostname), instance.lobby
+                    ),
+                    Host(str(urlsplit(settings.talk_origin).hostname), instance.talk),
+                    Route(BACKCHANNEL_LOGOUT_PATH, instance.lobby, methods=["POST"]),
+                ],
+                redirect_slashes=False,
+                lifespan=lifespan,
+            ),
+            trusted_proxies=TrustedProxies.parse(settings.trusted_proxies),
         )
     )
 
