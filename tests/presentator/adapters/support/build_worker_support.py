@@ -110,6 +110,16 @@ def staging_of(step: BuildStep) -> Path:
 
 
 @dataclass
+class MovedClock:
+    """The client's monotonic clock, which only the test moves."""
+
+    seconds: float = 0.0
+
+    def __call__(self) -> float:
+        return self.seconds
+
+
+@dataclass
 class Seen:
     """What the fake worker saw of its clients."""
 

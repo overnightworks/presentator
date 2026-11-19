@@ -35,6 +35,7 @@ from tests.presentator.adapters.support.build_worker_support import (
     PDF,
     WINDOW,
     WITHOUT_A_REASON,
+    MovedClock,
     Script,
     Seen,
     a_step,
@@ -51,7 +52,6 @@ from tests.support.log_lines import json_logged
 
 PROMPTLY = 10
 UNAVAILABLE = ToolchainUnavailable()
-WINDOW_TOLERANCE = 0.1
 
 
 def nothing_to_reply(_connection: socket.socket, _step: StepHeader) -> None:
@@ -230,45 +230,50 @@ def test_a_silent_connection_is_left_after_its_attempt_for_the_next_within_the_w
 def test_a_reply_dripped_past_the_last_deadline_fails_at_it(
     volume: Path, tmp_path: Path
 ) -> None:
-    """Cell B4."""
+    """Cell B4: the reply comes at once, but the clock passes the deadline in it."""
+    clock = MovedClock()
+    client = toolchain(volume, reply_bound_seconds=0.3, clock=clock)
+    last_deadline = (
+        client.connect_window_seconds
+        + client.reply_bound_seconds
+        + client.reply_margin_seconds
+    )
 
-    def dripping(connection: socket.socket, _step: StepHeader) -> None:
-        for byte in BUILT_TALK:
-            connection.sendall(bytes([byte]))
-            time.sleep(0.02)
+    def passing_the_deadline(connection: socket.socket, _step: StepHeader) -> None:
+        connection.sendall(BUILT_TALK[:1])
+        clock.seconds = last_deadline
+        connection.sendall(BUILT_TALK[1:])
 
-    client = toolchain(volume, reply_bound_seconds=0.3)
-    started = time.monotonic()
-    with fake_worker(volume, answering(dripping)):
+    with fake_worker(volume, answering(passing_the_deadline)):
         result = client.ran(a_step(tmp_path))
 
     assert result == WITHOUT_A_REASON
-    ends_by = WINDOW + 0.3 + 0.2
-    assert ends_by - 0.05 <= time.monotonic() - started < ends_by + 0.5
 
 
 def test_a_status_later_than_the_window_fails_at_it_with_no_upload_byte_sent(
     volume: Path, tmp_path: Path
 ) -> None:
-    """Cell B22: the STEP goes out well into W, and its STATUS comes after W."""
+    """Cell B22: the STEP goes out after closings, and its STATUS comes after W."""
+    clock = MovedClock()
+    client = toolchain(volume, clock=clock)
     seen_late: list[bytes] = []
 
-    def slow_status(connection: socket.socket, _seen: Seen, _uploads: Path) -> None:
+    def late_status(connection: socket.socket, _seen: Seen, _uploads: Path) -> None:
         read_request(connection)
-        time.sleep(1.0)
-        connection.settimeout(1)
-        seen_late.append(connection.recv(1 << 16))
+        clock.seconds = client.connect_window_seconds
+        send_status(connection)
+        connection.settimeout(PROMPTLY)
+        try:
+            seen_late.append(connection.recv(1 << 16))
+        except ConnectionResetError:
+            # A client that gives up leaves the STATUS unread; its close resets.
+            seen_late.append(b"")
 
-    after_three_closings = closing_first(3, proven(slow_status))
-    client = toolchain(volume)
-    step = a_step(tmp_path)
+    after_three_closings = closing_first(3, proven(late_status))
     with fake_worker(volume, after_three_closings):
-        started = time.monotonic()
-        result = client.ran(step)
-        elapsed = time.monotonic() - started
+        result = client.ran(a_step(tmp_path))
 
     assert result == UNAVAILABLE
-    assert abs(elapsed - WINDOW) < WINDOW_TOLERANCE
     assert seen_late == [b""]
 
 
