@@ -3,6 +3,6 @@ agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
 role = "builder"
 base = "084ce36b823172eda14e3fc79eca97251b8c64a1"
 branch = "claude/issue-1274-a-start-refused-by-a-store-fault-writes"
-scope = ["src/presentator/host", "tests/presentator/host"]
+scope = ["docs/configuration.md", "src/presentator/adapters/postgres/migrate.py", "src/presentator/host", "tests/presentator/host"]
 opened_commit = "d5b500b46e957097d867035b85a29b0e64a868f2"
 whole_reason = "src/presentator/host is the start path's owner directory"
