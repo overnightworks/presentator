@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Final
 
 _FINISH_SECONDS = 60
-_CONSOLE_ENTRY_POINT = Path(sys.executable).parent / "presentator"
+CONSOLE_ENTRY_POINT: Final = Path(sys.executable).parent / "presentator"
 # A module started with `-m` imports `tests.support` from here.
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 READY: Final = "ready"
@@ -40,7 +40,7 @@ def two_presentators(
     arguments: Sequence[str], environment: Mapping[str, str]
 ) -> AbstractContextManager[TwoProcesses]:
     """Start two processes of `presentator <arguments>` with only `environment`."""
-    return two_processes([str(_CONSOLE_ENTRY_POINT), *arguments], environment)
+    return two_processes([str(CONSOLE_ENTRY_POINT), *arguments], environment)
 
 
 def two_modules(

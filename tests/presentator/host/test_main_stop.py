@@ -23,7 +23,6 @@ from presentator.host.polling import ChoreCode, Schedule
 from presentator.host.stopping_server import interrupt_ends_as_a_stop
 from tests.presentator.application.support.fakes import PATIENCE
 from tests.presentator.host.support.app_processes import (
-    CONSOLE_ENTRY_POINT,
     presentator_environment,
     serving_presentator,
     two_free_ports,
@@ -36,6 +35,7 @@ from tests.support.log_lines import (
     json_logged,
 )
 from tests.support.postgres import engine_on
+from tests.support.two_processes import CONSOLE_ENTRY_POINT
 
 _STATEMENT_TIMEOUT_SECONDS = 1
 # What the stop takes besides the poll's wait: the server's own stop, the
