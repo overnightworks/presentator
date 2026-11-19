@@ -1,0 +1,7 @@
+claim_id = "24fafd53b06a46bd8b2c6d7cbf43ba0c"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "9e526dae542ab56a7fc24c3ef43cb5f4691f2b50"
+branch = "claude/issue-1318-the-k3d-probe-s-import-refusal-names-its"
+scope = ["scripts/probe_build_worker_k3d.py", "tests/scripts/support/k3d_world.py", "tests/scripts/test_probe_build_worker_k3d_published.py"]
+opened_commit = "7947e56e97db813c246a7923ccb8b8231016005f"
