@@ -4,7 +4,7 @@ import signal
 import subprocess
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from datetime import timedelta
 from functools import partial
 from pathlib import Path
@@ -29,7 +29,12 @@ from tests.presentator.host.support.app_processes import (
     two_free_ports,
 )
 from tests.support.lobby import a_settings
-from tests.support.log_lines import json_lines, json_lines_among
+from tests.support.log_lines import (
+    events_of,
+    json_lines,
+    json_lines_among,
+    json_logged,
+)
 from tests.support.postgres import engine_on
 
 _STATEMENT_TIMEOUT_SECONDS = 1
@@ -220,10 +225,14 @@ def test_a_sigint_before_any_serving_ends_the_process_in_its_stop_line_alone(
     assert errors == ""
 
 
-def test_an_interrupt_ends_the_process_by_sigint_at_its_default_action(
+@pytest.fixture
+def raised_signals(
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # The raise is recorded, not done: the signal would end the test run.
+) -> Generator[list[tuple[int, object]]]:
+    """The signals raised, with SIGINT's handler then; recorded, not done.
+
+    The signal would end the test run.
+    """
     raised: list[tuple[int, object]] = []
 
     def recorded(signal_number: int) -> None:
@@ -232,9 +241,31 @@ def test_an_interrupt_ends_the_process_by_sigint_at_its_default_action(
     monkeypatch.setattr(signal, "raise_signal", recorded)
     handler = signal.getsignal(signal.SIGINT)
     try:
-        with interrupt_ends_as_a_stop():
-            raise KeyboardInterrupt
+        yield raised
     finally:
         signal.signal(signal.SIGINT, handler)
 
-    assert raised == [(signal.SIGINT, signal.SIG_DFL)]
+
+def test_an_interrupt_ends_the_process_by_sigint_at_its_default_action(
+    raised_signals: list[tuple[int, object]],
+) -> None:
+    with interrupt_ends_as_a_stop():
+        raise KeyboardInterrupt
+
+    assert raised_signals == [(signal.SIGINT, signal.SIG_DFL)]
+
+
+@pytest.mark.parametrize(
+    "server_wrote_its_line",
+    [pytest.param(False, id="before serving"), pytest.param(True, id="after serving")],
+)
+@pytest.mark.usefixtures("raised_signals")
+def test_an_interrupt_ends_in_one_stop_line_wherever_it_lands(
+    capsys: pytest.CaptureFixture[str], *, server_wrote_its_line: bool
+) -> None:
+    with json_logged(capsys) as logged, interrupt_ends_as_a_stop() as stop_line:
+        if server_wrote_its_line:
+            stop_line.write()
+        raise KeyboardInterrupt
+
+    assert len(events_of(logged, "process.stopped")) == 1
