@@ -69,10 +69,11 @@ class World:
     nodes: list[Document] = field(default_factory=lambda: [node()])
     node_name: str = ""
     kubelet: Document = field(default_factory=kubelet_config)
-    # What the dump of a failed cell reads: the node's events and images, the
-    # runner's disk use.
+    # What the dump of a failed cell reads: the node's events and images as the
+    # kubelet and as containerd list them, the runner's disk use.
     node_events: str = "a node event"
     node_images: str = "a node image"
+    node_containerd_images: str = "a containerd image"
     disk_use: str = "a disk use"
     probe_image: str = ""
     # The local names of the probe's throwaway stores, Redis first.
@@ -244,6 +245,7 @@ class World:
             case (
                 ("kubectl", "get", "--raw" | "events", *_)
                 | ("docker", "exec", _, "crictl", "images")
+                | ("docker", "exec", _, "ctr", "images", "ls", "-q")
                 | ("df", *_)
             ):
                 return self.node_answer(command)
@@ -267,6 +269,8 @@ class World:
                 return self.node_events
             case ("docker", "exec", name, "crictl", "images"):
                 return self.node_images if name == self.node_name else None
+            case ("docker", "exec", name, "ctr", "images", "ls", "-q"):
+                return self.node_containerd_images if name == self.node_name else None
             case ("df", "-h"):
                 return self.disk_use
             case _:

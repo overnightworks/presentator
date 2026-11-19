@@ -263,6 +263,7 @@ def test_a_store_image_the_node_lacks_after_every_import_is_named_with_the_node_
     assert local in refusal
     assert "exited [0, 0]" in refusal
     assert fixture.world.node_images in refusal
+    assert fixture.world.node_containerd_images in refusal
     assert len(fixture.world.issued("k3d", "image", "import", local)) == most_imports
     assert fixture.world.applied("Deployment") == []
 
