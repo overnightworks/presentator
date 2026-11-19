@@ -106,13 +106,18 @@ from presentator.contracts.decks import ToolchainIdentity
 from presentator.host.command_line import (
     MIGRATE_COMMAND,
     UNPIN_HOST_COMMAND,
-    command_line,
     migrate_the_database,
+    read_the_command_line,
     unpin_the_host,
 )
 from presentator.host.config import Settings, WhereBuildsRun, load_settings
 from presentator.host.environment import ConfigurationError, cannot_start, variable_of
-from presentator.host.lifecycle import StopLine, signals_end_as_a_stop
+from presentator.host.lifecycle import (
+    ServerReason,
+    StopLine,
+    end_failed,
+    signals_end_as_a_stop,
+)
 from presentator.host.oidc import (
     admission_of,
     client_configs_of,
@@ -120,10 +125,8 @@ from presentator.host.oidc import (
 )
 from presentator.host.polling import ChoreCode, Schedule
 from presentator.host.stopping_server import (
-    ServerReason,
     StoppingServer,
     configure_logging,
-    end_failed,
     served_config,
 )
 from presentator.host.store_connection import (
@@ -711,7 +714,7 @@ def main(
     with signals_end_as_a_stop() as stop_line:
         cap_alembic_logging()
         try:
-            asked = command_line().parse_args(arguments)
+            asked = read_the_command_line(arguments)
             if asked.command == MIGRATE_COMMAND:
                 migrate_the_database()
                 return

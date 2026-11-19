@@ -1,36 +1,24 @@
 """The uvicorn server that marks a stop as begun the moment its signal arrives.
 
-It also owns the process's JSON log lines and the one line a failed start
-ends in.
+It also owns the process's JSON log lines.
 """
 
 import logging
 import os
 import socket
-from enum import StrEnum
 from types import FrameType
-from typing import Final, NoReturn, override
+from typing import Final, override
 
 import logline
 import uvicorn
 from starlette.types import ASGIApp
 
-from presentator.adapters.postgres.migrate import RefusalReason
 from presentator.api.health import Stopping
-from presentator.host.lifecycle import ServerEvent, StopLine
+from presentator.host.lifecycle import ServerReason, StopLine, end_failed
 
 _log = logging.getLogger(__name__)
 # The variable logline reads the root log level from.
 _LOG_LEVEL: Final = "LOG_LEVEL"
-
-
-class ServerReason(StrEnum):
-    """Why the process failed to start.
-
-    Together with the database's `RefusalReason`, the closed set of reasons.
-    """
-
-    CONFIGURATION_REFUSED = "configuration_refused"
 
 
 def configure_logging(service: str) -> None:
@@ -47,16 +35,6 @@ def configure_logging(service: str) -> None:
         del os.environ[_LOG_LEVEL]
         logline.configure(service)
         end_failed(ServerReason.CONFIGURATION_REFUSED, setting=_LOG_LEVEL)
-
-
-def end_failed(reason: RefusalReason | ServerReason, **codes: str) -> NoReturn:
-    """End the process in one line naming the refusal, without its traceback.
-
-    The traceback would name the database's host and port or a file's path, so
-    the line carries only codes, such as the class name of the driver's error.
-    """
-    _log.error(ServerEvent.PROCESS_FAILED, extra={"reason": reason, **codes})
-    raise SystemExit(1) from None
 
 
 class StoppingServer(uvicorn.Server):

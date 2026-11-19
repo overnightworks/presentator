@@ -19,7 +19,7 @@ from presentator.adapters.postgres.locks import (
     MIGRATION_LOCK,
     hold_until_transaction_ends,
 )
-from presentator.host.lifecycle import signals_end_as_a_stop
+from presentator.host.lifecycle import ServerEvent, signals_end_as_a_stop
 from presentator.host.main import Instance, served_by_host
 from presentator.host.polling import ChoreCode, Schedule
 from tests.presentator.application.support.fakes import PATIENCE
@@ -130,7 +130,7 @@ def test_a_sigterm_during_a_locked_source_poll_writes_its_failure_before_the_sto
     events = [(line["event"], line.get("chore")) for line in json_lines_among(output)]
     assert exit_code == -signal.SIGTERM
     assert events.index(("scheduled_run.failed", ChoreCode.SOURCE_POLL)) < (
-        events.index(("process.stopped", None))
+        events.index((ServerEvent.PROCESS_STOPPED, None))
     )
     assert stopped_after < _STATEMENT_TIMEOUT_SECONDS + _STOP_MARGIN_SECONDS
 
@@ -146,7 +146,7 @@ def test_a_sigint_ends_a_served_process_in_its_stop_line_alone(
 
     events = [line["event"] for line in json_lines(output)]
     assert exit_code == -signal.SIGINT
-    assert events.count("process.stopped") == 1
+    assert events.count(ServerEvent.PROCESS_STOPPED) == 1
     assert "process.crashed" not in events
 
 
@@ -222,8 +222,8 @@ def test_a_sigint_before_any_serving_ends_the_process_in_its_stop_line_alone(
     events = [line["event"] for line in json_lines(output)]
     # The default action of SIGINT, which a shell or a container runtime reports as 130.
     assert process.returncode == -signal.SIGINT
-    assert events[-1] == "process.stopped"
-    assert events.count("process.stopped") == 1
+    assert events[-1] == ServerEvent.PROCESS_STOPPED
+    assert events.count(ServerEvent.PROCESS_STOPPED) == 1
     assert "process.failed" not in events
     assert "process.crashed" not in events
     assert errors == ""
@@ -297,7 +297,7 @@ def test_an_interrupt_ends_in_one_stop_line_wherever_it_lands(
     with json_logged(capsys) as logged, pytest.raises(SystemExit):
         _stopped_by_an_interrupt(server_wrote_its_line=server_wrote_its_line)
 
-    assert len(events_of(logged, "process.stopped")) == 1
+    assert len(events_of(logged, ServerEvent.PROCESS_STOPPED)) == 1
 
 
 @pytest.mark.parametrize("stop_signal", _STOP_SIGNALS)

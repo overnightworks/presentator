@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+from collections.abc import Sequence
 from datetime import timedelta
 from typing import Final
 
@@ -9,12 +10,14 @@ from presentator.adapters.postgres.engine import create_database_engine
 from presentator.adapters.postgres.host_keys import PostgresHostKeyPins
 from presentator.adapters.postgres.migrate import StoreFault, migrate, store_refusal
 from presentator.host.config import load_database_settings
+from presentator.host.lifecycle import read_command_line, refuse_argument
 
 MIGRATE_COMMAND = "migrate"
 UNPIN_HOST_COMMAND = "unpin-host"
+_HOST: Final = "host"
 _HOST_UNPINNED: Final = "host_key.unpinned"
 _HOST_NOT_PINNED: Final = "host_key.not_pinned"
-# Apart from 1, a failed process, and 2, a command line argparse refuses.
+# Apart from 1, a failed process, and 2, a refused command line.
 NOTHING_PINNED_STATUS: Final = 3
 
 _log = logging.getLogger(__name__)
@@ -60,16 +63,33 @@ def unpin_the_host(host: str) -> None:
     _log.info(_HOST_UNPINNED, extra={"host": host})
 
 
-def command_line() -> argparse.ArgumentParser:
+def read_the_command_line(arguments: Sequence[str] | None) -> argparse.Namespace:
+    """The command `arguments` ask for; a refused one ends the process in one line.
+
+    The command line checks the host itself: argparse names no argument in the
+    refusal of a missing one.
+    """
+    asked = read_command_line(_command_line(), arguments)
+    if asked.command == UNPIN_HOST_COMMAND and asked.host is None:
+        refuse_argument(_HOST)
+    return asked
+
+
+def _command_line() -> argparse.ArgumentParser:
     """The parser of the commands that replace serving."""
-    parser = argparse.ArgumentParser(prog="presentator")
+    parser = argparse.ArgumentParser(prog="presentator", exit_on_error=False)
     commands = parser.add_subparsers(dest="command")
     commands.add_parser(
-        MIGRATE_COMMAND, help="bring the database to the newest revision, then exit"
+        MIGRATE_COMMAND,
+        help="bring the database to the newest revision, then exit",
+        exit_on_error=False,
     )
     unpin = commands.add_parser(
         UNPIN_HOST_COMMAND,
         help="remove one host's pinned ssh key after a verified rotation, then exit",
+        exit_on_error=False,
     )
-    unpin.add_argument("host", help="the host as ssh names it, `[host]:port` off 22")
+    unpin.add_argument(
+        _HOST, nargs="?", help="the host as ssh names it, `[host]:port` off 22"
+    )
     return parser
