@@ -15,6 +15,17 @@ WORKER_CONSOLE_ENTRY_POINT: Final = Path(sys.executable).parent / "presentator-w
 # A module started with `-m` imports `tests.support` from here.
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 READY: Final = "ready"
+# Coverage's subprocess patch sets it in a measured run; a child given it is measured.
+_COVERAGE_CONFIG: Final = "COVERAGE_PROCESS_CONFIG"
+
+
+def measured(environment: Mapping[str, str]) -> dict[str, str]:
+    """`environment`, measured by coverage as this run is, if it is."""
+    measuring = os.environ.get(_COVERAGE_CONFIG)
+    return {
+        **environment,
+        **({} if measuring is None else {_COVERAGE_CONFIG: measuring}),
+    }
 
 
 @dataclass(frozen=True, slots=True)

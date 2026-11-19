@@ -64,6 +64,7 @@ filterwarnings = [
 
 [tool.coverage.run]
 branch = true
+patch = ["subprocess"]
 # design-catalogs writes this module and `design-catalogs --check` holds it
 # current, so its lines have no test of ours to be covered by.
 omit = ["src/presentator/contracts/words.py"]
