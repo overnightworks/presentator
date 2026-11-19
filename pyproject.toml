@@ -14,7 +14,7 @@ dependencies = [
     "fastapi==0.162.0",
     "httpx2==2.16.0",
     "overnightworks-agents[backend,mcp-server] @ git+https://github.com/overnightworks/agents@v0.59.0",
-    "overnightworks-logline @ https://github.com/overnightworks/logline/releases/download/v1.4.0/overnightworks_logline-1.4.0-py3-none-any.whl#sha256=a1f36da28f7f09080219b08438208c4dca5678c92fb2e9fb3a2bdd15fe31ac30",
+    "overnightworks-logline @ git+https://github.com/overnightworks/logline@v1.4.0",
     "overnightworks-speech-client @ git+https://github.com/overnightworks/speech@v0.22.0#subdirectory=packages/client",
     "overnightworks-webauth[redis] @ git+https://github.com/overnightworks/webauth@v0.41.1",
     "psycopg[binary]==3.3.9",
@@ -32,7 +32,7 @@ presentator-worker = "presentator.host.console:presentator_worker"
 [dependency-groups]
 dev = [
     "coverage==7.16.0",
-    "overnightworks-design[catalogs] @ https://github.com/overnightworks/design/releases/download/v0.37.0/overnightworks_design-0.37.0-py3-none-any.whl#sha256=21f47850c76d247bf70d709eaf74975db1f268ee49e420f997aca94aeb0eb9f4",
+    "overnightworks-design[catalogs] @ git+https://github.com/overnightworks/design@v0.37.0",
     "pypdf==7.0.1",
     "pytest==9.2.0",
     "pytest-cov==7.1.0",
