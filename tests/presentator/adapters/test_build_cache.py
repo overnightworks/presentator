@@ -107,8 +107,9 @@ def test_a_store_that_does_not_answer_serves_what_the_disk_holds_and_nothing_els
     store.answering = False
 
     assert serving.local("run-1") == tmp_path / "b" / "run-1"
+    cold = a_cache(tmp_path / "c", store)
     with pytest.raises(BuildStoreUnavailableError):
-        a_cache(tmp_path / "c", store).local("run-1")
+        cold.local("run-1")
 
 
 def test_a_run_the_store_did_not_take_is_not_kept(
