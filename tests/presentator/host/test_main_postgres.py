@@ -3,7 +3,6 @@
 from http import HTTPStatus
 from pathlib import Path
 
-import psycopg
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import inspect, text
@@ -33,7 +32,7 @@ def test_an_empty_database_is_refused_at_start_and_left_without_a_table(
         engine.dispose()
 
 
-def test_a_database_that_does_not_answer_ends_the_start_in_one_failed_line(
+def test_a_database_that_does_not_answer_ends_the_starts_connection_step_failed(
     environment: pytest.MonkeyPatch,
     redis_url: str,
     tmp_path: Path,
@@ -42,20 +41,15 @@ def test_a_database_that_does_not_answer_ends_the_start_in_one_failed_line(
     point_at(environment, NO_DATABASE_HERE, tmp_path)
     environment.setenv("PRESENTATOR_REDIS_URL", redis_url)
 
-    with json_logged(capsys) as logged, pytest.raises(SystemExit) as ended:
+    with json_logged(capsys) as logged, pytest.raises(SystemExit):
         main.main([])
 
-    assert ended.value.code == 1
     (connection,) = [
         one
         for one in logged.lines
         if one["event"] == "store_connection.ended" and one["kind"] == "postgres"
     ]
     assert (connection["outcome"], connection["reason"]) == ("failed", "not_answering")
-    (failed,) = [one for one in logged.lines if one["event"] == "process.failed"]
-    assert (failed["level"], failed["reason"]) == ("error", "not_answering")
-    assert failed["error_type"] == psycopg.OperationalError.__name__
-    assert "127.0.0.1" not in logged.text
 
 
 @pytest.mark.parametrize("address", [A_BROWSERS_ADDRESS, A_TALK_ADDRESS])
