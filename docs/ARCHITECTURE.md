@@ -106,12 +106,12 @@ life ends the pod and the StatefulSet makes a fresh one.
 
 ## 5. Crosscutting Concepts
 
-**Persistence.** Postgres (`PRESENTATOR_DATABASE_URL`) holds the state. A build is one run (talk, deck text, PDF) in the S3 bucket all pods share, named
-by its row and served from a bounded copy on each pod's disk; it and each pod's mirrors are caches
-the rows rebuild. The ssh host keys every pod trusts are rows.
-`serve` creates no table; `presentator migrate` runs the migrations of `adapters/postgres` under a
-lock. A revision behind this release is refused at start; a newer one is served, and a stored word
-it does not know reads as its generic case, logged once. An unknown role or account kind fails loud.
+**Persistence.** Postgres (`PRESENTATOR_DATABASE_URL`) holds the state. A build is one run (talk, deck
+text, PDF) in the S3 bucket all pods share, named by its row and served from a bounded copy on each pod's
+disk; it and each pod's mirrors are caches the rows rebuild. The ssh host keys every pod trusts are rows.
+`serve` creates no table; `presentator migrate` runs the migrations of `adapters/postgres` under a lock. A
+revision behind this release is refused at start; a newer one is served, and a stored word it does not
+know reads as its generic case, logged once. An unknown role or account kind fails loud.
 
 **Authentication and wire.** Keycloak groups admit people ([sign-in](sign-in.md)). There is no
 session cache: rate limits live in the Redis every pod shares (webauth's `RedisRateLimitBackend`,
@@ -120,24 +120,25 @@ Postgres). JSON lives under `/api/` as typed models. The one signed-out path is 
 /api/session`, and a store failure while resolving a reader is a 500, never a signed-out answer.
 Problems follow RFC 9457 with `tag:` URI types.
 
-**Logging.** logline owns it, configured first in each process: every line is one JSON object. One line per HTTP
-request names the route template, never the path, with `sub` and the client address from webauth's decisions
-(`api/request_line.py`). Every other line is a literal `<noun>.<verb_past>` event of ids, counts and codes: the web
-writes `process.started`, `process.ready` and `process.stopped`, and a start the settings, the database or the
-worker's self-check refuse ends in `process.failed` with a `reason` code and exit status 1 (`presentator`)
-or 2 (`presentator-worker`). The co-presenter's events are in [co-presenter](co-presenter.md).
+**Logging.** logline owns it, configured first in each process: every line is one JSON object. One
+line per HTTP request names the route template, never the path, with `sub` and the client address
+from webauth's decisions (`api/request_line.py`). Every other line is a literal `<noun>.<verb_past>`
+event of ids, counts and codes: the web writes `process.started`, `process.ready` and
+`process.stopped`, and a start the settings, the database or the worker's self-check refuse ends in
+`process.failed` with a `reason` code and exit status 1 (`presentator`) or 2 (`presentator-worker`).
+The co-presenter's events are in [co-presenter](co-presenter.md).
 
 **Words and look.** Every lobby word comes from one gettext catalog per language
 (`frontend/src/lib/catalogs`), generated into typed modules for page and server; the session answer
 carries a language tag, no sentence. The overlay owns its pair ([co-presenter](co-presenter.md)).
 
 **Trust.** A deck author's code, git remotes and people's input are untrusted. The operator's
-settings and hal's token clients are trusted. The shared speech service gets readiness, PCM, transcripts, spoken
-sentences and two tokens (the person's access token and presentator's workload token) over its plain
-`http` origin; cookies are not forwarded, and what the service keeps is the shared section
-`#sprachdienst`. No operator blessing narrows this model, so an audit keeps the default. The platform confines the
-worker's pod; presentator's k3d CI job applies the platform's manifests to run the worker's
-self-check.
+settings and hal's token clients are trusted. The shared speech service gets readiness, PCM,
+transcripts, spoken sentences and two tokens (the person's access token and presentator's workload
+token) over its plain `http` origin; cookies are not forwarded, and what the service keeps is the
+shared section `#sprachdienst`. No operator blessing narrows this model, so an audit keeps the
+default. The platform confines the worker's pod; presentator's k3d CI job applies the platform's
+manifests to run the worker's self-check.
 
 A bearer enters the lobby through two paths besides hal's token clients, both limited to `/mcp` and
 the routes marked as tools, never one that deletes, shares, publishes, sends outward or is admin: the
