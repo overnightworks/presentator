@@ -1,0 +1,8 @@
+claim_id = "c128cc1d60224e70826de286b1b1a215"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "cc8ca8585b7d349916745b275db5da40e3fc3b57"
+branch = "claude/issue-1324-an-argument-error-in-a-console-script-en"
+scope = ["src/presentator/host", "tests/presentator/host"]
+opened_commit = "1e4ff8ebb8c31751a5ac83a68c96e7f21432a97a"
+whole_reason = "both console scripts' argument parsing and their process tests live in the host package"
