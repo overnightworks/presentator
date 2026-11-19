@@ -1,13 +1,13 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { createServer, type ServerResponse } from 'node:http'
-import { copyFile, mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { extname, join, normalize, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
-import { chromium, type BrowserContext, type Page } from 'playwright-chromium'
+import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-chromium'
 import { HopClose } from 'overnightworks-speech-browser'
 import { afterAll, afterEach, beforeAll, beforeEach, expect } from 'vitest'
 
@@ -25,6 +25,8 @@ const exampleDeckDirectory = join(repositoryRoot, 'examples/copresenter-deck')
 const addonFixtureDeck = fileURLToPath(new URL('./fixtures/addon-fixture.md', import.meta.url))
 const providedBuild = process.env.PRESENTER_RETURN_BUILD_DIR
 const evidenceDirectory = process.env.PRESENTER_RETURN_EVIDENCE_DIR
+// Where the instrumented deck's counters go for `pnpm coverage:merge`.
+const browserCoverageDirectory = join(repositoryRoot, 'reports/slidev-browser-coverage')
 const wav = 'UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
 // What the server answers before any stream starts: F1's refusals, plus the
 // two shapes it never sends, a 403 and a 401 that is not JSON.
@@ -594,16 +596,56 @@ export async function installCspGuard(page: Page) {
   })
 }
 
+async function saveCoverage(coverage: string | null) {
+  if (!coverage) return
+  await mkdir(browserCoverageDirectory, { recursive: true })
+  await writeFile(join(browserCoverageDirectory, `${randomUUID()}.json`), coverage)
+}
+
+function readCoverage(page: Page) {
+  return page.evaluate(() => {
+    const counters = (window as unknown as { __coverage__?: object }).__coverage__
+    return counters ? JSON.stringify(counters) : null
+  })
+}
+
+// The instrumented deck counts in `window.__coverage__`, which each page load
+// starts afresh: a document reports its counters as it leaves, and the pages
+// still open report theirs as their browser closes. A production build has no
+// counters and writes nothing.
+export async function installCoverageReport(page: Page) {
+  await page.exposeFunction('__reportCoverage', saveCoverage)
+  await page.addInitScript(() => {
+    addEventListener('pagehide', () => {
+      const counters = (window as unknown as { __coverage__?: object }).__coverage__
+      const report = (window as unknown as { __reportCoverage: (coverage: string) => void }).__reportCoverage
+      if (counters) report(JSON.stringify(counters))
+    })
+  })
+}
+
+export async function launchBrowser(): Promise<Browser> {
+  const browser = await chromium.launch({ headless: true })
+  const close = browser.close.bind(browser)
+  browser.close = async (options) => {
+    const pages = browser.contexts().flatMap((context) => context.pages())
+    for (const page of pages) await saveCoverage(await readCoverage(page))
+    await close(options)
+  }
+  return browser
+}
+
 export async function openPresenterAt(
   base: string,
   path: string,
   width: number,
   prepare: (page: Page) => Promise<void> = async () => undefined,
 ) {
-  const browser = await chromium.launch({ headless: true })
+  const browser = await launchBrowser()
   const page = await browser.newPage({ viewport: { width, height: 900 } })
   page.setDefaultTimeout(5_000)
   await installCspGuard(page)
+  await installCoverageReport(page)
   await installMediaFakes(page)
   await prepare(page)
   await page.goto(`${base}${path}`, { waitUntil: 'domcontentloaded', timeout: 10_000 })
@@ -613,7 +655,7 @@ export async function openPresenterAt(
 // One browser context, so its pages share an origin's BroadcastChannel the way
 // a presenter window and a projector window of one browser do.
 export async function openRoomBrowser(colorScheme: 'light' | 'dark' = 'light') {
-  const browser = await chromium.launch({ headless: true })
+  const browser = await launchBrowser()
   const context = await browser.newContext({ colorScheme })
   return { browser, context }
 }
@@ -628,6 +670,7 @@ export async function openPageIn(
   await page.setViewportSize({ width, height: 900 })
   page.setDefaultTimeout(5_000)
   await installCspGuard(page)
+  await installCoverageReport(page)
   await installMediaFakes(page)
   await prepare(page)
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10_000 })

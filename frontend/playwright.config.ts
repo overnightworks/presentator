@@ -12,11 +12,15 @@ const port = 8790;
 const instanceSpecs = '**/*.instance.spec.ts';
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 
+// Each stack counts the Python lines it runs beside pytest's for the coverage
+// job to combine; an interrupt lets uvicorn stop and coverage write its data,
+// which the default kill would lose.
 const stackAt = (stackPort: number) => ({
-	command: `uv run --locked python -m tests.support.lobby_drive serve frontend/build ${stackPort}`,
+	command: `uv run --locked coverage run --parallel-mode --source=src --data-file=reports/python-coverage/python -m tests.support.lobby_drive serve frontend/build ${stackPort}`,
 	cwd: repositoryRoot,
 	url: `http://localhost:${stackPort}/health`,
 	reuseExistingServer: false,
+	gracefulShutdown: { signal: 'SIGINT' as const, timeout: 10_000 },
 	timeout: 60_000
 });
 const serving = (stackPort: number) => ({ baseURL: `http://localhost:${stackPort}` });

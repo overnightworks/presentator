@@ -35,6 +35,10 @@ class BudgetSpentError(CoPresenterUnavailableError):
     """The person's gateway budget is spent; no outage."""
 
 
+class SessionEndedError(CoPresenterUnavailableError):
+    """The person's session ended while the co-presenter read its tokens; no outage."""
+
+
 class AnswerStopReason(StrEnum):
     """The reason an answer stream's `error` event names, as the overlay reads it."""
 

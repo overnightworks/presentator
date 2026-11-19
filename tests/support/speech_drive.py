@@ -17,6 +17,7 @@ from agents.backend.fake_gateway import FakeGateway, completion
 from logline import REQUEST_EVENT
 from logline.testing import configured
 from speech_client.outcomes import PastDeadline
+from speech_client.relay import HopClose
 from sqlalchemy import text
 from starlette.websockets import WebSocketDisconnect
 
@@ -109,7 +110,10 @@ if TYPE_CHECKING:
 
     from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
     from presentator.api.auth import InstalledAuth
-    from presentator.contracts.copresenter import CoPresenterReadiness
+    from presentator.contracts.copresenter import (
+        CoPresenterReadiness,
+        CoPresenterUnavailableError,
+    )
     from presentator.ports.copresenter import HearingSocket, Speaking
     from presentator.ports.copresenter import SpeechHearing as SpeechHearingPort
     from tests.presentator.application.support.fakes import FakeDeckStore
@@ -233,9 +237,11 @@ class WitnessedSpeech:
             self._errors.append(error)
             raise
 
-    async def refuse(self, browser: HearingSocket) -> None:
+    async def refuse(
+        self, browser: HearingSocket, unavailable: CoPresenterUnavailableError
+    ) -> None:
         try:
-            await self._speech.refuse(browser)
+            await self._speech.refuse(browser, unavailable)
         except BaseException as error:
             self._errors.append(error)
             raise
@@ -605,7 +611,7 @@ def _malformed_peer_cases() -> dict[str, Callable[[], SpeechScenario]]:
     }
 
 
-def _ended_before_any_service_is_asked() -> dict[str, Callable[[], SpeechScenario]]:
+def _refused_before_any_service_is_asked() -> dict[str, Callable[[], SpeechScenario]]:
     return {
         "marked-issuer-refusal": _arranged(refusing_every_workload_grant(PLANTED)),
         "workload-scope-refused": _arranged(
@@ -613,8 +619,10 @@ def _ended_before_any_service_is_asked() -> dict[str, Callable[[], SpeechScenari
         ),
         "thread-raises-the-token": _arranged(the_token_thread_fails),
         "revoked-refresh-token": _arranged(the_refresh_token_is_revoked),
-        "session-ends-during-the-grant": _arranged(the_session_ends_during_the_grant),
     }
+
+
+_SESSION_ENDS_DURING_THE_GRANT: Final = "session-ends-during-the-grant"
 
 
 LEAK_ASKS: Final[dict[str, Callable[[], SpeechScenario]]] = {
@@ -629,29 +637,63 @@ LEAK_ASKS: Final[dict[str, Callable[[], SpeechScenario]]] = {
     "unspeakable-remainder": lambda: SpeechScenario(
         gateway=lambda: FakeGateway(completion(f"{ANSWER_SENTENCES[0]} …"))
     ),
-    **_ended_before_any_service_is_asked(),
+    **_refused_before_any_service_is_asked(),
+    _SESSION_ENDS_DURING_THE_GRANT: _arranged(the_session_ends_during_the_grant),
 }
 
 
-LEAK_HEARINGS: Final[dict[str, Callable[[], SpeechScenario]]] = {
-    "good": _with_realtime(_hearing_the_words),
-    "marked-error-event": _with_realtime(
-        lambda: after_the_first_audio(a_marked_error_event())
+@dataclass(frozen=True)
+class LeakHearing:
+    """A hearing that might leak a marker, and the close it must reach."""
+
+    scenario: Callable[[], SpeechScenario]
+    close: HopClose
+
+
+def _failing(
+    cases: dict[str, Callable[[], SpeechScenario]],
+) -> dict[str, LeakHearing]:
+    return {
+        name: LeakHearing(scenario, HopClose.SERVICE_FAILED)
+        for name, scenario in cases.items()
+    }
+
+
+LEAK_HEARINGS: Final[dict[str, LeakHearing]] = {
+    "good": LeakHearing(_with_realtime(_hearing_the_words), HopClose.NORMAL),
+    **_failing(
+        {
+            "marked-error-event": _with_realtime(
+                lambda: after_the_first_audio(a_marked_error_event())
+            ),
+            "marked-failed-then-error": _with_realtime(
+                lambda: after_the_first_audio(
+                    a_marked_failed_item(), a_marked_error_event()
+                )
+            ),
+        }
     ),
-    "marked-failed-then-error": _with_realtime(
-        lambda: after_the_first_audio(a_marked_failed_item(), a_marked_error_event())
-    ),
-    **{name: _with_realtime(end.hear) for name, end in HEARING_ENDS.items()},
-    "busy-marked": _with_realtime(lambda: busy_at_the_upgrade(marked=True)),
     **{
-        f"denied-{status}": _with_realtime(
-            lambda status=status: denying(status, marked=True)
-        )
-        for status in (401, 403, 503)
+        name: LeakHearing(_with_realtime(end.hear), end.close)
+        for name, end in HEARING_ENDS.items()
     },
-    **_malformed_peer_cases(),
-    "nobody-listens": _with_peer(nobody_listens),
-    **_ended_before_any_service_is_asked(),
+    "busy-marked": LeakHearing(
+        _with_realtime(lambda: busy_at_the_upgrade(marked=True)), HopClose.BUSY
+    ),
+    **_failing(
+        {
+            f"denied-{status}": _with_realtime(
+                lambda status=status: denying(status, marked=True)
+            )
+            for status in (401, 403, 503)
+        }
+    ),
+    **_failing(_malformed_peer_cases()),
+    **_failing({"nobody-listens": _with_peer(nobody_listens)}),
+    **_failing(_refused_before_any_service_is_asked()),
+    _SESSION_ENDS_DURING_THE_GRANT: LeakHearing(
+        _arranged(the_session_ends_during_the_grant), HopClose.NORMAL
+    ),
 }
 
 LEAK_HEALTH: Final[dict[str, Callable[[], SpeechScenario]]] = {

@@ -16,6 +16,7 @@ check holds the committed one to the routes.
 import argparse
 import itertools
 import json
+import signal
 from collections.abc import Iterator
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -390,6 +391,11 @@ def _serve(build: Path, port: int) -> None:
     origin = f"http://{_DRIVE_HOST}:{port}"
     app = _driven_lobby(build, origin)
     print(f"the driven lobby serves at {origin}", flush=True)
+    # The drive stops a stack with an interrupt to its whole process group,
+    # and `uv run` can forward it once more after uvicorn has stopped. uvicorn
+    # handles interrupts while it serves and restores this disposition when it
+    # stops, so a late one cannot break off the coverage data written at exit.
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
     uvicorn.run(app, host=_LOOPBACK, port=port, log_level="warning")
 
 
