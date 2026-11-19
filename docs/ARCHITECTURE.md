@@ -139,11 +139,11 @@ trace, which the overlay takes from the heard turn; a hearing writes `hearing_se
 `hearing_opening.ended` per opening (`docs/co-presenter.md`).
 A start refused by its settings, its database or the worker's self-check ends in one `process.failed` with a `reason`
 code, with exit status 1 for `presentator` and 2 for `presentator-worker` (`settings`, `key`, `bind`, `listen` or the
-failed self-check predicate); a refused command line ends either console script in one with exit status 2 and `argument_refused`, naming the
-argument, or `argument_unknown` for a word no argument takes. A SIGINT or SIGTERM ends a process in `process.stopped`,
-or silently while it still imports its program. logline writes uvicorn's records as literal coded events, a port that
-cannot be bound as `server_bind.failed`, and one it does not know as `uvicorn.unknown_record` with no text; only
-`asgi_app.failed` carries the exception's traceback, in `exception`.
+failed self-check predicate); a refused command line ends either console script in one with exit status 2 and
+`argument_refused`, naming the argument, or `argument_unknown` for a word no argument takes. A SIGINT or SIGTERM ends
+a process in `process.stopped`, or silently while it still imports its program. logline writes uvicorn's records as
+literal coded events, a port that cannot be bound as `server_bind.failed`, and one it does not know as
+`uvicorn.unknown_record` with no text; only `asgi_app.failed` carries the exception's traceback, in `exception`.
 
 **Words and look.** Every lobby word comes from one gettext catalog per language
 (`frontend/src/lib/catalogs`), generated into typed modules for page and server; the session answer
