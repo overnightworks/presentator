@@ -42,6 +42,7 @@ from presentator.contracts.copresenter import (
     CoPresenterReadiness,
     CoPresenterUnavailableError,
     HearingTranscript,
+    SessionEndedError,
     SpeechTokens,
     SpeechTokenSource,
 )
@@ -228,7 +229,7 @@ class SpeechHearing:
                 hears = wire.Language(language)
             except ValueError:
                 session.refuse(HearingFailure.UNKNOWN_LANGUAGE)
-                await self.refuse(browser)
+                await browser.close(HopClose.SERVICE_FAILED)
                 return
             session.add(language=hears.value)
             openings = _Openings()
@@ -237,13 +238,13 @@ class SpeechHearing:
                     browser, hears, tokens, ended=ended, heard=heard, openings=openings
                 )
             # The client leaves the browser socket to the app when the token source
-            # raises, so the hearing ends here as a service failure. The token read
-            # wrote the error line.
-            except CoPresenterUnavailableError:
-                openings.end(_tokens_unavailable)
+            # raises, so the hearing ends here. The token read wrote its own line.
+            except CoPresenterUnavailableError as unavailable:
+                mark = _token_read_ending(unavailable)
+                openings.end(mark)
                 session.handled()
-                _tokens_unavailable(session)
-                await self.refuse(browser)
+                mark(session)
+                await self.refuse(browser, unavailable)
                 return
             except Exception as error:
                 openings.end_raised(error)
@@ -282,9 +283,18 @@ class SpeechHearing:
             opening_seconds=self._opening_seconds,
         )
 
-    async def refuse(self, browser: HearingSocket) -> None:
-        """Close the browser as a hearing the service cannot give."""
-        await browser.close(HopClose.SERVICE_FAILED)
+    async def refuse(
+        self, browser: HearingSocket, unavailable: CoPresenterUnavailableError
+    ) -> None:
+        """Close the browser on a hearing its tokens could not be read for.
+
+        A session that ended closes in order, as a sign-out does, so the overlay
+        shows no fault word; anything else is a hearing the service cannot give.
+        """
+        session_ended = isinstance(unavailable, SessionEndedError)
+        await browser.close(
+            HopClose.NORMAL if session_ended else HopClose.SERVICE_FAILED
+        )
 
 
 class ReadinessFailure(StrEnum):
@@ -453,6 +463,19 @@ def _hearing_callbacks(
         on_turn_ended=opened,
         on_reconnected=reconnected,
     )
+
+
+def _token_read_ending(
+    unavailable: CoPresenterUnavailableError,
+) -> Callable[[StepTimer], None]:
+    """How a line records a hearing its tokens could not be read for."""
+    if isinstance(unavailable, SessionEndedError):
+        return _ended_by_the_app
+    return _tokens_unavailable
+
+
+def _ended_by_the_app(step: StepTimer) -> None:
+    step.add(ending=HearingEnding.APP_ENDED)
 
 
 def _tokens_unavailable(step: StepTimer) -> None:
