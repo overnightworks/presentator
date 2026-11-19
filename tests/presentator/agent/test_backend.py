@@ -383,35 +383,31 @@ async def test_a_stop_is_worded_by_its_outcome_alone(
     ) == (kind.value, code.value, stop.outcome.value, stop.detail, stop.retry_after_s)
 
 
-@pytest.mark.parametrize(
-    ("message", "stop"),
-    [
-        pytest.param("\ud800", None, id="request_invalid"),
-        *(
-            pytest.param(THE_QUESTION, TurnStopped(kind, code), id=code.value)
-            for kind, code in ALL_STOPS
-        ),
-    ],
-)
-@on_an_event_loop
-async def test_every_stop_line_carries_one_field_set_whatever_its_reason(
+async def stop_line_fields(
     message: str, stop: TurnStopped | None, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """A query by any stop field reads every stop, a refused request included."""
+) -> set[str]:
+    """The field names of the stop line one spoken message ends in."""
     answerer = GatewayAnswerer(
         ScriptedBackend(stop=stop), a_relying_party(FrozenClock(instant=NOW))
     )
-
     with json_logged(capsys) as logged, pytest.raises(CoPresenterUnavailableError):
         await spoken_to(answerer, message)
+    return set(the_stop_line(logged).keys())
 
-    assert the_stop_line(logged).keys() >= {
-        "outcome",
-        "reason",
-        "stop_outcome",
-        "detail",
-        "retry_after_s",
-    }
+
+@pytest.mark.parametrize(("kind", "code"), ALL_STOPS)
+@on_an_event_loop
+async def test_every_stop_line_carries_the_fields_of_a_refused_request(
+    kind: TurnStopKind,
+    code: RejectionCode | FailureCode,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A stop by any reason writes exactly the fields a request_invalid stop writes."""
+    refused_request = await stop_line_fields("\ud800", None, capsys)
+
+    stopped = await stop_line_fields(THE_QUESTION, TurnStopped(kind, code), capsys)
+
+    assert stopped == refused_request
 
 
 @pytest.mark.parametrize(
