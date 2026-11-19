@@ -71,7 +71,7 @@ from presentator.contracts.decks import (
     SourceRunFailure,
 )
 from presentator.contracts.models import Role, User
-from presentator.contracts.voice import SampleLanguage
+from presentator.contracts.words import Language
 from presentator.host.config import Settings, WhereBuildsRun
 from presentator.host.main import agent_front, web_auth_config_for
 from presentator.host.oidc import admission_of, oidc_client_config
@@ -319,9 +319,9 @@ def a_settings() -> Settings:
     )
 
 
-def the_speech_voices() -> Mapping[SampleLanguage, wire.VoiceId]:
+def the_speech_voices() -> Mapping[Language, wire.VoiceId]:
     """The voices an instance speaks in when no setting names them."""
-    return a_settings().speech_voices()
+    return a_settings().speech_voices
 
 
 def a_content_security_policy() -> str:

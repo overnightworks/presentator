@@ -513,14 +513,14 @@ def _copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands
         use=CoPresenterUse(
             answers=answers,
             speech=SpeechHearing(
-                settings.speech_service, voices=settings.speech_voices()
+                settings.speech_service, voices=settings.speech_voices
             ),
             decks=decks.store,
             sources=decks.sources,
             texts=texts,
             boundaries=split_sentences,
             speaking=SpeechSpeaking(
-                settings.speech_service, voices=settings.speech_voices()
+                settings.speech_service, voices=settings.speech_voices
             ),
             person_access=SessionAccess(
                 auth.relying_party,

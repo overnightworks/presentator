@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
+from presentator.application.preferences import offered_language
 from presentator.contracts.copresenter import (
     AnswerText,
     Audio,
@@ -12,15 +13,13 @@ from presentator.contracts.copresenter import (
     Sentence,
     ShowSlide,
 )
-from presentator.contracts.voice import SampleLanguage
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
 
     from presentator.contracts.copresenter import AnswerEvent, SpeechTokens
+    from presentator.contracts.words import Language
     from presentator.ports.copresenter import SentenceBoundaries, Speaking
-
-DEFAULT_LANGUAGE: Final = "de"
 
 _TERMINATOR_WITH_CONTENT_AFTER = re.compile(r"[.!?…:;\n]\s*\S")
 # The boundary finder judges a word by the words before it; fewer than this
@@ -72,23 +71,13 @@ class SpokenAnswer:
         return ()
 
 
-def spoken_language(
-    heard: SampleLanguage | None, interface: Callable[[], str]
-) -> SampleLanguage:
+def spoken_language(heard: Language | None, interface: Callable[[], str]) -> Language:
     """The language a question is answered in, written and spoken.
 
-    The language it was heard in, else the asking person's interface language as
-    `voice_language_of` reads it; that is read only when nothing was heard.
+    The language it was heard in, else the offered language the asking person's
+    interface language names; that is read only when nothing was heard.
     """
-    return heard or voice_language_of(interface())
-
-
-def voice_language_of(written: str | None) -> SampleLanguage:
-    """The language a tag names when the voice has it, else German."""
-    try:
-        return SampleLanguage(written)
-    except ValueError:
-        return SampleLanguage(DEFAULT_LANGUAGE)
+    return heard or offered_language(interface())
 
 
 async def spoken_events(

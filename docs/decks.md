@@ -16,10 +16,10 @@ Authors outside this repository rely on these rules. Local assets,
   names a `title`.
 - **DK2** The folder name is the deck's address, so a title change moves no
   link.
-- **DK3** `language` is optional. `de` or `en` is the language the
-  co-presenter hears first and the language of the room's words, and any other
-  value, or none, reads as German. It hears the other of German and English as
-  well.
+- **DK3** `language` is optional. A language tag the lobby's catalogs offer
+  is the language the co-presenter hears first and the language of the room's
+  words, and any other value, or none, reads as the catalogs' source language.
+  It hears the other offered languages as well.
 - **DK4** The build has no network and writes nothing outside the deck, so a
   deck builds only with the themes and addons `slidev/package.json` carries and
   with the files it carries itself.

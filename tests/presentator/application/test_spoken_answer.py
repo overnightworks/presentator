@@ -10,7 +10,6 @@ from presentator.application.spoken_answer import (
     SpokenAnswer,
     spoken_events,
     spoken_language,
-    voice_language_of,
 )
 from presentator.contracts.copresenter import (
     AnswerEvent,
@@ -22,7 +21,7 @@ from presentator.contracts.copresenter import (
     ShowSlide,
     SpeechTokens,
 )
-from presentator.contracts.voice import SampleLanguage
+from presentator.contracts.words import SOURCE_LANGUAGE, Language
 
 TOKENS = SpeechTokens(person="a-person", workload="a-workload")
 
@@ -183,33 +182,14 @@ def test_a_speech_failure_propagates_after_earlier_sentences_without_done() -> N
 @pytest.mark.parametrize(
     ("heard", "interface", "language"),
     [
-        (SampleLanguage.ENGLISH, "de", SampleLanguage.ENGLISH),
-        (SampleLanguage.GERMAN, "en", SampleLanguage.GERMAN),
-        (None, "en", SampleLanguage.ENGLISH),
-        (None, "de", SampleLanguage.GERMAN),
-        (None, "fr", SampleLanguage.GERMAN),
+        ("en", "de", "en"),
+        ("de", "en", "de"),
+        (None, "en", "en"),
+        (None, "de", "de"),
+        (None, "fr", SOURCE_LANGUAGE),
     ],
 )
-def test_the_heard_language_wins_over_the_persons_then_german(
-    heard: SampleLanguage | None, interface: str, language: SampleLanguage
+def test_the_heard_language_wins_over_the_persons_then_the_catalog_source(
+    heard: Language | None, interface: str, language: Language
 ) -> None:
-    assert spoken_language(heard, lambda: interface) is language
-
-
-# DK3
-@pytest.mark.parametrize(
-    ("written", "language"),
-    [
-        ("de", SampleLanguage.GERMAN),
-        ("en", SampleLanguage.ENGLISH),
-        (None, SampleLanguage.GERMAN),
-        ("", SampleLanguage.GERMAN),
-        ("fr", SampleLanguage.GERMAN),
-        ("EN", SampleLanguage.GERMAN),
-        ("de-DE", SampleLanguage.GERMAN),
-    ],
-)
-def test_a_decks_written_language_is_german_or_english_and_else_german(
-    written: str | None, language: SampleLanguage
-) -> None:
-    assert voice_language_of(written) is language
+    assert spoken_language(heard, lambda: interface) == language

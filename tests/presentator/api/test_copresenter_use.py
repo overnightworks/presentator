@@ -9,11 +9,10 @@ from presentator.contracts.copresenter import (
     Question,
 )
 from presentator.contracts.models import Role
-from presentator.contracts.voice import SampleLanguage
 from tests.presentator.application.support.fakes import FakeDeckStore
 from tests.support.copresenter_support import ASKED, PrivateFakes, a_use
 
-A_QUESTION = Question(said="Frage", slide=1, language=SampleLanguage.GERMAN)
+A_QUESTION = Question(said="Frage", slide=1, language="de")
 
 
 def test_cancelling_an_answer_awaits_the_private_operation() -> None:

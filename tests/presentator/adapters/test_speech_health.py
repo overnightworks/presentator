@@ -15,7 +15,7 @@ from presentator.contracts.copresenter import (
     CoPresenterReadiness,
     CoPresenterUnavailableError,
 )
-from presentator.contracts.voice import SampleLanguage
+from presentator.contracts.words import LANGUAGES, Language
 from tests.support.lobby import the_speech_voices
 from tests.support.log_lines import LoggedText, json_logged
 from tests.support.speech_service import (
@@ -69,9 +69,9 @@ def test_a_listed_voice_on_a_service_in_its_start_load_is_unavailable() -> None:
         readiness_of(fake)
 
 
-@pytest.mark.parametrize("language", list(SampleLanguage))
+@pytest.mark.parametrize("language", list(LANGUAGES))
 def test_a_service_not_offering_the_voice_of_one_language_is_unavailable(
-    language: SampleLanguage,
+    language: Language,
 ) -> None:
     voices = dict(the_speech_voices())
     del voices[language]
@@ -84,9 +84,9 @@ def test_a_service_not_offering_the_voice_of_one_language_is_unavailable(
         readiness_of(fake)
 
 
-@pytest.mark.parametrize("language", list(SampleLanguage))
+@pytest.mark.parametrize("language", list(LANGUAGES))
 def test_one_languages_voice_not_ready_in_the_start_load_is_unavailable(
-    language: SampleLanguage,
+    language: Language,
 ) -> None:
     voices_offered = {
         str(voice): voice != the_speech_voices()[language]

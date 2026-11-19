@@ -19,8 +19,11 @@ from presentator.ports.preferences import (
 )
 
 
-def offered_language(tag: str) -> Language:
-    """The offered language a stored or resolved tag names, else the fallback."""
+def offered_language(tag: str | None) -> Language:
+    """The offered language a tag names, else the catalogs' source language.
+
+    The one fallback of every language choice: a page's, a deck's and an answer's.
+    """
     return tag if tag in LANGUAGES else SOURCE_LANGUAGE
 
 

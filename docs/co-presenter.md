@@ -61,8 +61,9 @@ the cluster, and that hop's trust sentence is in
   moves the slide and takes no clicks; the band covers the slide's bottom strip
   only for its ten seconds.
 - **CP10** The presenter's own controls and fault words follow the presenter's
-  account language (German or English), else the browser's, else German, as the
-  lobby's [LB1](lobby.md); the room notice and pills keep following the deck's
+  account language when the lobby's catalogs offer it, else the browser's, else
+  the catalogs' source language, as the lobby's [LB1](lobby.md) and
+  [decks](decks.md) DK3; the room notice and pills keep following the deck's
   language, as [decks](decks.md) DK3 rules, and so does the hearing request; a
   question carries the language its utterance was heard in. `/who` names the
   language of the controls beside the deck's. Until it has answered the overlay

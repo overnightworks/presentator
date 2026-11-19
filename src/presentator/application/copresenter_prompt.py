@@ -1,17 +1,18 @@
 """The turn the answering model is given: the question and the deck around it."""
 
-from typing import assert_never
-
 from presentator.contracts.copresenter import DeckText, Question, SlideText
-from presentator.contracts.voice import SampleLanguage
 
 
 def user_message(question: Question, deck_text: DeckText) -> str:
-    """What was said, the current slide, the deck around it."""
+    """What was said, the current slide, the deck around it.
+
+    The answer language is named by its BCP 47 tag, the catalogs' own name for
+    it, so a language the catalogs add is named without a list of its own here.
+    """
     pages = "\n\n".join(_page(slide) for slide in deck_text.slides)
     current = deck_text.at(question.slide)
     here = (
-        f"Folie {question.slide} is not in this deck."
+        f"Slide {question.slide} is not in this deck."
         if current is None
         else _page(current, current_mark=True)
     )
@@ -21,18 +22,8 @@ def user_message(question: Question, deck_text: DeckText) -> str:
         f"--- CURRENT SLIDE ---\n{here}\n--- END CURRENT SLIDE ---\n\n"
         f"--- DECK ---\n{pages}\n--- END DECK ---\n\n"
         f"The person said: {question.said}\n"
-        f"Answer in {_name_of(question.language)}."
+        f"Answer in the language whose BCP 47 tag is {question.language}."
     )
-
-
-def _name_of(language: SampleLanguage) -> str:
-    match language:
-        case SampleLanguage.GERMAN:
-            return "German"
-        case SampleLanguage.ENGLISH:
-            return "English"
-        case _:
-            assert_never(language)
 
 
 def _page(slide: SlideText, *, current_mark: bool = False) -> str:

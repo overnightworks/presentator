@@ -16,7 +16,7 @@ from presentator.contracts.copresenter import (
     HearingTranscript,
     SpeechTokens,
 )
-from presentator.contracts.voice import SampleLanguage
+from presentator.contracts.words import LANGUAGES, Language
 from tests.support.lobby import the_speech_voices
 from tests.support.log_lines import events_of, json_logged
 from tests.support.speech_service import (
@@ -110,9 +110,7 @@ def _interim(text: str) -> HearingTranscript:
     return HearingTranscript(text=text, final=False)
 
 
-def _final(
-    text: str, language: SampleLanguage = SampleLanguage.GERMAN
-) -> HearingTranscript:
+def _final(text: str, language: Language = "de") -> HearingTranscript:
     return HearingTranscript(text=text, final=True, language=language)
 
 
@@ -139,13 +137,13 @@ def test_deltas_grow_per_item_and_the_completed_text_replaces_them() -> None:
     assert browser.closed_with == [HopClose.NORMAL]
 
 
-@pytest.mark.parametrize("language", list(SampleLanguage))
+@pytest.mark.parametrize("language", list(LANGUAGES))
 def test_a_completed_transcript_carries_the_language_the_hearing_decoded_it_in(
-    language: SampleLanguage,
+    language: Language,
 ) -> None:
     events = (
         a_delta("Hello"),
-        a_completed("Hello there.", language=wire.Language(language.value)),
+        a_completed("Hello there.", language=wire.Language(language)),
     )
 
     transcripts, _browser = asyncio.run(_heard_through(sending(*events)))
