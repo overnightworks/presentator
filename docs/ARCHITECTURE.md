@@ -135,7 +135,7 @@ carries a language tag, no sentence. The overlay owns its pair ([co-presenter](c
 settings and hal's token clients are trusted. The shared speech service gets readiness, PCM, transcripts, spoken
 sentences and two tokens (the person's access token and presentator's workload token) over its plain
 `http` origin; cookies are not forwarded, and what the service keeps is the shared section
-No operator blessing narrows this model, so an audit keeps the default. The platform confines the
+`#sprachdienst`. No operator blessing narrows this model, so an audit keeps the default. The platform confines the
 worker's pod; presentator's k3d CI job applies the platform's manifests to run the worker's
 self-check.
 
