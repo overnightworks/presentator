@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Final
 
+from presentator.adapters.persisted import read_persisted
 from presentator.contracts.decks import (
     Build,
     BuildAttempt,
@@ -180,13 +181,23 @@ def _attempt[Instant](
     written_megabytes, allowed_megabytes, allowed_entries = columns[5:]
     if commit is None or started_at is None or outcome is None:
         return None
-    if reason is None:
+    known_outcome = read_persisted(BuildOutcome, outcome, unknown=None)
+    known_reason = (
+        None
+        if reason is None
+        else read_persisted(BuildFailureReason, reason, unknown=None)
+    )
+    if known_outcome is None or (reason is not None and known_reason is None):
+        # A newer release worded it: it is listed as a failure that says
+        # nothing, which counts as tried rather than being built over and over.
+        known_outcome, failure = BuildOutcome.FAILED, BuildFailure.without_words()
+    elif known_reason is None:
         # A failed attempt always carries a reason; no writer leaves a row
         # without one.
         failure = None
     else:
         failure = BuildFailure(
-            reason=BuildFailureReason(reason),
+            reason=known_reason,
             text=text,
             written_megabytes=written_megabytes,
             allowed_megabytes=allowed_megabytes,
@@ -195,7 +206,7 @@ def _attempt[Instant](
     attempt = BuildAttempt(
         commit=commit,
         started_at=read_instant(started_at),
-        outcome=BuildOutcome(outcome),
+        outcome=known_outcome,
         failure=failure,
         toolchain=_read_toolchain(stored_toolchain, commit),
     )

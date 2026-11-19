@@ -88,6 +88,18 @@ def test_a_persons_choice_survives_a_round_trip(
     assert people.read(_PERSON) == chosen
 
 
+def test_a_theme_a_newer_release_wrote_reads_as_following_the_system(
+    people: PostgresPersonPreferencesStore, engine: Engine
+) -> None:
+    people.write(_PERSON, PersonPreferences(theme=ThemeChoice.DARK))
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE person_preferences SET theme = 'from-a-newer-release'"
+        )
+
+    assert people.read(_PERSON) == PersonPreferences(theme=ThemeChoice.FOLLOW_SYSTEM)
+
+
 def test_one_persons_choice_is_not_another_persons(
     people: PostgresPersonPreferencesStore,
 ) -> None:

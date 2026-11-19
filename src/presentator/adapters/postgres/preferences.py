@@ -5,6 +5,7 @@ from typing import Final
 
 from sqlalchemy import Engine, text
 
+from presentator.adapters.persisted import read_persisted
 from presentator.contracts.preferences import (
     InstanceSettings,
     PersonPreferences,
@@ -69,7 +70,11 @@ class PostgresPersonPreferencesStore:
         """Read that person's choices."""
         with self.engine.connect() as connection:
             row = connection.execute(_READ_PREFERENCES, {"user_id": user_id}).fetchone()
-        return None if row is None else PersonPreferences(theme=ThemeChoice(row[0]))
+        if row is None:
+            return None
+        return PersonPreferences(
+            theme=read_persisted(ThemeChoice, row[0], unknown=ThemeChoice.FOLLOW_SYSTEM)
+        )
 
     def write(self, user_id: str, preferences: PersonPreferences) -> None:
         """Write that person's choices over whatever stood there."""
