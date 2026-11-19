@@ -208,7 +208,7 @@ def test_a_sweep_that_found_no_run_to_take_writes_no_line(
 def test_a_listing_that_did_not_finish_deletes_nothing(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Root unlisted or missing."""
+    """Root unlisted."""
     builder, store, mirror, source_store = over_rows(on_disk=("one",))
     builder.listing_fails = True
     decks = decks_over(

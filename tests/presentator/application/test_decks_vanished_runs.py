@@ -5,8 +5,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from presentator.application.decks import Decks
-from presentator.contracts.decks import BuildOutcome, SourceRunOutcome
+from presentator.contracts.decks import BuildOutcome, DeckState, SourceRunOutcome
 from tests.presentator.application.support.decks_support import (
+    OWNER,
     DecksFakes,
     a_folder,
     decks_over,
@@ -41,7 +42,9 @@ def the_standing_run_is_on_disk(fakes: DecksFakes) -> bool:
     return standing.run in fakes.builder.on_disk
 
 
-def test_a_deck_whose_run_vanished_is_built_again_at_the_next_refresh() -> None:
+def test_a_deck_whose_run_vanished_reads_ready_once_the_next_refresh_rebuilt_it() -> (
+    None
+):
     decks, fakes = a_built_deck()
     its_run_vanishes(fakes)
 
@@ -49,6 +52,10 @@ def test_a_deck_whose_run_vanished_is_built_again_at_the_next_refresh() -> None:
 
     assert fakes.builder.built == [_A_DECK, _A_DECK]
     assert the_standing_run_is_on_disk(fakes)
+    page = decks.page(_A_DECK, viewer=OWNER)
+    assert page is not None
+    assert page.state is DeckState.READY
+    assert [deck.state for deck in decks.listed(viewer=OWNER)] == [DeckState.READY]
 
 
 def test_a_deck_whose_run_is_on_disk_is_not_built_again() -> None:
