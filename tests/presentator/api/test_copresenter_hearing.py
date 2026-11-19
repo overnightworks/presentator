@@ -672,8 +672,10 @@ def test_a_browser_that_leaves_during_the_token_read_sends_no_audio_and_logs_no_
 def test_a_hearing_shows_no_marker_in_any_log_frame_close_or_stored_row(
     engine: Engine, case: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    with a_speech_instance(engine, LEAK_HEARINGS[case]()) as instance:
+    leak = LEAK_HEARINGS[case]
+    with a_speech_instance(engine, leak.scenario()) as instance:
         heard = hear_and_record(instance)
+        assert heard.closed_with == leak.close
         assert_nothing_shows(
             instance,
             heard.logged,
