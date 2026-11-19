@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  type AnswerMode,
   boxesIntersect,
   contrastRatio,
   expectFaultWordClearOfControls,
   expectPanelCoversNoSlidevControl,
-  openPresenter,
   readBarBackground,
   readPaintedColours,
+} from './presenter-bar-measures'
+import {
+  type AnswerMode,
+  openPresenter,
   registerOverlayHarness,
   saveEvidence,
   sendHeard,
