@@ -133,7 +133,7 @@ def test_a_sigint_ends_a_served_process_in_its_stop_line_alone(
 
     events = [line["event"] for line in json_lines(output)]
     assert exit_code == -signal.SIGINT
-    assert "process.stopped" in events
+    assert events.count("process.stopped") == 1
     assert "process.crashed" not in events
 
 
