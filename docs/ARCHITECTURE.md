@@ -106,12 +106,12 @@ life ends the pod and the StatefulSet makes a fresh one.
 
 ## 5. Crosscutting Concepts
 
-**Persistence.** Postgres (`PRESENTATOR_DATABASE_URL`) holds the state. A build is one run (talk, deck
-text, PDF) in the S3 bucket all pods share, named by its row and served from a bounded copy on each pod's
-disk; it and each pod's mirrors are caches the rows rebuild. The ssh host keys every pod trusts are rows.
-`serve` creates no table; `presentator migrate` runs the migrations of `adapters/postgres` under a lock. A
-revision behind this release is refused at start; a newer one is served, and a stored word it does not
-know reads as its generic case, logged once. An unknown role or account kind fails loud.
+**Persistence.** Postgres holds the state. A build is one run (talk, deck text, PDF) in the S3
+bucket all pods share, named by its row and served from a bounded copy on each pod's disk; it and
+each pod's mirrors are caches the rows rebuild. The ssh host keys every pod trusts are rows. `serve`
+creates no table; `presentator migrate` runs the migrations of `adapters/postgres` under a lock. A
+revision behind this release is refused at start; a newer one is served, and a stored word it does
+not know reads as its generic case, logged once. An unknown role or account kind fails loud.
 
 **Authentication and wire.** Keycloak groups admit people ([sign-in](sign-in.md)). There is no
 session cache: rate limits live in the Redis every pod shares (webauth's `RedisRateLimitBackend`,
@@ -122,11 +122,11 @@ Problems follow RFC 9457 with `tag:` URI types.
 
 **Logging.** logline owns it, configured first in each process: every line is one JSON object. One
 line per HTTP request names the route template, never the path, with `sub` and the client address
-from webauth's decisions (`api/request_line.py`). Every other line is a literal `<noun>.<verb_past>`
-event of ids, counts and codes: the web writes `process.started`, `process.ready` and
-`process.stopped`, and a start the settings, the database or the worker's self-check refuse ends in
-`process.failed` with a `reason` code and exit status 1 (`presentator`) or 2 (`presentator-worker`).
-The co-presenter's events are in [co-presenter](co-presenter.md).
+from webauth (gates and sign-in callback the person, `ClientAddressMiddleware` the address). Every
+other line is a literal `<noun>.<verb_past>` event of ids, counts and codes: the web writes
+`process.started`, `.ready` and `.stopped`, and a start the settings, the database or the worker's
+self-check refuse ends in `process.failed` with a `reason` code and exit status 1 (`presentator`) or
+2 (`presentator-worker`). Co-presenter events: [co-presenter](co-presenter.md).
 
 **Words and look.** Every lobby word comes from one gettext catalog per language
 (`frontend/src/lib/catalogs`), generated into typed modules for page and server; the session answer
