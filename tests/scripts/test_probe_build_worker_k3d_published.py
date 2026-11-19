@@ -7,6 +7,7 @@ from types import ModuleType
 import pytest
 from ruamel.yaml import YAML
 
+from tests.scripts.support.k3d_pods import Document
 from tests.scripts.support.k3d_world import (
     BROKEN_FORMS,
     OTHER_DIGEST,
@@ -169,7 +170,7 @@ def test_a_probe_store_runs_the_image_of_ci_s_service_container_of_that_store(
     manifests_module: ModuleType, store: int
 ) -> None:
     pinned = pinned_store(manifests_module, store).rsplit("/", 1)[-1]
-    workflow = YAML(typ="safe").load(CI_WORKFLOW.read_text())
+    workflow: Document = YAML(typ="safe").load(CI_WORKFLOW.read_text())  # pyright: ignore[reportUnknownMemberType]
     services = [
         service["image"]
         for job in workflow["jobs"].values()
