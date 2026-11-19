@@ -17,6 +17,7 @@ import {
 import {
   addonRootDirectory,
   buildAddonDeck,
+  closeBrowser,
   createMediaObservation,
   createOverlayDeckServer,
   endHearings,
@@ -33,6 +34,7 @@ import {
   state,
   wordsOf,
 } from './presenter-overlay-harness'
+import { frame } from './websocket-frames'
 
 registerOverlayHarness()
 
@@ -71,7 +73,7 @@ describe('presenter controls', () => {
       await expect.poll(() => state.hearingClosed).toBeGreaterThanOrEqual(state.hearingOpened)
     } finally {
       state.answerMode = 'audio'
-      await browser.close()
+      await closeBrowser(browser)
     }
   }, 30_000)
 
@@ -102,7 +104,7 @@ describe('presenter controls', () => {
       ])
     } finally {
       state.answerMode = 'audio'
-      await browser.close()
+      await closeBrowser(browser)
     }
   }, 30_000)
 
@@ -139,7 +141,7 @@ describe('presenter controls', () => {
       await page.keyboard.press('Enter')
       await page.waitForURL(`${state.origin}/`)
     } finally {
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -166,7 +168,7 @@ describe('presenter controls', () => {
       await expectPanelCoversNoSlidevControl(page)
       await saveEvidence(page, `presenter-layout-${layout}-${width}-heard-panel.png`)
     } finally {
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -195,7 +197,7 @@ describe('presenter controls', () => {
       await saveEvidence(page, 'presenter-on-1024.png')
     } finally {
       state.heardOnConnect = true
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -228,7 +230,7 @@ describe('presenter controls', () => {
       await expectFocusRing(ai, 'the switch')
       await saveEvidence(page, `presenter-bar-focus-${scheme}-1024.png`)
     } finally {
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -263,7 +265,7 @@ describe('presenter controls', () => {
       await saveEvidence(page, `presenter-heard-panel-${scheme}-1024.png`)
     } finally {
       state.answerMode = 'audio'
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -310,7 +312,7 @@ describe('presenter controls', () => {
       await page.goto(`${state.origin}/presenter/1`, { waitUntil: 'domcontentloaded', timeout: 10_000 })
       expect(await page.getByRole('switch', { name: en['controls.switch'] }).getAttribute('aria-checked')).toBe('false')
     } finally {
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -367,7 +369,29 @@ describe('presenter controls', () => {
       }
     } finally {
       state.hearingMode = 'ready'
-      await browser.close()
+      await closeBrowser(browser)
+    }
+  })
+
+  it('shows a transcript that is not final as heard without asking, and passes over an empty one', async () => {
+    state.heardOnConnect = false
+    const { browser, page } = await openPresenter(1024)
+    try {
+      await page.getByRole('switch', { name: en['controls.switch'] }).click({ timeout: 2_000 })
+      await expect.poll(() => page.evaluate(() => (window as unknown as {
+        __copresenter: { snapshot: () => { capturing: boolean } }
+      }).__copresenter.snapshot().capturing)).toBe(true)
+      const heard = page.locator('.copresenter .heard')
+      sendHeard('Where does the', false)
+      await expect.poll(async () => (await heard.textContent())?.trim()).toBe('Where does the')
+      sendHeard('', true)
+      sendHeard('', false)
+      sendHeard('Where does the handoff slow down?')
+      await expect.poll(() => state.askBodies.map((body) => body.said)).toEqual(['Where does the handoff slow down?'])
+      expect((await heard.textContent())?.trim()).toBe('Where does the handoff slow down?')
+    } finally {
+      state.heardOnConnect = true
+      await closeBrowser(browser)
     }
   })
 
@@ -389,7 +413,7 @@ describe('presenter controls', () => {
         expect(await page.getByText(word, { exact: true }).count()).toBe(0)
       }
     } finally {
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -419,7 +443,7 @@ describe('presenter controls', () => {
         expect(state.media.trackStopped).toBe(false)
       }
     } finally {
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -449,7 +473,7 @@ describe('presenter controls', () => {
       expect(await page.getByRole('complementary', { name: controls['controls.presenterOff'] }).count()).toBe(1)
     } finally {
       state.whoLanguage = 'de'
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -467,7 +491,7 @@ describe('presenter controls', () => {
       expect(await page.getByRole('complementary', { name: wordsOf.de['controls.presenterOff'] }).count()).toBe(1)
     } finally {
       answer()
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -484,7 +508,7 @@ describe('presenter controls', () => {
       expect(await page.locator('.copresenter').getAttribute('aria-label')).toBeNull()
     } finally {
       state.hearingMode = 'ready'
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -505,7 +529,7 @@ describe('presenter controls', () => {
       expect(await page.getByRole('complementary', { name: en['controls.presenterOn'] }).count()).toBe(1)
       expect(scripts).toEqual([])
     } finally {
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -521,7 +545,7 @@ describe('presenter controls', () => {
       await page.getByRole('complementary', { name: wordsOf.de['controls.presenterOn'] }).waitFor({ state: 'attached', timeout: 5_000 })
       expect(await page.getByRole('link', { name: wordsOf.de['controls.home'] }).count()).toBe(1)
     } finally {
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -535,7 +559,7 @@ describe('presenter controls', () => {
       await page.getByText(wordsOf.de['controls.unreachable'], { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
       expect(await page.getByText(en['controls.unreachable'], { exact: true }).count()).toBe(0)
     } finally {
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -565,7 +589,7 @@ describe('presenter controls', () => {
       await saveEvidence(presenter, `presenter-slide-${shown}-${width}.png`)
     } finally {
       state.answerMode = 'audio'
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -583,7 +607,7 @@ describe('presenter controls', () => {
       expect(state.askBodies.map((body) => body.slide)).toEqual([1, 2])
     } finally {
       state.answerMode = 'audio'
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -600,7 +624,7 @@ describe('presenter controls', () => {
       expect(await page.locator('.presenter-bar, .copresenter').count()).toBe(0)
       await saveEvidence(page, 'projector.png')
     } finally {
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -667,15 +691,15 @@ describe('presenter controls', () => {
         const [workletPath = ''] = await workletLoads()
         expect(workletPath.startsWith(`${base}assets/`), workletPath).toBe(true)
         if (nested) {
-          await page.evaluate(() => (window as unknown as {
-            __copresenter: { say: (text: string) => void }
-          }).__copresenter.say('Which deck is this?'))
+          for (const socket of overlaySockets) {
+            socket.write(frame(JSON.stringify({ text: 'Which deck is this?', final: true, language: 'en' })))
+          }
           await expect.poll(() => asked).toEqual([{ said: 'Which deck is this?', deck: slug }])
           // One /who at start for the controls' language, one on turning the AI on.
           expect(whoDecks).toEqual([slug, slug])
         }
       } finally {
-        await browser.close()
+        await closeBrowser(browser)
       }
     } finally {
       for (const socket of overlaySockets) socket.destroy()

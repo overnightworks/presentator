@@ -137,12 +137,6 @@ function setOn(value) {
   else turnOff()
 }
 
-function say(text) {
-  if (!on.value) return
-  heard.value = text
-  void ask(text)
-}
-
 function whoUrl() {
   return `${COPRESENTER}/who?deck=${encodeURIComponent(DECK_SLUG)}`
 }
@@ -159,33 +153,40 @@ async function learnAccountLanguage() {
 }
 
 async function turnOn() {
-  if (on.value) return
   const generation = ++activationGeneration
   on.value = true
   error.value = ''
   heard.value = ''
   answer.value = ''
   spokenText = ''
-  let report
+  let hearingReady
+  let fault = null
   try {
-    const response = await fetch(whoUrl())
-    if (!stillActive(generation)) return
-    if (!response.ok) throw new WhoRefused(response.status)
-    report = await response.json()
-    if (!stillActive(generation)) return
-    deckLanguage = report.language
-    await useAccountLanguage(report.interface_language)
+    hearingReady = await readWhoAtSwitchOn()
   } catch (error_) {
-    if (!stillActive(generation)) return
-    error.value = faultLine(error_ instanceof WhoRefused && error_.status === 503 ? VOICE_OFFLINE : UNREACHABLE)
-    return
+    fault = error_
   }
   if (!stillActive(generation)) return
-  if (report.speech?.hearing?.ready) {
+  if (fault) {
+    error.value = faultLine(fault instanceof WhoRefused && fault.status === 503 ? VOICE_OFFLINE : UNREACHABLE)
+    return
+  }
+  if (hearingReady) {
     await startLocalHear(generation)
     return
   }
   fail(faultLine(HEARING_NOT_READY))
+}
+
+// Takes the deck's and the account's language from `/who`, which a switch-off
+// meanwhile does not undo, and tells whether the hearing is ready.
+async function readWhoAtSwitchOn() {
+  const response = await fetch(whoUrl())
+  if (!response.ok) throw new WhoRefused(response.status)
+  const report = await response.json()
+  deckLanguage = report.language
+  await useAccountLanguage(report.interface_language)
+  return report.speech?.hearing?.ready
 }
 
 function turnOff() {
@@ -232,12 +233,12 @@ async function startLocalHear(generation) {
 // One hearing connection on the microphone the switch holds. The same URL
 // serves a reconnect, which the platform routes to any ready pod.
 async function openHearing(stream, generation) {
-  const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const running = startCapture({
     stream,
-    hopUrl: `${scheme}//${window.location.host}${COPRESENTER}/hear?language=${deckLanguage}`,
+    // `http:` becomes `ws:`, `https:` becomes `wss:`.
+    hopUrl: `${window.location.origin.replace(/^http/, 'ws')}${COPRESENTER}/hear?language=${deckLanguage}`,
     workletUrl: WORKLET_URL,
-    onMessage: (data) => onHeard(data, generation),
+    onMessage: onHeard,
   })
   capture = running
   void running.ended.then((end) => endHearing(generation, end, stream))
@@ -259,14 +260,10 @@ function endHearing(generation, end, stream) {
   else fail(faultLine(NO_HEARING))
 }
 
-function onHeard(data, generation) {
-  if (!stillActive(generation) || typeof data !== 'string') return
-  let payload
-  try {
-    payload = JSON.parse(data)
-  } catch {
-    return
-  }
+// The capture hands over no message after it ends, and the server sends each
+// transcript as a JSON text message.
+function onHeard(data) {
+  const payload = JSON.parse(data)
   if (!payload.text) return
   heard.value = payload.text
   if (payload.final) onFinal(payload.text, payload.language, payload.traceparent)
@@ -297,9 +294,9 @@ function isEcho(text, spoken) {
   const words = (value) => new Set(value.toLowerCase().split(/\s+/).filter((w) => w.length > 2))
   const a = words(text)
   const b = words(spoken)
-  if (!a.size) return false
   let overlap = 0
   for (const word of a) if (b.has(word)) overlap += 1
+  // A text of short words only divides 0 by 0, and NaN is no echo.
   return overlap / a.size >= 0.5
 }
 
@@ -322,7 +319,6 @@ function randomHex(byteCount) {
 }
 
 async function ask(text, utteranceLanguage, heardTraceparent) {
-  if (!capture) return
   invalidatePlayback()
   if (askAbort) askAbort.abort()
   const controller = new AbortController()
@@ -346,8 +342,8 @@ async function ask(text, utteranceLanguage, heardTraceparent) {
       }),
       signal: controller.signal,
     })
-    if (!response.ok || !response.body) {
-      error.value = response.ok ? faultLine(NO_ANSWER) : await refusalLine(response)
+    if (!response.ok) {
+      error.value = await refusalLine(response)
       return
     }
     await readSse(response.body, controller.signal)
@@ -371,13 +367,13 @@ async function readSse(body, signal) {
   }
 }
 
+// The server writes each event as one `event:` line and one `data:` line of
+// JSON; a block it did not write throws, and the answer shows "No answer".
+const SSE_EVENT = /^event: (\S+)\ndata: (.*)$/
+
 function applySse(block) {
-  if (!on.value) return
-  const kind = (block.match(/^event:\s*(\S+)/m) || [])[1]
-  const dataLine = (block.match(/^data: ?(.*)$/m) || [])[1]
-  if (!kind || dataLine == null) return
-  let data
-  try { data = JSON.parse(dataLine) } catch { return }
+  const [, kind, dataLine] = SSE_EVENT.exec(block)
+  const data = JSON.parse(dataLine)
   if (kind === 'text' && data.text) answer.value += data.text
   if (kind === 'sentence' && data.text) unvoicedSentence = data.text
   if (kind === 'audio' && data.wav_b64) {
@@ -396,7 +392,6 @@ function isShownSlide(number) {
 }
 
 function enqueueWav(b64) {
-  if (!on.value) return
   player ??= startPlayer()
   if (!player) return
   const bytes = Uint8Array.from(atob(b64), (c) => c.codePointAt(0))
@@ -439,7 +434,7 @@ function invalidatePlayback() {
 
 onMounted(() => {
   window.addEventListener('pagehide', turnOff)
-  window.__copresenter = { setOn, say, snapshot }
+  window.__copresenter = { snapshot }
   void learnAccountLanguage()
 })
 onUnmounted(() => {
@@ -482,13 +477,10 @@ onUnmounted(() => {
       <span class="label">{{ words['controls.switch'] }}</span>
     </button>
     <section
-      v-if="on && (heard || answer)"
+      v-if="on && heard"
       class="panel"
     >
-      <p
-        v-if="heard"
-        class="line heard"
-      >
+      <p class="line heard">
         {{ heard }}
       </p>
       <p
