@@ -14,7 +14,8 @@ from presentator.api.decks import TalkFiles
 from presentator.api.lobby_shell import _InlineScripts  # pyright: ignore[reportPrivateUsage] - HTMLParser.feed, not Python code, calls its hooks
 from presentator.api.problems import ValidationFault
 from presentator.contracts import words
-from presentator.host.config import Settings, WorkerSettings
+from presentator.host.config import Settings
+from presentator.host.worker_settings import WorkerSettings
 from tests.conftest import redis_environment, served_database
 from tests.gitmirror.test_mirror import DumbHttpHandler, RespondingHandler
 from tests.presentator.host.conftest import (

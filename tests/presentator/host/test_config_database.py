@@ -10,12 +10,12 @@ from pathlib import Path
 import pytest
 
 from presentator.host.config import (
-    ConfigurationError,
     DatabaseSettings,
     Settings,
     load_database_settings,
     load_settings,
 )
+from presentator.host.environment import ConfigurationError
 from tests.presentator.host.support.config_refusals import (
     assert_refusal_names,
     assert_refusal_never_quotes,

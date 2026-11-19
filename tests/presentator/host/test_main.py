@@ -25,12 +25,8 @@ from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.decks import OUTPUT_DIRECTORY, PDF_FILE
 from presentator.contracts.models import Role, User
 from presentator.host import main
-from presentator.host.config import (
-    SECRET_LENGTH,
-    ConfigurationError,
-    WhereBuildsRun,
-    load_settings,
-)
+from presentator.host.config import SECRET_LENGTH, WhereBuildsRun, load_settings
+from presentator.host.environment import ConfigurationError
 from presentator.host.main import Instance
 from tests.support.copresenter_support import QUESTION
 from tests.support.git_remote import (

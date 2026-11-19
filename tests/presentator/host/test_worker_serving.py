@@ -9,10 +9,10 @@ from pathlib import Path
 import pytest
 
 from presentator.host import worker
-from presentator.host.config import MINIMUM_KEY_LENGTH
 from presentator.host.lifecycle import StopLine
 from presentator.host.worker import StartRefusal
 from presentator.host.worker_serving import Serving
+from presentator.host.worker_settings import MINIMUM_KEY_LENGTH
 from tests.presentator.host.support.worker_boundary import LOADED_SETTINGS
 from tests.presentator.host.support.worker_lines import refusal_reasons
 from tests.support.log_lines import json_logged

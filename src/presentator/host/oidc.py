@@ -10,12 +10,8 @@ from webauth.oidc import OidcClientConfig, OidcRelyingParty
 from webauth.oidc_transport import post_token_request_over_https
 
 from presentator.api.auth import LOGIN_PATH, SIGN_IN_CALLBACK_PATH
-from presentator.host.config import (
-    Settings,
-    cannot_start,
-    read_secret_file,
-    variable_of,
-)
+from presentator.host.config import Settings, read_secret_file
+from presentator.host.environment import cannot_start, variable_of
 
 _PROTOCOL_PATH: Final = "protocol/openid-connect"
 _PERSON_SCOPES: Final = ("openid", "profile", "groups")

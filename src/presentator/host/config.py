@@ -1,7 +1,6 @@
 """What varies by deployment; everything else is a constant beside its owner."""
 
 import re
-import threading
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -24,6 +23,17 @@ from presentator.adapters.postgres.engine import LONGEST_TIMEOUT
 from presentator.adapters.speech import VoiceId, voice_speaks
 from presentator.agent.settings import AgentSettings
 from presentator.contracts.voice import SampleLanguage
+from presentator.host.environment import (
+    ENVIRONMENT_PREFIX,
+    ConfigurationError,
+    cannot_start,
+    variable_of,
+)
+from presentator.host.worker_settings import (
+    DEFAULT_BUILD_OUTPUT_MEGABYTES,
+    DEFAULT_BUILD_TIMEOUT_SECONDS,
+    MINIMUM_KEY_LENGTH,
+)
 
 # Every secret this instance is handed is at least this many characters, so no
 # guard of it rests on a value somebody could type.
@@ -31,7 +41,6 @@ SECRET_LENGTH: Final = 32
 
 _INVALID_PORT: Final = "has an invalid port"
 _SCOPE_TOKEN: Final = re.compile(r"[\x21\x23-\x5B\x5D-\x7E]+")
-_REFUSED: Final = "this environment cannot start an instance"
 _EMPTY_CLIENT_ID: Final = "token_clients: names an empty client id"
 _VOICE_SPEAKS_OTHER: Final = "names a voice that does not speak it"
 _ONE_HOSTNAME: Final = "is another hostname than public_origin"
@@ -43,19 +52,9 @@ _WORKER_REACHED: Final = (
     " run in the worker"
 )
 
-ENVIRONMENT_PREFIX: Final = "PRESENTATOR_"
 _NESTED: Final = "__"
-# The shortest key of the build worker's hello, the web's file and the worker's alike.
-MINIMUM_KEY_LENGTH: Final = 32
-# What the web and the build worker both bound one build step by.
-DEFAULT_BUILD_TIMEOUT_SECONDS: Final = 300.0
-# What the web and the build worker both bound one build's output by.
-DEFAULT_BUILD_OUTPUT_MEGABYTES: Final = 300
 # Room for a dozen talks at the bound one build may leave.
 DEFAULT_BUILD_CACHE_BYTES: Final = 4 * 1024**3
-# The watchdog cannot be armed for longer than threading.TIMEOUT_MAX, and the
-# worker's fixed phases and the clock offset come on top of the build step.
-LONGEST_BUILD_TIMEOUT_SECONDS: Final = threading.TIMEOUT_MAX / 2
 
 
 class WhereBuildsRun(StrEnum):
@@ -77,19 +76,6 @@ class _FieldRefusedError(ValueError):
         """Refuse `field` by `rule`."""
         super().__init__(f"{field}: {rule}")
         self.field = field
-
-
-class ConfigurationError(ValueError):
-    """What the environment carries is not a configuration to run on.
-
-    `variables` names the environment variables that were refused, when it is
-    known which; they are setting names, never values.
-    """
-
-    def __init__(self, message: str, *, variables: tuple[str, ...] = ()) -> None:
-        """Say why, and which variables."""
-        super().__init__(message)
-        self.variables = variables
 
 
 def worker_endpoint(address: str) -> tuple[str, int]:
@@ -486,20 +472,6 @@ class Settings(
         return self
 
 
-class WorkerSettings(BaseSettings):
-    """What the build worker reads of its container's environment, and no file."""
-
-    model_config = SettingsConfigDict(env_prefix=ENVIRONMENT_PREFIX, frozen=True)
-
-    build_timeout_seconds: float = Field(
-        default=DEFAULT_BUILD_TIMEOUT_SECONDS,
-        gt=0,
-        le=LONGEST_BUILD_TIMEOUT_SECONDS,
-        allow_inf_nan=False,
-    )
-    build_output_megabytes: int = Field(default=DEFAULT_BUILD_OUTPUT_MEGABYTES, gt=0)
-
-
 class DatabaseSettings(BaseSettings):
     """What `presentator migrate` and `unpin-host` read, so they need no other."""
 
@@ -519,32 +491,6 @@ class DatabaseSettings(BaseSettings):
     def postgres(self) -> PostgresDatabase:
         """The database, with its password read once from its file."""
         return _postgres_database(self.database_url, self.database_password_file)
-
-
-def variable_of(field_name: str) -> str:
-    """The environment variable that carries a settings field."""
-    return f"{ENVIRONMENT_PREFIX}{field_name}".upper()
-
-
-def worker_settings_variables() -> frozenset[str]:
-    """The environment variables the worker reads, derived from its fields."""
-    return frozenset(variable_of(name) for name in WorkerSettings.model_fields)
-
-
-def load_worker_settings() -> WorkerSettings:
-    """Read the worker's settings, refusing a value its limits cannot hold."""
-    try:
-        return WorkerSettings.model_validate({})
-    except ValidationError as refused:
-        # `msg` states the rule that failed and never quotes the value.
-        faults = [
-            (variable_of(str(fault["loc"][0])), fault["msg"])
-            for fault in refused.errors()
-        ]
-        raise cannot_start(
-            ", ".join(f"{variable}: {rule}" for variable, rule in faults),
-            variables=tuple(variable for variable, _ in faults),
-        ) from None
 
 
 def read_secret_file(
@@ -569,11 +515,6 @@ def read_secret_file(
         short = f"{setting}: is a file that holds at least {minimum_length} characters"
         raise cannot_start(short, variables=variables)
     return SecretStr(secret)
-
-
-def cannot_start(reason: str, *, variables: tuple[str, ...] = ()) -> ConfigurationError:
-    """The refusal an environment no instance can run on is answered with."""
-    return ConfigurationError(f"{_REFUSED}: {reason}", variables=variables)
 
 
 def load_settings() -> Settings:

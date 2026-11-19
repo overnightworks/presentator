@@ -2,12 +2,12 @@
 
 import pytest
 
-from presentator.host.config import worker_settings_variables
 from presentator.host.worker_self_check import (
     KUBERNETES_ENVIRONMENT_KEYS,
     Predicate,
     first_failing_predicate,
 )
+from presentator.host.worker_settings import worker_settings_variables
 from tests.presentator.host.support.sealed_snapshot import (
     sealed_snapshot,
     with_fields,

@@ -228,9 +228,17 @@ name = "The sealed build worker imports no web stack from presentator"
 type = "forbidden"
 # The worker serves its one wire on a raw socket; every module it loads is code
 # inside the sealed container. External packages are leaves here, so a web
-# framework one of them loads stays outside this contract.
+# framework one of them loads stays outside this contract: the web's settings
+# and webauth, whose config loads starlette, are forbidden by name, and a test
+# reads what importing the worker loads.
 source_modules = ["presentator.host.worker"]
-forbidden_modules = ["uvicorn", "fastapi", "starlette"]
+forbidden_modules = [
+    "uvicorn",
+    "fastapi",
+    "starlette",
+    "webauth",
+    "presentator.host.config",
+]
 
 [[tool.importlinter.contracts]]
 id = "route-vocabulary"

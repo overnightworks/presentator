@@ -15,7 +15,8 @@ from httpx2 import Response
 
 from presentator.application.people import People
 from presentator.host import main
-from presentator.host.config import ConfigurationError, load_settings
+from presentator.host.config import load_settings
+from presentator.host.environment import ConfigurationError
 from tests.presentator.application.support.decks_support import (
     a_folder,
     a_source,

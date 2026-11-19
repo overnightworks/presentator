@@ -10,7 +10,8 @@ from agents.mcp_wire import MCP_ENDPOINT_PATH
 from fastapi.testclient import TestClient
 
 from presentator.host import main
-from presentator.host.config import ConfigurationError, load_settings
+from presentator.host.config import load_settings
+from presentator.host.environment import ConfigurationError
 from tests.presentator.host.support.config_refusals import assert_refusal_names
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,

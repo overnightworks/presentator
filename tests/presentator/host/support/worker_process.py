@@ -12,9 +12,9 @@ from enum import StrEnum
 from pathlib import Path
 
 from presentator.host import worker
-from presentator.host.config import WorkerSettings
 from presentator.host.lifecycle import StopLine
 from presentator.host.worker_self_check import Snapshot
+from presentator.host.worker_settings import WorkerSettings
 from tests.presentator.host.support.sealed_snapshot import sealed_snapshot
 from tests.presentator.host.support.worker_boundary import boundary_over
 from tests.support.worker_support import ScriptedLife

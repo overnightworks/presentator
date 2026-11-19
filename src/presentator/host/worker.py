@@ -25,12 +25,7 @@ from presentator.adapters.worker_children import (
     readable_within,
     spawn_gated,
 )
-from presentator.host.config import (
-    MINIMUM_KEY_LENGTH,
-    ConfigurationError,
-    WorkerSettings,
-    load_worker_settings,
-)
+from presentator.host.environment import ConfigurationError
 from presentator.host.lifecycle import StopLine, interrupt_ends_as_a_stop
 from presentator.host.worker_scratch import (
     HOME_DIRECTORY,
@@ -62,6 +57,11 @@ from presentator.host.worker_serving import (
     Serving,
     StepEffects,
     accept_connections,
+)
+from presentator.host.worker_settings import (
+    MINIMUM_KEY_LENGTH,
+    WorkerSettings,
+    load_worker_settings,
 )
 from presentator.host.worker_termination import (
     FaultHandlerWatchdog,

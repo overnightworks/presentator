@@ -10,10 +10,6 @@ from pathlib import Path
 import pytest
 
 from presentator.host import worker, worker_self_check
-from presentator.host.config import (
-    load_worker_settings,
-    worker_settings_variables,
-)
 from presentator.host.lifecycle import StopLine
 from presentator.host.worker_scratch import (
     QUEUE_MOUNT,
@@ -22,6 +18,10 @@ from presentator.host.worker_scratch import (
     scratch_empty,
 )
 from presentator.host.worker_self_check import Predicate, Snapshot
+from presentator.host.worker_settings import (
+    load_worker_settings,
+    worker_settings_variables,
+)
 from tests.presentator.host.support.audit_recording import (
     LAUNCH_EVENTS,
     READ_EVENTS,

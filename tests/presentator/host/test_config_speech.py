@@ -11,7 +11,8 @@ from speech_client import wire
 
 from presentator.contracts.voice import SampleLanguage
 from presentator.host import main
-from presentator.host.config import ConfigurationError, Settings, load_settings
+from presentator.host.config import Settings, load_settings
+from presentator.host.environment import ConfigurationError
 from tests.support.lobby import A_SPEECH_SCOPE, A_SPEECH_SERVICE, a_settings
 from tests.support.log_lines import json_lines
 

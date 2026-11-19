@@ -11,7 +11,8 @@ from presentator.adapters.postgres.deck_store import PostgresDeckStore
 from presentator.adapters.toolchain_identity import toolchain_identity_of
 from presentator.contracts.models import Role, User
 from presentator.host import main
-from presentator.host.config import ConfigurationError, load_settings
+from presentator.host.config import load_settings
+from presentator.host.environment import ConfigurationError
 from presentator.host.worker_serving import emergency_end
 from tests.support.git_remote import GitRemote
 from tests.support.people import seed_user
