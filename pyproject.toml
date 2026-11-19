@@ -393,8 +393,8 @@ as_packages = true
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
-id = "redis-client-and-tandem"
-name = "Only adapters import the Redis client and tandem"
+id = "redis-library"
+name = "Only adapters import the Redis client"
 type = "forbidden"
 # The Redis every pod shares is reached through the adapter that owns its
 # clients and keys; a layer above is handed the limits and the lease.
@@ -405,7 +405,24 @@ source_modules = [
     "presentator.ports",
     "presentator.contracts",
 ]
-forbidden_modules = ["redis", "tandem"]
+forbidden_modules = ["redis"]
+as_packages = true
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+id = "tandem-library"
+name = "Only adapters import tandem"
+type = "forbidden"
+# The ask lease is a tandem slot held through the adapter that owns the
+# client; a layer above is handed the limiter.
+source_modules = [
+    "presentator.host",
+    "presentator.api",
+    "presentator.application",
+    "presentator.ports",
+    "presentator.contracts",
+]
+forbidden_modules = ["tandem"]
 as_packages = true
 allow_indirect_imports = true
 

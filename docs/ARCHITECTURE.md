@@ -164,8 +164,8 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
   advisory lock; the refresh holds a session lock on a pinned connection and bumps an epoch in
   `refresh_owner`, which every refresh and removal write reads `FOR SHARE`, so a holder whose
   connection ended is refused. The ask lease is a tandem slot (cap 1 per session) that lasts the
-  agent's deadline plus a margin and is freed by its holder's token only; a Redis restart can
-  briefly allow a second answer. While Redis cannot answer, every request but `/health` is a 503.
+  agent's deadline plus a margin and is freed by its holder's token only. While Redis cannot answer
+  (it keeps nothing durable), every request but `/health` is a 503: webauth's limiter fails closed.
 - The speech origin is plain `http` and the gateway's `http` or `https`, both at Service addresses
   inside the cluster; presentator sends the workload token and the person's token over that hop and
   relies on the deployment to keep it there.

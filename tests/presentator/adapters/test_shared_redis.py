@@ -80,7 +80,7 @@ type LeaseOf = Callable[[], AbstractAsyncContextManager[Lease]]
 
 
 @pytest.fixture(params=["in memory", "redis"])
-def lease_of(request: pytest.FixtureRequest, redis_url: str, server: Redis) -> LeaseOf:
+def lease_of(request: pytest.FixtureRequest) -> LeaseOf:
     """The in-memory double and the Redis adapter, which one contract holds for."""
     if request.param == "in memory":
 
@@ -90,6 +90,9 @@ def lease_of(request: pytest.FixtureRequest, redis_url: str, server: Redis) -> L
             yield Lease(limiter, limiter.lose_every_lease)
 
         return in_memory
+
+    redis_url: str = request.getfixturevalue("redis_url")
+    server: Redis = request.getfixturevalue("server")
 
     @asynccontextmanager
     async def in_redis() -> AsyncGenerator[Lease]:
