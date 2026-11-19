@@ -3,6 +3,6 @@ agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
 role = "builder"
 base = "9ae652065c55e10a49f6b3205b9f927fe96ae0c2"
 branch = "claude/issue-1311-the-sealed-build-worker-loads-no-web-fra"
-scope = ["pyproject.toml", "src/presentator/host", "tests/presentator/host"]
+scope = ["pyproject.toml", "src/presentator/host", "tests/presentator/adapters/test_worker_children.py", "tests/presentator/api/test_people_erasure_route.py", "tests/presentator/host", "tests/support/vulture_allowlist.py"]
 opened_commit = "497826a3b4d15c70be11e1487cb466cfd630e406"
 whole_reason = "the worker's settings move within the host package and its tests"
