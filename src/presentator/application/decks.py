@@ -25,19 +25,18 @@ from presentator.application.source_state import (
     SHORT_COMMIT,
     deck_state_of,
     listed_source,
+    shown_attempt,
     shown_run,
 )
 from presentator.contracts.decks import (
     AccessKind,
     Artefacts,
-    BuildAttempt,
     ConnectionCheckResult,
     Deck,
     DeckPage,
     DeployKeyDraft,
     ListedDeck,
     ListedSource,
-    ShownAttempt,
     Source,
     SourceDeck,
     SourceFetch,
@@ -619,23 +618,8 @@ class Decks:
             commit=(deck.commit if built is None else built.commit)[:SHORT_COMMIT],
             built_at=None if built is None else built.built_at,
             state=deck_state_of(deck),
-            attempt=self._shown(deck.attempt),
+            attempt=shown_attempt(deck.attempt),
             themes=self.toolchain_themes.names(),
-        )
-
-    def _shown(self, attempt: BuildAttempt | None) -> ShownAttempt | None:
-        """What the page says about the build that ran last, while one has run.
-
-        The commit is shortened the way the delivered one is: a person reads
-        both off the same screen to see which push is which.
-        """
-        if attempt is None:
-            return None
-        return ShownAttempt(
-            commit=attempt.commit[:SHORT_COMMIT],
-            started_at=attempt.started_at,
-            outcome=attempt.outcome,
-            failure=attempt.failure,
         )
 
     def _address_of(self, deck: Deck) -> str | None:

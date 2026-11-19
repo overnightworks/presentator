@@ -3,11 +3,13 @@
 from typing import Final
 
 from presentator.contracts.decks import (
+    BuildAttempt,
     BuildOutcome,
     ConnectionCheckResult,
     Deck,
     DeckState,
     ListedSource,
+    ShownAttempt,
     ShownSourceRun,
     Source,
     SourceRun,
@@ -57,6 +59,22 @@ def connection_state_of(checked: ConnectionCheckResult) -> SourceState:
     if checked.failure is None:
         return SourceState.REACHABLE
     return _failed_state_of(checked.failure)
+
+
+def shown_attempt(attempt: BuildAttempt | None) -> ShownAttempt | None:
+    """What a deck page says about the build that ran last, while one has run.
+
+    The commit is shortened the way the delivered one is: a person reads
+    both off the same screen to see which push is which.
+    """
+    if attempt is None:
+        return None
+    return ShownAttempt(
+        commit=attempt.commit[:SHORT_COMMIT],
+        started_at=attempt.started_at,
+        outcome=attempt.outcome,
+        failure=attempt.failure,
+    )
 
 
 def deck_state_of(deck: Deck) -> DeckState:
