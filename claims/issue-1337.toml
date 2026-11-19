@@ -1,0 +1,8 @@
+claim_id = "d64d5520670a4198a4ea295fa6d9a48e"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "e475a478c4eed24cec8eedea230fb63fdcbe04be"
+branch = "claude/issue-1337-a-taken-over-deck-and-a-lost-lock-connec"
+scope = ["frontend/src", "src/presentator/adapters", "src/presentator/application", "tests"]
+opened_commit = "e9cfa1b17add32844bee0ed279b9b4e7eef5c031"
+whole_reason = "the recovery spans the source adapters, the refresh application, the lobby page and their tests"
