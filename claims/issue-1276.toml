@@ -1,8 +1,0 @@
-claim_id = "9534159abe914704a9f44ca2fd189e6f"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "084ce36b823172eda14e3fc79eca97251b8c64a1"
-branch = "claude/issue-1276-one-owner-decides-whether-a-source-run-f"
-scope = ["src/presentator/adapters/decks.py", "src/presentator/application/source_state.py", "src/presentator/contracts", "tests/presentator"]
-opened_commit = "d44ee7694a1e80547a41f5b5e8afc3cfd37d4b26"
-whole_reason = "tests/presentator holds the tests of both readers"
