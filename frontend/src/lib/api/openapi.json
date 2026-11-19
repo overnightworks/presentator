@@ -111,7 +111,8 @@
           "output-shape",
           "deck-megabytes",
           "deck-paths",
-          "store"
+          "store",
+          "interrupted"
         ],
         "title": "BuildFailureReason",
         "type": "string"

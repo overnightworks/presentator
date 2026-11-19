@@ -53,7 +53,8 @@ describe('failureWords', () => {
 			worded: words['deck.failedDeckMegabytes']({ entries: '9000', megabytes: '300' })
 		},
 		{ reason: 'deck-paths', given: {}, worded: words['deck.failedDeckPaths'] },
-		{ reason: 'store', given: {}, worded: words['deck.failedStore'] }
+		{ reason: 'store', given: {}, worded: words['deck.failedStore'] },
+		{ reason: 'interrupted', given: {}, worded: words['deck.failedInterrupted'] }
 	] as const)('words the $reason reason', ({ reason, given, worded }) => {
 		expect(failureWords(failure({ reason, ...given }), words)).toBe(worded);
 	});
