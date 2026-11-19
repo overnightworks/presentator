@@ -1,0 +1,8 @@
+claim_id = "5cb05f36880b455fbb9a3588b85caddf"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "664392f720c273f4aa99c744aa26235f86a7ac41"
+branch = "claude/issue-1263-the-object-store-s-failure-paths-tell-th"
+scope = ["docs/decks.md", "docs/people.md", "src/presentator", "tests/presentator"]
+opened_commit = "bd7075af5f78ccb2f100c68a7d001884a448868c"
+whole_reason = "Three truth fixes in the object store's failure paths across API, labels and log."
