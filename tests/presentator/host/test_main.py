@@ -121,7 +121,9 @@ def test_a_sigterm_turns_the_built_instance_unready_and_refuses_asks(
     instance = a_real_instance()
     settings = load_settings()
     server = main.StoppingServer(
-        uvicorn.Config(main.served_by_host(instance, settings)), instance.stopping
+        uvicorn.Config(main.served_by_host(instance, settings)),
+        instance.stopping,
+        main.StopLine(),
     )
     talk = signed_in(
         engine,

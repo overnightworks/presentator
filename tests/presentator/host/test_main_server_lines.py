@@ -17,7 +17,7 @@ from uvicorn.config import STARTUP_FAILURE
 
 from presentator.api.health import Stopping
 from presentator.host import main
-from presentator.host.stopping_server import StoppingServer, served_config
+from presentator.host.stopping_server import StopLine, StoppingServer, served_config
 from tests.support.log_lines import LoggedText, LogLine, events_of, json_logged
 
 _LOOPBACK = "127.0.0.1"
@@ -102,7 +102,9 @@ def _serving_in_a_thread(app: _App) -> Generator[StoppingServer]:
     listening.bind((_LOOPBACK, 0))
     listening.listen()
     port = listening.getsockname()[1]
-    server = StoppingServer(served_config(app, host=_LOOPBACK, port=port), Stopping())
+    server = StoppingServer(
+        served_config(app, host=_LOOPBACK, port=port), Stopping(), StopLine()
+    )
     thread = threading.Thread(
         target=asyncio.run, args=(server.serve(sockets=[listening]),)
     )
