@@ -5,33 +5,19 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from ruamel.yaml import YAML
 
+from tests.scripts.support.k3d_pods import Document
 from tests.scripts.support.k3d_world import (
     BROKEN_FORMS,
     OTHER_DIGEST,
     Fixture,
     World,
     command_positions,
-    fixture_maker,
     issued_commands,
 )
 
-
-@pytest.fixture
-def driver_module(load_script: Callable[..., ModuleType]) -> ModuleType:
-    return load_script("probe_build_worker_k3d")
-
-
-@pytest.fixture
-def make_fixture(
-    load_script: Callable[..., ModuleType], tmp_path: Path
-) -> Callable[..., Fixture]:
-    return fixture_maker(load_script, tmp_path)
-
-
-@pytest.fixture
-def manifests_module(load_script: Callable[..., ModuleType]) -> ModuleType:
-    return load_script("probe_build_worker_k3d_manifests")
+CI_WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
 
 
 def recorded_drive() -> tuple[
@@ -177,6 +163,44 @@ def test_a_probe_store_is_pulled_by_the_runner_and_imported_before_the_pod_exist
     assert all(found for found in positions)
     assert [found[0] for found in positions] == sorted(found[0] for found in positions)
     assert "@sha256:" in pinned
+
+
+@STORES
+def test_a_probe_store_runs_the_image_of_ci_s_service_container_of_that_store(
+    manifests_module: ModuleType, store: int
+) -> None:
+    pinned = pinned_store(manifests_module, store).rsplit("/", 1)[-1]
+    workflow: Document = YAML(typ="safe").load(CI_WORKFLOW.read_text())  # pyright: ignore[reportUnknownMemberType]
+    services = [
+        service["image"]
+        for job in workflow["jobs"].values()
+        for service in job.get("services", {}).values()
+        if service["image"].split(":")[0] == pinned.split(":")[0]
+    ]
+    assert services == [pinned]
+
+
+@STORES
+def test_a_probe_store_s_pull_and_import_are_named_in_the_log(
+    make_fixture: Callable[..., Fixture],
+    manifests_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+    store: int,
+) -> None:
+    fixture = make_fixture()
+    fixture.drive()
+    lines = capsys.readouterr().out.splitlines()
+    pinned = pinned_store(manifests_module, store)
+    local = fixture.world.store_images[store]
+    pulled = [n for n, line in enumerate(lines) if pinned in line and local in line]
+    imported = [
+        n
+        for n, line in enumerate(lines)
+        if pinned not in line and local in line and fixture.run.node in line
+    ]
+    assert len(pulled) == 1
+    assert len(imported) == 1
+    assert pulled[0] < imported[0]
 
 
 def test_a_store_pull_that_fails_names_the_image_and_creates_no_cluster(

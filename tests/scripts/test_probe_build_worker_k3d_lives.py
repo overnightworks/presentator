@@ -3,7 +3,6 @@
 import json
 from collections.abc import Callable, Iterator
 from functools import partial
-from pathlib import Path
 from types import ModuleType
 
 import pytest
@@ -26,20 +25,7 @@ from tests.scripts.support.k3d_render import (
 from tests.scripts.support.k3d_world import (
     Fixture,
     World,
-    fixture_maker,
 )
-
-
-@pytest.fixture
-def lives_module(load_script: Callable[..., ModuleType]) -> ModuleType:
-    return load_script("probe_build_worker_k3d_lives")
-
-
-@pytest.fixture
-def make_fixture(
-    load_script: Callable[..., ModuleType], tmp_path: Path
-) -> Callable[..., Fixture]:
-    return fixture_maker(load_script, tmp_path)
 
 
 def judge_cell(  # noqa: PLR0913 - each argument is one knob of the judged cell
