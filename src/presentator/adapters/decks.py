@@ -34,6 +34,7 @@ from gitmirror.model import (
     Revision,
 )
 from presentator.adapters.deck_manifest import MalformedManifestError, titled_by
+from presentator.adapters.persisted import read_persisted
 from presentator.contracts.decks import (
     MANIFEST_FILE,
     AccessKind,
@@ -353,11 +354,29 @@ def stored_source_run(
     commit: str | None,
     reason: str | None,
 ) -> SourceRun:
-    """The run of one row's columns, its words read as this product's enums."""
+    """The run of one row's columns, its words read as this product's enums.
+
+    A run a newer release worded reads as a poll that failed for no named reason.
+    """
+    known_outcome = read_persisted(SourceRunOutcome, outcome, unknown=None)
+    if known_outcome is None:
+        return SourceRun(
+            source_id=source_id,
+            at=at,
+            outcome=SourceRunOutcome.FAILURE,
+            commit=None,
+            reason=SourceRunFailure.FAILED,
+        )
     return SourceRun(
         source_id=source_id,
         at=at,
-        outcome=SourceRunOutcome(outcome),
+        outcome=known_outcome,
         commit=commit,
-        reason=None if reason is None else SourceRunFailure(reason),
+        reason=(
+            None
+            if reason is None
+            else read_persisted(
+                SourceRunFailure, reason, unknown=SourceRunFailure.FAILED
+            )
+        ),
     )

@@ -121,6 +121,8 @@ the rows rebuild. The ssh host keys every pod trusts are rows, written into a fi
 `serve` creates no table; `presentator migrate` runs the migrations of `adapters/postgres` under a
 lock, which drop a column only one release after its last reader. No revision row or one behind
 this release is refused at start and unready; an unknown revision is a newer release's and is served.
+So is a stored word it does not know (a build reason, a poll outcome, a theme): it reads as its
+generic case, logged once per process; an unknown role or account kind fails loud.
 
 **Authentication and wire.** Keycloak groups admit people ([sign-in](sign-in.md)). There is no
 session cache: rate limits live in the Redis every pod shares (webauth's `RedisRateLimitBackend`,
@@ -181,7 +183,7 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
   credential it must not reach.
 - Processes share state only through Postgres and Redis. Every write that needs one winner takes an
   advisory lock. The refresh is one such winner: a session advisory lock on a pinned connection
-  (re-taken by the tick when it dies) holds it, each new holder bumps an epoch in `refresh_owner`, and
+  (re-taken by the next refresh, fetch or removal when it dies) holds it, each new holder bumps an epoch in `refresh_owner`, and
   every refresh and removal write, a removal's file deletion and the sweep read that epoch `FOR SHARE`,
   so a holder whose connection ended is refused. The same connection holds a key per toolchain, which keeps a pod from
   rebuilding what a running pod of another toolchain built. The ask lease is a Redis key taken with `SET NX PX`, lasting the agent's deadline plus a margin, never renewed:

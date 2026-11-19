@@ -59,7 +59,22 @@ _LET_GO_OF_THE_REFRESH_LOCK = "SELECT pg_advisory_unlock(:lock_class, :instance)
 _NEWEST_RUN = "SELECT coalesce(max(id), 0) FROM source_runs"
 _ATTEMPT = "SELECT attempt_outcome FROM decks"
 _ATTEMPT_STARTED = "SELECT attempt_outcome, attempt_started_at FROM decks"
-_ATTEMPT_AND_REASON = "SELECT attempt_outcome, attempt_reason FROM decks"
+# A trigger keeps each committed attempt write in order, so a short-lived one
+# is seen without a reader racing the writer.
+_RECORD_ATTEMPT_WRITES = """
+CREATE TABLE attempt_writes (
+    id bigserial PRIMARY KEY, outcome text, reason text
+);
+CREATE FUNCTION record_attempt_write() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO attempt_writes (outcome, reason)
+    VALUES (NEW.attempt_outcome, NEW.attempt_reason);
+    RETURN NEW;
+END $$;
+CREATE TRIGGER attempt_writes AFTER UPDATE OF attempt_outcome ON decks
+FOR EACH ROW EXECUTE FUNCTION record_attempt_write();
+"""
+_ATTEMPT_WRITES = "SELECT outcome, reason FROM attempt_writes ORDER BY id"
 _WAITING_TO_BUMP = (
     "SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock'"
     " AND query LIKE 'UPDATE refresh_owner%' AND datname = current_database()"
@@ -128,6 +143,12 @@ def _rows(engine: Engine, statement: str) -> list[tuple[str | None, ...]]:
             tuple(None if each is None else str(each) for each in row)
             for row in connection.execute(text(statement)).all()
         ]
+
+
+def _record_attempt_writes(engine: Engine) -> None:
+    """Keep every committed write of a deck's attempt, however soon the next follows."""
+    with engine.begin() as connection:
+        connection.exec_driver_sql(_RECORD_ATTEMPT_WRITES)
 
 
 def _push(remote: GitRemote, number: int) -> None:
@@ -232,8 +253,8 @@ def test_a_process_that_lost_its_lock_connection_mid_build_is_replaced_and_refus
             database.url, tmp_path, _stored(database.store, _NO_TICKS)
         ) as apps,
         ThreadPoolExecutor(max_workers=2) as pool,
-        watching(engine, _ATTEMPT_AND_REASON) as attempts,
     ):
+        _record_attempt_writes(engine)
         admin = admin_of(apps[0])
         _a_source_pushed_once_more(admin, apps[0], remote, gate)
         standing = _rows(engine, _BUILD_OF_THE_DECK)
@@ -258,13 +279,12 @@ def test_a_process_that_lost_its_lock_connection_mid_build_is_replaced_and_refus
         rows = _rows(engine, _BUILD_OF_THE_DECK)
         stored = database.store.runs.names()
         runs_after_the_late_build = scalar(engine, _NEWEST_RUN)
+        attempts = _rows(engine, _ATTEMPT_WRITES)
 
     assert taken_over["run"] is not None
     assert taken_over["decks_built"] == 1
-    assert (BuildOutcome.FAILED, BuildFailureReason.INTERRUPTED) in [
-        row for each in attempts for row in each
-    ]
-    assert attempts[-1] == ((None, None),)
+    assert (BuildOutcome.FAILED, BuildFailureReason.INTERRUPTED) in attempts
+    assert attempts[-1] == (None, None)
     assert late["run"] is None
     assert rows[0][1] == remote.head
     assert rows != standing

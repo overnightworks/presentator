@@ -149,6 +149,41 @@ def test_a_failed_attempt_without_a_reason_is_refused_loudly(engine: Engine) -> 
 
 
 @pytest.mark.parametrize(
+    "newer_word",
+    [
+        pytest.param(
+            "UPDATE decks SET attempt_reason = 'from-a-newer-release'", id="reason"
+        ),
+        pytest.param(
+            "UPDATE decks SET attempt_outcome = 'from-a-newer-release'", id="outcome"
+        ),
+    ],
+)
+def test_an_attempt_worded_by_a_newer_release_is_listed_as_failed_without_words(
+    engine: Engine, newer_word: str
+) -> None:
+    """A rollback keeps listing and refreshing a deck a newer release wrote."""
+    store = a_store(engine)
+    store.put(a_deck())
+    store.put_attempt(
+        _SLUG,
+        an_attempt(
+            BuildFailure(
+                reason=BuildFailureReason.OUTPUT_MEGABYTES,
+                written_megabytes=700,
+                allowed_megabytes=500,
+            )
+        ),
+    )
+    with store.engine.begin() as connection:
+        connection.exec_driver_sql(newer_word)
+
+    (listed,) = store.all()
+
+    assert listed.attempt == an_attempt(BuildFailure.without_words())
+
+
+@pytest.mark.parametrize(
     "made",
     [
         lambda: BuildFailure(reason=BuildFailureReason.TOOLCHAIN),
