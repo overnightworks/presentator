@@ -1,8 +1,0 @@
-claim_id = "386ed7ba92d144b09084ebf89cba6641"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "04da6794f75881e789bdffd66e0b38fc9cb2c133"
-branch = "claude/issue-1343-a-persisted-enum-value-an-older-image-do"
-scope = ["docs/ARCHITECTURE.md", "src/presentator/adapters/deck_store.py", "src/presentator/adapters/decks.py", "src/presentator/adapters/persisted.py", "src/presentator/adapters/postgres", "src/presentator/contracts", "tests/presentator/adapters", "tests/presentator/host"]
-opened_commit = "e17f6faae36535f1a73ba837bc4608b3885604f2"
-whole_reason = "persisted enum reads span the store adapters and their contracts"
