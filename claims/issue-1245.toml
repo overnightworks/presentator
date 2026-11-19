@@ -3,6 +3,6 @@ agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
 role = "builder"
 base = "be080c30c389e3078070fddb64f0f6ab001ccdfa"
 branch = "claude/issue-1245-vulture-counts-only-production-callers-s"
-scope = ["pyproject.toml", "src/presentator", "tests/presentator", "tests/support/vulture_allowlist.py"]
+scope = ["pyproject.toml", "quality/config.toml", "src/gitmirror/__init__.py", "src/gitmirror/model.py", "src/presentator", "tests/gitmirror/test_mirror.py", "tests/gitmirror/test_mirror_connection_states.py", "tests/presentator", "tests/support/vulture_allowlist.py"]
 opened_commit = "8d79fb13b3cfa156f45c224ca7238ea88aa337f3"
 whole_reason = "One check's input plus whatever production names it then shows dead, with their tests."
