@@ -46,21 +46,15 @@ def _request_line_of(route: str) -> Callable[[LogLine], bool]:
 
 @pytest.fixture
 def app(
-    environment: pytest.MonkeyPatch, database_url: str, tmp_path: Path
+    request: pytest.FixtureRequest,
+    environment: pytest.MonkeyPatch,
+    database_url: str,
+    tmp_path: Path,
 ) -> Iterator[App]:
-    environment.setenv("PRESENTATOR_TRUSTED_PROXIES", _THE_PROXY)
-    with serving_apps(database_url, tmp_path, {"SERVICE_VERSION": _A_RELEASE}) as (
-        first,
-        _second,
-    ):
-        yield first
-
-
-@pytest.fixture
-def app_that_trusts_other_proxies(
-    environment: pytest.MonkeyPatch, database_url: str, tmp_path: Path
-) -> Iterator[App]:
-    environment.setenv("PRESENTATOR_TRUSTED_PROXIES", _A_NETWORK_NOT_THE_PEERS)
+    """The served apps, trusting the proxies a test parametrizes, else the real one."""
+    environment.setenv(
+        "PRESENTATOR_TRUSTED_PROXIES", getattr(request, "param", _THE_PROXY)
+    )
     with serving_apps(database_url, tmp_path, {"SERVICE_VERSION": _A_RELEASE}) as (
         first,
         _second,
@@ -115,25 +109,17 @@ def test_a_mounted_files_request_line_names_the_mount_and_never_the_file_path(
     assert line["route"] != path
 
 
-def test_the_routers_own_404_names_the_forwarded_client(
-    app: App,
+@pytest.mark.parametrize(
+    ("app", "ip"),
+    [(_THE_PROXY, _THE_CLIENT), (_A_NETWORK_NOT_THE_PEERS, _THE_PROXY)],
+    indirect=["app"],
+    ids=["a trusted peer", "an untrusted peer"],
+)
+def test_the_routers_own_404_names_the_client_the_trusted_proxies_resolve(
+    app: App, ip: str
 ) -> None:
     answer = app.request("GET", "/", _BEHIND_THE_PROXY, host=_A_HOST_NOBODY_SERVES)
     line = app.log_line_where(_request_line_with(HTTPStatus.NOT_FOUND))
 
     assert answer.status_code == HTTPStatus.NOT_FOUND
-    assert line["ip"] == _THE_CLIENT
-
-
-def test_the_routers_404_for_an_untrusted_peer_names_the_peer_not_the_forwarded_client(
-    app_that_trusts_other_proxies: App,
-) -> None:
-    answer = app_that_trusts_other_proxies.request(
-        "GET", "/", _BEHIND_THE_PROXY, host=_A_HOST_NOBODY_SERVES
-    )
-    line = app_that_trusts_other_proxies.log_line_where(
-        _request_line_with(HTTPStatus.NOT_FOUND)
-    )
-
-    assert answer.status_code == HTTPStatus.NOT_FOUND
-    assert line["ip"] == _THE_PROXY
+    assert line["ip"] == ip
