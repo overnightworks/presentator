@@ -3,6 +3,6 @@ agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
 role = "builder"
 base = "03735671f356557843d00f2d23f84f16a97a27da"
 branch = "claude/issue-1301-an-interrupt-before-serving-ends-with-on"
-scope = ["src/presentator/host", "tests/conftest.py", "tests/presentator/host"]
+scope = ["src/presentator/host", "tests/conftest.py", "tests/presentator/api/test_auth_sign_in_callback.py", "tests/presentator/host"]
 opened_commit = "0c4e61e477b7ceb700bb4e8e7730aeaa297283cc"
 whole_reason = "src/presentator/host owns the start path and its interrupt handling"
