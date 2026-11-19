@@ -35,12 +35,11 @@ def main() -> None:
     offered = offered_language(tag)
     deck = DeckText(title="Deck", language=tag, slides=())
     prompt = user_message(Question(said="?", slide=2, language=offered), deck)
+    reason, variables = None, None
     try:
         load_settings()
     except ConfigurationError as refused:
         reason, variables = str(refused), list(refused.variables)
-    else:
-        raise SystemExit("the start did not refuse")
     print(
         json.dumps(
             {
