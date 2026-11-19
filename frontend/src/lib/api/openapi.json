@@ -239,7 +239,7 @@
         "type": "object"
       },
       "DeckState": {
-        "description": "What the list and the deck page say a deck is, in one word.\n\nIt is read off the talk that stands and the attempt beside it, never\nstored: two records that can each be written on their own would otherwise\ndisagree about one deck.",
+        "description": "What the list and the deck page say a deck is, in one word.\n\nIt is read off the talk that stands and the attempt beside it, never\nstored: two records that can each be written on their own would otherwise\ndisagree about one deck. A known window: between a run leaving the store\nand the next refresh, a deck reads ready while its talk answers 404; the\nrefresh rebuilds it.",
         "enum": [
           "ready",
           "building",

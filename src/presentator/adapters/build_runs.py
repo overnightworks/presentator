@@ -50,7 +50,11 @@ class RunRemovalReason(StrEnum):
 
 
 def listed_runs(root: Path) -> frozenset[str] | None:
-    """Every run directly under that root, or nothing where the listing broke off."""
+    """Every run directly under that root, or nothing where the listing broke off.
+
+    A root never made holds no run: a process makes it with its first build or
+    fetch, and until then retention has nothing to take but the store's runs.
+    """
     try:
         with os.scandir(root) as entries:
             names = [
@@ -58,6 +62,8 @@ def listed_runs(root: Path) -> frozenset[str] | None:
                 for entry in entries
                 if not entry.name.startswith(ARRIVING_PREFIX)
             ]
+    except FileNotFoundError:
+        return frozenset()
     except OSError as problem:
         _log.warning(
             _ROOT_UNLISTED_EVENT,

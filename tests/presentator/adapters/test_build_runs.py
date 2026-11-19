@@ -97,17 +97,30 @@ def test_a_removal_that_stopped_halfway_is_finished_by_the_next_attempt(
 def test_a_root_that_cannot_be_listed_lists_nothing_at_all(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """#505 matrix: root unlisted or missing."""
+    """Root unlisted."""
+    a_file = tmp_path / "a-file"
+    a_file.write_text("no directory", encoding="utf-8")
+
     with json_logged(capsys) as logged:
-        assert listed_runs(tmp_path / "missing") is None
+        assert listed_runs(a_file) is None
 
     (line,) = logged.lines
     assert (line["event"], line["reason"], line["error_type"]) == (
         "build_root_listing.refused",
         "unlistable",
-        "FileNotFoundError",
+        "NotADirectoryError",
     )
-    assert "missing" not in logged.text
+    assert "a-file" not in logged.text
+
+
+def test_a_root_never_made_lists_no_run_and_refuses_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Root missing."""
+    with json_logged(capsys) as logged:
+        assert listed_runs(tmp_path / "missing") == frozenset()
+
+    assert logged.lines == []
 
 
 def test_removing_a_run_takes_its_whole_directory_even_where_a_deck_closed_it(
