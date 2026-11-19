@@ -1,8 +1,0 @@
-claim_id = "4acab28c5e3d4cabafafb8a9058a3370"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "b06d5b17820f1e5e2f1486b9bda954aad1e4dae5"
-branch = "claude/issue-1310-a-sigint-while-a-console-script-imports"
-scope = ["docs/ARCHITECTURE.md", "pyproject.toml", "src/presentator/host", "tests/presentator/host", "tests/support"]
-opened_commit = "309cdb33d921334758360158b7637e6339f53e69"
-whole_reason = "each console script's start and its process tests live in the host package and the shared test support"
