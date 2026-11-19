@@ -1,0 +1,8 @@
+claim_id = "b9c290ed72f24733826cb636992caf51"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "f72a7540295da828a72758dc60a5e03b32f77524"
+branch = "claude/issue-1295-every-command-names-a-store-fault-the-sa"
+scope = ["docs/configuration.md", "docs/runbooks", "src/presentator/adapters/postgres", "src/presentator/host", "tests/presentator/adapters", "tests/presentator/host"]
+opened_commit = "819d4a2e86698bfe3ff2013405ff7d69bd043f3a"
+whole_reason = "one owner for store-fault reasons across host commands and the postgres adapter"
