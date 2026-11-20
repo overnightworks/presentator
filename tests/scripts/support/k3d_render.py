@@ -49,7 +49,9 @@ def add_web_secrets(spec: Document) -> None:
         },
     ]
     main["volumeMounts"] = [
-        {"name": "elsewhere", "mountPath": SCRATCH_MOUNT},
+        {"name": "tmp", "mountPath": SCRATCH_MOUNT},
+        {"name": "mirrors", "mountPath": "/data/mirrors"},
+        {"name": "builds", "mountPath": "/data/builds"},
         {"name": SECRETS_VOLUME, "mountPath": PROJECTED_MOUNT},
         {"name": "database-password", "mountPath": DATABASE_MOUNT},
     ]
@@ -69,7 +71,9 @@ def add_web_secrets(spec: Document) -> None:
         ]
     }
     spec["volumes"] = [
-        {"name": "elsewhere", "emptyDir": {}},
+        {"name": "tmp", "emptyDir": {}},
+        {"name": "mirrors", "emptyDir": {}},
+        {"name": "builds", "emptyDir": {}},
         {"name": SECRETS_VOLUME, "projected": projected},
         {"name": "database-password", "secret": {"secretName": DATABASE_CREDENTIALS}},
     ]
