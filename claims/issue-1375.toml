@@ -1,0 +1,7 @@
+claim_id = "9ff3316639bc4813af74b6e900df1867"
+agent = "Claude 5d9860ec-23d0-455e-86fe-195b872a5fbf"
+role = "builder"
+base = "756b2be9209bba64333e5261a0b095b820268d49"
+branch = "claude/issue-1375-architecture-names-deck-origin-risk"
+scope = ["docs/ARCHITECTURE.md"]
+opened_commit = "0488922f7c01f9e76fd47bc999b4cfe65ef628e8"
