@@ -192,9 +192,9 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
 - The git child's environment holds the credential, readable by the same user.
 - A database copy plus the client secret renews a session until the SSO session ends; deleting a row
   revokes nothing, and freed pages, the `-wal` and backups keep ended tokens.
-- The hosts are same-site: deck code on the talk host can set `Domain=` cookies.
-- The overlay's palette can clash with a deck's palette.
-- Each presenter window mounts its own overlay; nothing enforces one speaker.
-- The presenter bar is teleported into Slidev's presenter markup, which Slidev does not promise.
+- Deck code shares the talk origin with the session, the origin-wide microphone grant and the overlay
+  that draws the AI notice: as the owner it can ask, hear, read other decks, set `Domain=` cookies and
+  hide the notice. Only the operator presents his own decks today; #1251 owns the fix.
+- The overlay's palette can clash; nothing enforces one speaker; the bar rides unpromised Slidev markup.
 - A toolchain rollout can let one deck's build reach the old worker pod, its result recorded under
   the new identity until its next push; the update strategy must not be `OnDelete`.
