@@ -1,8 +1,0 @@
-claim_id = "695d863c029346559e1301d7685a4015"
-agent = "Claude 8ee5fb01-f0ec-4dfd-8667-519e2cc2cc19"
-role = "builder"
-base = "fbffd5a7f9eecd811887f330869ae1e039eb2835"
-branch = "claude/issue-1359-presentator-takes-webauth-0-42-0"
-scope = ["docs/ARCHITECTURE.md", "docs/configuration.md", "pyproject.toml", "src/presentator/api/admission.py", "src/presentator/host/main.py", "tests/presentator/adapters/test_identity.py", "tests/presentator/agent/support/mcp_world.py", "tests/presentator/agent/test_mcp_front.py", "tests/presentator/api/test_auth_backchannel_logout.py", "tests/presentator/api/test_auth_rate_limit.py", "tests/presentator/api/test_people_erasure_route.py", "tests/presentator/host/support/copresenter_services.py", "tests/presentator/host/test_config_agent.py", "tests/presentator/host/test_main.py", "tests/presentator/host/test_main_client_address.py", "tests/presentator/host/test_main_hearing_line.py", "tests/presentator/host/test_main_postgres.py", "tests/presentator/host/test_main_request_line.py", "tests/support/lobby.py", "tests/support/lobby_drive.py", "tests/support/sign_in_support.py", "tests/support/speech_drive.py", "tests/support/talk_support.py", "uv.lock"]
-opened_commit = "ecc0e3498188e32fabb84bacffc518101c9e4b3b"
-whole_reason = "The pin, the host wiring and every test builder that no longer gets the writer from the stack move together, or the first request fails."
