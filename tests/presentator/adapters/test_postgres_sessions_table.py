@@ -3,17 +3,15 @@
 from collections.abc import Iterator, Sequence
 
 import pytest
-from alembic import command
 from alembic.autogenerate import compare_metadata
-from alembic.config import Config
 from alembic.migration import MigrationContext
 from sqlalchemy import Engine, text
 from sqlalchemy.schema import SchemaItem
 from webauth.postgres import stored_key
 
-from presentator.adapters.postgres.migrate import MIGRATIONS_DIRECTORY, migrate
+from presentator.adapters.postgres.migrate import migrate
 from presentator.adapters.postgres.session_schema import SESSIONS
-from tests.support.postgres import created_database, engine_on
+from tests.support.postgres import database_at
 from tests.support.sign_in_support import a_scene
 
 _KEPT_TABLES = ("users", "host_key_pins")
@@ -38,30 +36,22 @@ def _only_the_sessions_table(
 @pytest.fixture
 def database_before_the_extra() -> Iterator[Engine]:
     """A database one revision before the extra's table, holding a live session."""
-    with created_database() as database_url:
-        engine = engine_on(database_url)
-        try:
-            config = Config()
-            config.set_main_option("script_location", str(MIGRATIONS_DIRECTORY))
-            with engine.begin() as connection:
-                config.attributes["connection"] = connection
-                command.upgrade(config, "0004")
-                connection.execute(
-                    text(
-                        "INSERT INTO users (id, username, role)"
-                        " VALUES ('u1', 'ada', 'admin')"
-                    )
+    with database_at("0004") as engine:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO users (id, username, role)"
+                    " VALUES ('u1', 'ada', 'admin')"
                 )
-                connection.execute(
-                    text(
-                        "INSERT INTO host_key_pins (host, public_key)"
-                        " VALUES ('git.example', 'ssh-ed25519 A')"
-                    )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO host_key_pins (host, public_key)"
+                    " VALUES ('git.example', 'ssh-ed25519 A')"
                 )
-                connection.execute(text(_THE_OLD_SHAPE))
-            yield engine
-        finally:
-            engine.dispose()
+            )
+            connection.execute(text(_THE_OLD_SHAPE))
+        yield engine
 
 
 def _rows_of(engine: Engine, tables: tuple[str, ...]) -> dict[str, Sequence[object]]:

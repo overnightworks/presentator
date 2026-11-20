@@ -15,12 +15,14 @@ from pathlib import Path
 from typing import Final
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from pydantic import SecretStr, TypeAdapter
 from sqlalchemy import Connection, Engine, create_engine, text
 from sqlalchemy.engine import URL, make_url
 
 from presentator.adapters.postgres.engine import create_database_engine
-from presentator.adapters.postgres.migrate import migrate
+from presentator.adapters.postgres.migrate import MIGRATIONS_DIRECTORY, migrate
 from tests.support.two_processes import Finished, release_together, two_modules
 
 SERVER_VARIABLE = "PRESENTATOR_TEST_POSTGRES_URL"
@@ -96,6 +98,22 @@ def migrated_template() -> Generator[str]:
         name = make_url(database_url).database
         assert name is not None
         yield name
+
+
+@contextmanager
+def database_at(revision: str) -> Generator[Engine]:
+    """An engine on a throwaway database migrated to `revision`, dropped after."""
+    config = Config()
+    config.set_main_option("script_location", str(MIGRATIONS_DIRECTORY))
+    with created_database() as database_url:
+        engine = engine_on(database_url)
+        try:
+            with engine.begin() as connection:
+                config.attributes["connection"] = connection
+                command.upgrade(config, revision)
+            yield engine
+        finally:
+            engine.dispose()
 
 
 # The server's lock table covers every database on it, so a test counts only its own.
