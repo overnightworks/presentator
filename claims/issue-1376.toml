@@ -1,7 +1,0 @@
-claim_id = "74e282bd4ba44283ba717d21aaffeab6"
-agent = "Claude 5d9860ec-23d0-455e-86fe-195b872a5fbf"
-role = "builder"
-base = "756b2be9209bba64333e5261a0b095b820268d49"
-branch = "claude/issue-1376-runbooks-take-the-skeleton"
-scope = ["docs/runbooks/install-the-host-build-toolchain.md", "docs/runbooks/prepare-a-deck-for-the-build.md", "docs/runbooks/run-from-a-checkout.md"]
-opened_commit = "b76ca31f570a8cc48b53d8f6c9fb257fb456b5a3"
