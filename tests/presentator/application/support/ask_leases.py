@@ -47,11 +47,6 @@ class FakeAskLimiter:
             self._holders[session_id] = ticket
             return ticket
 
-    def lose_every_lease(self) -> None:
-        """Forget every holder, as a lease does when it expires."""
-        with self._guard:
-            self._holders.clear()
-
 
 class UnavailableAskLimiter:
     """An ask lease that cannot be told."""
