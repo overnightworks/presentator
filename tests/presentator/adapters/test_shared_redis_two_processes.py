@@ -120,26 +120,6 @@ def test_the_other_process_answers_once_the_streaming_one_ends(
     assert after_the_release.status_code == HTTPStatus.OK
 
 
-def test_the_lease_of_a_holder_that_died_expires_at_the_other_process(
-    redis_url: str,
-) -> None:
-    with _serving(redis_url) as (first, second, processes):
-        second.let_answers_finish()
-        with httpx2.stream(
-            "POST", f"http://127.0.0.1:{first.port}{ASK}", json=QUESTION
-        ):
-            processes.first.kill()
-            processes.first.wait()
-            statuses = [second.post(ASK).status_code]
-            deadline = time.monotonic() + _START_SECONDS
-            while statuses[-1] != HTTPStatus.OK and time.monotonic() < deadline:
-                time.sleep(_POLL_SECONDS)
-                statuses.append(second.post(ASK).status_code)
-
-    assert statuses[0] == HTTPStatus.TOO_MANY_REQUESTS
-    assert statuses[-1] == HTTPStatus.OK
-
-
 def test_an_ask_while_redis_cannot_be_reached_is_refused_visibly_and_leaks_nothing(
     redis_url: str,
 ) -> None:

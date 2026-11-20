@@ -458,7 +458,7 @@ def _absent(text: str, markers: Sequence[str]) -> None:
         assert marker not in text
 
 
-def _without_the_lines_sub(
+def without_the_lines_sub(
     logged: Sequence[logging.LogRecord],
 ) -> list[logging.LogRecord]:
     """The records, a line without its `sub` where it is the person's id."""
@@ -546,7 +546,7 @@ def assert_nothing_shows(
     markers = _every_marker(instance)
     words = (*ANSWER_SENTENCES, *HEARD_WORDS)
     _absent(
-        everything_shown(_without_the_lines_sub(logged), instance.errors),
+        everything_shown(without_the_lines_sub(logged), instance.errors),
         (*markers, *words),
     )
     _assert_rows_keep_only_their_own_values(instance.hosts, (*markers, *words))

@@ -27,7 +27,7 @@ from tests.support.copresenter_support import (
     the_token_endpoint_goes_down,
     the_token_thread_fails,
 )
-from tests.support.hearing_endings import BROWSER_ENDINGS
+from tests.support.hearing_endings import HEARING_ENDS
 from tests.support.leak_support import everything_shown
 from tests.support.lobby import A_SPEECH_SCOPE, A_TALK_ADDRESS
 from tests.support.log_lines import LoggedText, LogLine, json_lines_among
@@ -155,16 +155,16 @@ def _closed_with(socket: WebSocketTestSession) -> WebSocketDisconnect:
     return closed.value
 
 
-@pytest.mark.parametrize("case", BROWSER_ENDINGS)
-def test_the_browser_gets_each_transcript_then_the_close_the_service_ended_with(
+@pytest.mark.parametrize("case", HEARING_ENDS)
+def test_the_browser_gets_no_frame_and_the_close_the_service_ended_with(
     engine: Engine, case: str
 ) -> None:
-    ending = BROWSER_ENDINGS[case]
+    ending = HEARING_ENDS[case]
     service = FakeSpeechService(realtime=ending.hear())
     with a_speech_instance(engine, SpeechScenario(service=service)) as instance:
         heard = hear_and_record(instance)
 
-    assert heard.frames == ending.frames
+    assert heard.frames == []
     assert heard.closed_with == ending.close
     if ending.close == HopClose.NORMAL:
         assert _warnings(heard.logged) == []

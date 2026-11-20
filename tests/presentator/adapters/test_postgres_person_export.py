@@ -11,12 +11,10 @@ from pydantic import SecretStr
 from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.contracts.people import KeyDraftExport, PersonKind
 from tests.presentator.adapters.support.key_draft_support import a_key_drafts_store
-from tests.presentator.adapters.support.person_instance_support import (
+from tests.presentator.adapters.support.person_postgres_support import (
     ANOTHER,
     THE_PERSON,
     WHAT_THE_GIT_HOST_EXPECTS,
-)
-from tests.presentator.adapters.support.person_postgres_support import (
     PostgresInstance,
     an_instance_with_both_people_on_postgres,
     tables_reaching_accounts,

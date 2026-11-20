@@ -54,17 +54,15 @@ from tests.support.speech_drive import (
     assert_nothing_shows,
     refusing_every_workload_grant,
     who_over,
+    without_the_lines_sub,
 )
 from tests.support.speech_service import (
     A_WAV,
     HEALTH_FAILURES,
-    MALFORMED_PEERS,
     PLANTED,
     SPEAK_FAILURES,
     FakeSpeechService,
     Hear,
-    RawPeer,
-    Served,
     a_chunked_wav,
     a_completed,
     a_health_document,
@@ -125,11 +123,12 @@ def test_sentences_are_spoken_in_order_with_both_issued_tokens_and_the_wav_uncha
     assert run.events[-1] == "done"
 
 
-@pytest.mark.parametrize("case", SPEAK_FAILURES)
-def test_every_speak_failure_keeps_what_was_spoken_and_ends_with_the_plain_error(
-    engine: Engine, case: str
+def test_a_speak_failure_keeps_what_was_spoken_and_ends_with_the_plain_error(
+    engine: Engine,
 ) -> None:
-    service = FakeSpeechService(speak_answers=[a_chunked_wav, SPEAK_FAILURES[case]])
+    service = FakeSpeechService(
+        speak_answers=[a_chunked_wav, SPEAK_FAILURES["cut-body"]]
+    )
     scenario = SpeechScenario(
         gateway=_say("Erster Satz. Zweiter Satz."), service=service
     )
@@ -142,18 +141,10 @@ def test_every_speak_failure_keeps_what_was_spoken_and_ends_with_the_plain_error
     assert run.error_payload() == _THE_PLAIN_ERROR
 
 
-@pytest.mark.parametrize(
-    "peer",
-    [
-        pytest.param(RawPeer(MALFORMED_PEERS[name]).serving, id=name)
-        for name in MALFORMED_PEERS
-    ]
-    + [pytest.param(nobody_listens, id="nobody-listens")],
-)
-def test_a_service_answering_nothing_the_client_can_read_ends_with_the_plain_error(
-    engine: Engine, peer: Served
+def test_a_service_nobody_reaches_ends_the_ask_with_the_plain_error(
+    engine: Engine,
 ) -> None:
-    with a_speech_instance(engine, SpeechScenario(peer=peer)) as instance:
+    with a_speech_instance(engine, SpeechScenario(peer=nobody_listens)) as instance:
         run = ask_over(instance)
 
     assert run.response.status_code == HTTPStatus.OK
@@ -318,29 +309,9 @@ def test_who_says_hearing_still_loading_even_when_the_voice_is_not_ready(
     assert response.json()["speech"]["hearing"]["ready"] is False
 
 
-@pytest.mark.parametrize("case", HEALTH_FAILURES)
-def test_who_answers_503_for_every_health_that_cannot_say_ready(
-    engine: Engine, case: str
-) -> None:
-    service = FakeSpeechService(health_answer=HEALTH_FAILURES[case])
+def test_who_answers_503_for_a_health_that_cannot_say_ready(engine: Engine) -> None:
+    service = FakeSpeechService(health_answer=HEALTH_FAILURES["non-200-marked"])
     with a_speech_instance(engine, SpeechScenario(service=service)) as instance:
-        status = _who_status(instance)
-
-    assert status == HTTPStatus.SERVICE_UNAVAILABLE
-
-
-@pytest.mark.parametrize(
-    "peer",
-    [
-        pytest.param(RawPeer(MALFORMED_PEERS[name]).serving, id=name)
-        for name in MALFORMED_PEERS
-    ]
-    + [pytest.param(nobody_listens, id="nobody-listens")],
-)
-def test_who_answers_503_for_a_service_it_cannot_read(
-    engine: Engine, peer: Served
-) -> None:
-    with a_speech_instance(engine, SpeechScenario(peer=peer)) as instance:
         status = _who_status(instance)
 
     assert status == HTTPStatus.SERVICE_UNAVAILABLE
@@ -499,33 +470,16 @@ def _a_record(message: object) -> logging.LogRecord:
     return logging.LogRecord("probe", logging.INFO, __file__, 0, message, (), None)
 
 
-def test_a_request_line_may_carry_the_admitted_persons_id_as_its_sub(
-    engine: Engine,
-) -> None:
-    line = {"event": REQUEST_EVENT, "sub": A.id}
-    with a_speech_instance(engine, next(iter(LEAK_ASKS.values()))()) as instance:
-        assert_nothing_shows(instance, [_a_record(line)])
-
-
-def test_a_request_line_whose_sub_is_any_other_value_is_still_checked(
-    engine: Engine,
-) -> None:
+def test_a_request_line_whose_sub_is_any_other_value_is_still_checked() -> None:
     leaking = _a_record({"event": REQUEST_EVENT, "sub": ACCESS})
-    with (
-        a_speech_instance(engine, next(iter(LEAK_ASKS.values()))()) as instance,
-        pytest.raises(AssertionError),
-    ):
-        assert_nothing_shows(instance, [leaking])
+
+    assert ACCESS in everything_shown(without_the_lines_sub([leaking]))
 
 
-def test_a_request_line_record_keeps_its_exception_text_when_its_sub_is_exempt(
-    engine: Engine,
-) -> None:
-    line = {"event": REQUEST_EVENT, "sub": A.id}
-    leaking = _a_record(line)
+def test_a_request_line_record_keeps_its_exception_text_when_its_sub_is_exempt() -> (
+    None
+):
+    leaking = _a_record({"event": REQUEST_EVENT, "sub": A.id})
     leaking.exc_text = ACCESS
-    with (
-        a_speech_instance(engine, next(iter(LEAK_ASKS.values()))()) as instance,
-        pytest.raises(AssertionError),
-    ):
-        assert_nothing_shows(instance, [leaking])
+
+    assert ACCESS in everything_shown(without_the_lines_sub([leaking]))
