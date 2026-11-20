@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 
+from presentator.contracts.models import User
 from presentator.contracts.people import PersonErased
 from tests.presentator.adapters.support.person_postgres_support import (
     ANOTHER,
@@ -50,30 +51,24 @@ def test_a_person_with_every_kind_of_row_leaves_none_and_no_mirror_or_build(
     assert not instance.stored(THE_PERSON)
 
 
-def test_a_second_person_keeps_every_row_mirror_and_build(
-    instance: PostgresInstance,
+@pytest.mark.parametrize(
+    ("kept", "dry_run"),
+    [
+        pytest.param(ANOTHER, False, id="a second person's rows, mirror and build"),
+        pytest.param(THE_PERSON, True, id="a dry run's rows and directories"),
+    ],
+)
+def test_what_an_erasure_does_not_take_keeps_every_row_mirror_and_build(
+    instance: PostgresInstance, kept: User, *, dry_run: bool
 ) -> None:
-    before = _owned_by(instance, ANOTHER.id)
+    before = _owned_by(instance, kept.id)
 
-    instance.people.erase_person(THE_PERSON.id, dry_run=False)
+    instance.people.erase_person(THE_PERSON.id, dry_run=dry_run)
 
-    assert _owned_by(instance, ANOTHER.id) == before
-    assert instance.mirror_of(ANOTHER).exists()
-    assert instance.build_of(ANOTHER).exists()
-    assert instance.stored(ANOTHER)
-
-
-def test_a_dry_run_changes_no_row_and_no_directory(
-    instance: PostgresInstance,
-) -> None:
-    before = _owned_by(instance, THE_PERSON.id)
-
-    instance.people.erase_person(THE_PERSON.id, dry_run=True)
-
-    assert _owned_by(instance, THE_PERSON.id) == before
-    assert instance.mirror_of(THE_PERSON).exists()
-    assert instance.build_of(THE_PERSON).exists()
-    assert instance.stored(THE_PERSON)
+    assert _owned_by(instance, kept.id) == before
+    assert instance.mirror_of(kept).exists()
+    assert instance.build_of(kept).exists()
+    assert instance.stored(kept)
 
 
 def test_an_unknown_subject_creates_no_account(instance: PostgresInstance) -> None:
