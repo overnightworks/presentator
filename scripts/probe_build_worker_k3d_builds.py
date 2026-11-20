@@ -25,6 +25,7 @@ from probe_build_worker_web import (
 )
 
 HELLO_DECK = "hello-deck"
+SCRATCH_VOLUME = "tmp"
 COPY_SECONDS = 120
 CLIENT_SECONDS = 600
 PROGRAM_SECONDS = 120
@@ -32,12 +33,11 @@ TAIL_CHARACTERS = 2000
 
 
 def scratch_mount(deployment: Document) -> str:
-    """The path where the web container mounts its one `emptyDir` volume."""
+    """The path where the web container mounts its `tmp` volume."""
     pod = deployment["spec"]["template"]["spec"]
-    scratch = {volume["name"] for volume in pod["volumes"] if "emptyDir" in volume}
     container = next(c for c in pod["containers"] if c["name"] == WEB_CONTAINER)
     (mount,) = [
-        m["mountPath"] for m in container["volumeMounts"] if m["name"] in scratch
+        m["mountPath"] for m in container["volumeMounts"] if m["name"] == SCRATCH_VOLUME
     ]
     return mount
 
