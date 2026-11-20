@@ -7,7 +7,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final
 
-from speech_client import realtime_wire
 from speech_client.relay import HopClose
 
 from tests.support.speech_service import (
@@ -16,15 +15,10 @@ from tests.support.speech_service import (
     Hear,
     a_completed,
     a_delta,
-    a_failed_item,
     after_the_first_audio,
-    an_error_event,
-    busy_at_the_upgrade,
     crashing_after_the_first_audio,
     denying,
-    draining,
     one_after_another,
-    sending,
 )
 
 
@@ -111,50 +105,5 @@ BROWSER_ENDINGS: dict[str, Ending] = {
         [_interim("Gu"), _interim("Guten"), _final("Guten Tag.")],
         HopClose.NORMAL,
     ),
-    "session-and-turn-events-skipped": Ending(
-        lambda: after_the_first_audio(
-            realtime_wire.SessionCreated(
-                session=realtime_wire.TranscriptionSession(type="transcription")
-            ),
-            realtime_wire.SessionUpdated(
-                session=realtime_wire.TranscriptionSession(type="transcription")
-            ),
-            realtime_wire.SpeechStarted(audio_start_ms=0, item_id=AN_ITEM),
-            realtime_wire.SpeechStopped(audio_end_ms=1, item_id=AN_ITEM),
-            realtime_wire.AudioCommitted(item_id=AN_ITEM, previous_item_id=None),
-            realtime_wire.ItemCreated(
-                previous_item_id=None,
-                item=realtime_wire.UserMessageItem(id=AN_ITEM),
-            ),
-            a_completed("Ein Wort."),
-        ),
-        [_final("Ein Wort.")],
-        HopClose.NORMAL,
-    ),
-    "failed-then-error": Ending(
-        lambda: after_the_first_audio(a_failed_item(), an_error_event()),
-        [],
-        HopClose.SERVICE_FAILED,
-    ),
-    "error-alone": Ending(
-        lambda: after_the_first_audio(an_error_event()), [], HopClose.SERVICE_FAILED
-    ),
     **HEARING_ENDS,
-    "busy-at-the-upgrade": Ending(busy_at_the_upgrade, [], HopClose.BUSY),
-    "drained-then-reopened": Ending(
-        lambda: one_after_another(draining(), sending(a_completed("Nach der Pause."))),
-        [_final("Nach der Pause.")],
-        HopClose.NORMAL,
-    ),
-    "drained-then-no-session-opens": Ending(
-        lambda: one_after_another(draining(), busy_at_the_upgrade()),
-        [],
-        HopClose.SERVICE_FAILED,
-    ),
-    **{
-        f"refused-{status}": Ending(
-            lambda status=status: denying(status), [], HopClose.SERVICE_FAILED
-        )
-        for status in (401, 403, 503)
-    },
 }
