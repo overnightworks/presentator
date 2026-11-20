@@ -83,6 +83,9 @@ function errorEventLine(data) {
 
 const on = ref(false)
 const heard = ref('')
+// The language of the heard utterance. The question goes to the server in it
+// and the stream names no language of its own, so the answer line takes it too.
+const utteranceLanguage = ref('')
 const answer = ref('')
 const error = ref('')
 const speaking = ref(false)
@@ -146,6 +149,7 @@ async function turnOn() {
   on.value = true
   error.value = ''
   heard.value = ''
+  utteranceLanguage.value = ''
   answer.value = ''
   spokenText = ''
   let hearingReady
@@ -255,6 +259,7 @@ function onHeard(data) {
   const payload = JSON.parse(data)
   if (!payload.text) return
   heard.value = payload.text
+  utteranceLanguage.value = payload.language
   if (payload.final) onFinal(payload.text, payload.language, payload.traceparent)
 }
 
@@ -494,12 +499,16 @@ onUnmounted(() => {
       v-if="on && heard"
       class="panel"
     >
-      <p class="line heard">
+      <p
+        class="line heard"
+        :lang="utteranceLanguage"
+      >
         {{ heard }}
       </p>
       <p
         v-if="answer"
         class="line answer"
+        :lang="utteranceLanguage"
       >
         {{ answer }}
       </p>
