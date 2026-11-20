@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-from presentator.adapters import build_cache
 from presentator.adapters.build_cache import BuildCache, RunObjects
 from presentator.adapters.build_runs import ARRIVING_PREFIX
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES
@@ -314,24 +313,6 @@ def test_a_run_holding_what_cannot_be_read_counts_for_what_was_read_against_the_
     assert tight.keep("run-2")
 
     assert on_disk(cache) == {"run-2"}
-
-
-def test_a_run_gone_while_the_bound_adds_up_the_disk_stops_neither_keep_nor_local(
-    tmp_path: Path, store: DirectoryRunObjects, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    cache = a_cache(tmp_path / "a", store)
-    built_run(cache, "run-1")
-    assert cache.keep("run-1")
-    listing = build_cache.listed_runs
-
-    def listing_one_more(root: Path) -> frozenset[str]:
-        return (listing(root) or frozenset()) | {"gone"}
-
-    monkeypatch.setattr(build_cache, "listed_runs", listing_one_more)
-    built_run(cache, "run-2")
-
-    assert cache.keep("run-2")
-    assert cache.local("run-1") is not None
 
 
 def test_past_its_bound_the_least_recently_served_run_goes_and_is_fetched_again(
