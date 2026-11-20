@@ -19,6 +19,7 @@ from typing import Final, Protocol
 
 import logline
 
+from presentator.adapters.build_wire import MAXIMUM_KEY_BYTES, is_a_hello_key
 from presentator.adapters.worker_children import (
     ChildIdentity,
     program_output_as,
@@ -66,7 +67,6 @@ from presentator.host.worker_serving import (
     accept_connections,
 )
 from presentator.host.worker_settings import (
-    MINIMUM_KEY_LENGTH,
     WorkerSettings,
     load_worker_settings,
 )
@@ -90,7 +90,6 @@ NOT_READY_EXIT_STATUS = 1
 LISTEN_BACKLOG = 4
 ONLY_THE_OWNER = 0o077
 KEY_MODE = 0o400
-MAXIMUM_KEY_BYTES = 4096
 SOCKET_TABLE = Path("/proc/net/tcp")
 LISTENING = "0A"
 ESTABLISHED = "01"
@@ -191,7 +190,7 @@ def read_key(key_file: Path, *, controller_uid: int) -> bytes:
             ):
                 raise StartRefusedError(StartRefusal.KEY)
             key = os.read(descriptor, MAXIMUM_KEY_BYTES + 1).removesuffix(b"\n")
-            if not MINIMUM_KEY_LENGTH <= len(key) <= MAXIMUM_KEY_BYTES:
+            if not is_a_hello_key(key):
                 raise StartRefusedError(StartRefusal.KEY)
             return key
         finally:

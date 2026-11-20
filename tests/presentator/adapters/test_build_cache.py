@@ -10,6 +10,7 @@ import pytest
 
 from presentator.adapters.build_cache import BuildCache, RunObjects
 from presentator.adapters.build_runs import ARRIVING_PREFIX
+from presentator.adapters.build_wire import MAXIMUM_ENTRIES
 from presentator.application import build_retention
 from presentator.contracts.decks import (
     DECK_DIRECTORY,
@@ -259,6 +260,59 @@ def test_a_process_that_builds_past_its_bound_lets_its_older_kept_run_go(
 
     assert on_disk(cache) == {"run-2"}
     assert cache.local("run-1") is not None
+
+
+def test_a_run_with_more_entries_than_a_talk_may_hold_still_counts_every_byte(
+    tmp_path: Path, store: DirectoryRunObjects
+) -> None:
+    cache = a_cache(tmp_path / "a", store, bound=2 * _A_RUNS_BYTES)
+    crowded = built_run(cache, "run-1") / DECK_DIRECTORY / "assets"
+    crowded.mkdir()
+    for number in range(MAXIMUM_ENTRIES + 1):
+        (crowded / str(number)).write_bytes(b"x")
+    assert cache.keep("run-1")
+    built_run(cache, "run-2")
+
+    assert cache.keep("run-2")
+
+    assert on_disk(cache) == {"run-2"}
+
+
+def test_a_run_holding_what_cannot_be_read_does_not_stop_the_bound_taking_it(
+    tmp_path: Path, store: DirectoryRunObjects
+) -> None:
+    cache = a_cache(tmp_path / "a", store)
+    for served_at, name in enumerate(("run-1", "run-2"), start=1):
+        run = built_run(cache, name)
+        assert cache.keep(name)
+        os.utime(run / OUTPUT_DIRECTORY, (served_at, served_at))
+    unreadable = cache.root / "run-1" / DECK_DIRECTORY
+    unreadable.chmod(0)
+    tight = a_cache(cache.root, store, bound=2 * _A_RUNS_BYTES)
+    built_run(tight, "run-3")
+
+    assert tight.keep("run-3")
+
+    assert "run-1" not in on_disk(cache)
+
+
+def test_a_run_holding_what_cannot_be_read_counts_for_what_was_read_against_the_bound(
+    tmp_path: Path, store: DirectoryRunObjects
+) -> None:
+    cache = a_cache(tmp_path / "a", store)
+    unreadable = built_run(cache, "run-1")
+    assert cache.keep("run-1")
+    os.utime(unreadable / OUTPUT_DIRECTORY, (1, 1))
+    (unreadable / OUTPUT_DIRECTORY / "big").write_bytes(b"x" * 3 * _A_RUNS_BYTES)
+    closed = unreadable / OUTPUT_DIRECTORY / "inner" / "closed"
+    closed.mkdir(parents=True)
+    closed.chmod(0)
+    tight = a_cache(cache.root, store, bound=2 * _A_RUNS_BYTES)
+    built_run(tight, "run-2")
+
+    assert tight.keep("run-2")
+
+    assert on_disk(cache) == {"run-2"}
 
 
 def test_past_its_bound_the_least_recently_served_run_goes_and_is_fetched_again(

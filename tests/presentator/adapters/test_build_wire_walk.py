@@ -1,6 +1,7 @@
 """The sender's walk of /work/out: what it admits, refuses, limits and sends."""
 
 import errno
+import math
 import os
 import socket
 import threading
@@ -9,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from presentator.adapters.build_tree import added_up
 from presentator.adapters.build_wire import (
     MAXIMUM_ENTRIES,
     MEGABYTE,
@@ -501,3 +503,11 @@ def test_an_empty_end_is_read_without_a_fault() -> None:
 
     reading_end.close()
     writing_end.close()
+
+
+def test_a_directory_that_is_not_there_is_added_up_as_unreadable(
+    tmp_path: Path,
+) -> None:
+    added = added_up(tmp_path / "gone", ends_by=math.inf)
+
+    assert added.unreadable == str(tmp_path / "gone")
