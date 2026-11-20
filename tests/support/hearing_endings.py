@@ -13,8 +13,6 @@ from tests.support.speech_service import (
     AN_ITEM,
     PLANTED,
     Hear,
-    a_completed,
-    a_delta,
     after_the_first_audio,
     crashing_after_the_first_audio,
     denying,
@@ -86,24 +84,4 @@ HEARING_ENDS: Final[dict[str, Ending]] = {
         name: Ending(lambda hear=hear: hear, [], HopClose.SERVICE_FAILED)
         for name, hear in _marked_frames_the_parser_refuses().items()
     },
-}
-
-
-def _interim(text: str) -> dict[str, object]:
-    return {"text": text, "final": False, "language": None, "traceparent": None}
-
-
-def _final(text: str, language: str = "de") -> dict[str, object]:
-    return {"text": text, "final": True, "language": language, "traceparent": None}
-
-
-BROWSER_ENDINGS: dict[str, Ending] = {
-    "deltas-grow-and-completed-replaces": Ending(
-        lambda: after_the_first_audio(
-            a_delta("Gu"), a_delta("ten"), a_completed("Guten Tag.")
-        ),
-        [_interim("Gu"), _interim("Guten"), _final("Guten Tag.")],
-        HopClose.NORMAL,
-    ),
-    **HEARING_ENDS,
 }

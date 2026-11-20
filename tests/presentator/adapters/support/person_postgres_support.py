@@ -37,9 +37,7 @@ from presentator.contracts.decks import (
 )
 from presentator.contracts.models import Role, User
 from presentator.contracts.preferences import PersonPreferences, ThemeChoice
-from presentator.ports.decks import DeckStore, DeployKeyDrafts, SourceRuns, SourceStore
-from presentator.ports.identity import PersonAccounts
-from presentator.ports.preferences import PersonPreferencesStore
+from presentator.ports.decks import DeployKeyDrafts
 from tests.presentator.adapters.support.credentials_support import OpenCredentials
 from tests.presentator.adapters.support.key_draft_support import (
     INSTANCE_KEY,
@@ -60,8 +58,6 @@ from tests.support.postgres import NO_FENCE, engine_on
 from tests.support.run_objects import A_CACHE_BOUND, DirectoryRunObjects
 
 _ACCOUNTS = "users"
-
-
 _NOW = datetime(2026, 1, 15, 9, tzinfo=UTC)
 THE_PERSON = User(id="the-person", username="pia", role=Role.ADMIN)
 ANOTHER = User(id="another-person", username="ben", role=Role.USER)
@@ -101,13 +97,13 @@ class Stores:
     """Every store two people's rows are written through and erased from."""
 
     seed_user: Callable[[User], None]
-    sources: SourceStore
-    decks: DeckStore
-    runs: SourceRuns
+    sources: PostgresSourceStore
+    decks: PostgresDeckStore
+    runs: PostgresSourceRunStore
     key_drafts: DeployKeyDrafts
-    accounts: PersonAccounts
+    accounts: PostgresIdentityWrites
     sessions: PostgresSessions
-    preferences: PersonPreferencesStore
+    preferences: PostgresPersonPreferencesStore
 
 
 def _seed_person(
