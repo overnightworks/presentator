@@ -1,0 +1,7 @@
+claim_id = "4d6c6eb0af434caab9b98514e5b04907"
+agent = "Claude 5d9860ec-23d0-455e-86fe-195b872a5fbf"
+role = "builder"
+base = "094a2e87551f2a9a0482248874a64b23b4e168d7"
+branch = "claude/issue-1385-serving-loop-thread-warnings"
+scope = ["tests/presentator/host/test_worker_serving_loop.py"]
+opened_commit = "f09261d7f5406d8674ea64046b76c5f24a06355d"
