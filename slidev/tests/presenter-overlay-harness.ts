@@ -168,12 +168,7 @@ export async function buildAddonDeck(base = '/'): Promise<string> {
   return outDirectory
 }
 
-export async function serveFile(
-  directory: string,
-  pathname: string,
-  response: ServerResponse,
-  extraHeaders: Record<string, string> = productionSecurityHeaders,
-) {
+export async function serveFile(directory: string, pathname: string, response: ServerResponse, extraHeaders = productionSecurityHeaders) {
   const requested = normalize(resolve(directory, `.${pathname}`))
   const candidate = requested.startsWith(`${directory}/`) ? requested : ''
   try {

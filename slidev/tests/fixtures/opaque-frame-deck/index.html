@@ -5,7 +5,7 @@
     // stands in so the build starts.
     for (const name of ['localStorage', 'sessionStorage']) {
       try {
-        void window[name]
+        Reflect.get(window, name)
       } catch {
         window.blockedStorage = [...(window.blockedStorage ?? []), name]
         const entries = new Map()
