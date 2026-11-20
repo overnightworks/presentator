@@ -12,7 +12,6 @@ from importlib import import_module
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.postgres.accounts import PostgresSubjectUserStore
 from presentator.adapters.postgres.sessions import PostgresSessions
-from presentator.agent.settings import AgentSettings
 from presentator.api.copresenter import AskRequest
 from presentator.api.decks import TalkFiles
 from presentator.api.lobby_shell import _InlineScripts  # pyright: ignore[reportPrivateUsage] - HTMLParser.feed, not Python code, calls its hooks
@@ -35,9 +34,6 @@ TalkFiles.get_response
 
 # `StaticFiles.__call__` runs this no-op override instead of the base directory check.
 TalkFiles.check_config
-
-# Pydantic runs this `model_validator` before every `AgentSettings` validation.
-AgentSettings.drop_the_retired_backend
 
 # Pydantic runs this `field_validator` on every `AskRequest.language` value.
 AskRequest.empty_language_is_no_language
