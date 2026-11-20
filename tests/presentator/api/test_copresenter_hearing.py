@@ -156,7 +156,7 @@ def _closed_with(socket: WebSocketTestSession) -> WebSocketDisconnect:
 
 
 @pytest.mark.parametrize("case", HEARING_ENDS)
-def test_the_browser_gets_each_transcript_then_the_close_the_service_ended_with(
+def test_the_browser_gets_no_frame_and_the_close_the_service_ended_with(
     engine: Engine, case: str
 ) -> None:
     ending = HEARING_ENDS[case]
@@ -164,7 +164,7 @@ def test_the_browser_gets_each_transcript_then_the_close_the_service_ended_with(
     with a_speech_instance(engine, SpeechScenario(service=service)) as instance:
         heard = hear_and_record(instance)
 
-    assert heard.frames == ending.frames
+    assert heard.frames == []
     assert heard.closed_with == ending.close
     if ending.close == HopClose.NORMAL:
         assert _warnings(heard.logged) == []

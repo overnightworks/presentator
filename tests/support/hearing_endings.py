@@ -41,14 +41,13 @@ def _marked_frames_the_parser_refuses() -> dict[str, Hear]:
 
 @dataclass(frozen=True)
 class Ending:
-    """How a service ends a hearing, and what the browser shows of it.
+    """How a service ends a hearing, and how the browser's hearing closes.
 
     `hear` builds the service's handler anew for each scenario: a handler that
     steps through upgrades keeps that state to one scenario.
     """
 
     hear: Callable[[], Hear]
-    frames: list[dict[str, object]]
     close: HopClose
 
 
@@ -60,7 +59,6 @@ def _refusing_after(cut: Callable[[], Hear]) -> Callable[[], Hear]:
 HEARING_ENDS: Final[dict[str, Ending]] = {
     "closes-1000": Ending(
         lambda: after_the_first_audio(close_code=1000, close_reason=PLANTED),
-        [],
         HopClose.NORMAL,
     ),
     **{
@@ -70,18 +68,16 @@ HEARING_ENDS: Final[dict[str, Ending]] = {
                     close_code=code, close_reason=PLANTED
                 )
             ),
-            [],
-            HopClose.SERVICE_FAILED,
+                HopClose.SERVICE_FAILED,
         )
         for code in (1009, 1011, 1013)
     },
     "peer-crashes-mid-session": Ending(
         _refusing_after(crashing_after_the_first_audio),
-        [],
         HopClose.SERVICE_FAILED,
     ),
     **{
-        name: Ending(lambda hear=hear: hear, [], HopClose.SERVICE_FAILED)
+        name: Ending(lambda hear=hear: hear, HopClose.SERVICE_FAILED)
         for name, hear in _marked_frames_the_parser_refuses().items()
     },
 }
