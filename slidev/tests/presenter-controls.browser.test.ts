@@ -88,10 +88,6 @@ describe('presenter controls', () => {
       await ai.click({ timeout: 2_000 })
       await page.getByText(en['controls.noAnswer'], { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
       expect(await page.getByText('Then the second one fails.').count()).toBeGreaterThan(0)
-      // The fake player never ends on its own; ending it lets the next question be heard.
-      await expect.poll(() => overlayFlag(page, 'speaking')).toBe(true)
-      await page.evaluate(() => (window as unknown as { __fakes: { endPlayback: () => void } }).__fakes.endPlayback())
-      await expect.poll(() => overlayFlag(page, 'speaking')).toBe(false)
       sendHeard('The first sentence is voiced.')
       sendHeard('Then the second one fails.')
       await expect.poll(() => state.askBodies.length).toBe(2)
@@ -117,8 +113,6 @@ describe('presenter controls', () => {
       expect(await page.getByText('The answer stops here.').isVisible(), 'what it showed stays').toBe(true)
       // The fake player never ends on its own, so the queued sound is still playing here.
       expect(await overlayFlag(page, 'speaking'), 'the queued sound keeps playing').toBe(true)
-      await page.evaluate(() => (window as unknown as { __fakes: { endPlayback: () => void } }).__fakes.endPlayback())
-      await expect.poll(() => overlayFlag(page, 'speaking')).toBe(false)
       sendHeard('And the next question?')
       await page.getByText('The second ask is answered.').waitFor({ state: 'visible', timeout: 5_000 })
       expect(state.askBodies.map((body) => body.said)).toEqual([
@@ -311,6 +305,27 @@ describe('presenter controls', () => {
     }
   })
 
+  it('CP17: stops the playing answer at once and asks a final heard during playback as the next question', async () => {
+    state.media = createMediaObservation()
+    const { browser, page } = await openPresenter(1024)
+    try {
+      const ai = page.getByRole('switch', { name: en['controls.switch'] })
+      await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      await ai.click({ timeout: 2_000 })
+      await expect.poll(() => overlayFlag(page, 'speaking'), { timeout: 5_000 }).toBe(true)
+      await expect.poll(() => state.media.playbackStarted).toBe(true)
+      expect(state.media.playbackPaused).toBe(false)
+      sendHeard('Why does the handoff slow down?')
+      await expect.poll(() => state.media.playbackPaused, { timeout: 2_000 }).toBe(true)
+      await expect.poll(() => state.askBodies.map((body) => body.said)).toEqual([
+        'Where does the handoff slow down?',
+        'Why does the handoff slow down?',
+      ])
+    } finally {
+      await closeBrowser(browser)
+    }
+  }, 30_000)
+
   it('CP15: stops the active co-presenter before Home leaves, keeps the overlay out of the bottom and a return starts off', async () => {
     state.media = createMediaObservation()
     const { browser, page } = await openPresenter(390)
@@ -321,7 +336,7 @@ describe('presenter controls', () => {
       await expect.poll(() => overlayFlag(page, 'speaking'), { timeout: 5_000 }).toBe(true)
       await page.getByText('Where does the handoff slow down?').waitFor({ state: 'visible', timeout: 5_000 })
       expect(state.media.trackStopped).toBe(false)
-      expect(state.media.playbackStarted).toBe(true)
+      await expect.poll(() => state.media.playbackStarted).toBe(true)
       expect(state.media.playbackPaused).toBe(false)
       const [homeBox, aiBox, panelBox] = await Promise.all([
         page.getByRole('link', { name: en['controls.home'] }).boundingBox(),
