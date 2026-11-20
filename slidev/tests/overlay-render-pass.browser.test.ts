@@ -7,6 +7,7 @@ import {
   openPresenter,
   openRoomBrowser,
   registerOverlayHarness,
+  sendHeard,
   state,
   wordsOf,
 } from './presenter-overlay-harness'
@@ -124,6 +125,9 @@ describe('the overlay render pass', () => {
       await switchOn(page, 'en')
       const lines = page.locator(`${CONTROLS_ROOT} .panel .line`)
       await page.locator(`${CONTROLS_ROOT} .panel .answer`).waitFor({ state: 'visible' })
+      expect(await lines.evaluateAll((elements) => elements.map((element) => element.getAttribute('lang')))).toEqual(['de', 'de'])
+      sendHeard('And the next step', false)
+      await page.locator(`${CONTROLS_ROOT} .panel .heard`).filter({ hasText: 'And the next step' }).waitFor({ state: 'visible' })
       expect(await lines.evaluateAll((elements) => elements.map((element) => element.getAttribute('lang')))).toEqual(['de', 'de'])
       expect(await page.locator(CONTROLS_ROOT).getAttribute('lang')).toBe('en')
     } finally {

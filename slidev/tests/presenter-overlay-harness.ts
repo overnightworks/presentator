@@ -469,9 +469,11 @@ export async function overlayFlag(page: Page, name: 'on' | 'capturing' | 'speaki
   return await page.locator('.copresenter').getAttribute(`data-${name}`) === 'true'
 }
 
-// A final transcript asks; one that is not final only shows as heard.
+// A final transcript asks; one that is not final only shows as heard and, as on
+// the real wire, names no language.
 export function sendHeard(text: string, final = true) {
-  for (const socket of hearingSockets) socket.write(frame(JSON.stringify({ text, final, language: state.heardLanguage, traceparent: state.heardTraceparent })))
+  const language = final ? state.heardLanguage : null
+  for (const socket of hearingSockets) socket.write(frame(JSON.stringify({ text, final, language, traceparent: state.heardTraceparent })))
 }
 
 // The server ends every held answer in order, as it does when the session ends.
