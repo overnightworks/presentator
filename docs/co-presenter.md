@@ -98,6 +98,12 @@ the cluster, and that hop's trust sentence is in
   restart); the half-heard sentence is lost and the speaker repeats it. The
   overlay opens the hearing again at the same address, which any ready pod
   answers, with no fault word; any other close shows "No hearing".
+- **CP17** A final transcript heard while an answer is spoken or streamed stops
+  that answer at once, its queued and playing audio included, and is asked as
+  the next question. This holds until the talk-over rule decides what an
+  interjection does; from then that rule says whether the answer stops, finishes
+  its sentence or goes on, and what becomes of the heard words. Until then a
+  backchannel final such as "Mhm." stops the answer too.
 
 **What the log keeps of a hearing.** Each hearing is a trace of its own and
 writes one `hearing_session.ended`, with its language, how many openings and

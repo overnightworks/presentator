@@ -311,6 +311,27 @@ describe('presenter controls', () => {
     }
   })
 
+  it('CP17: stops the playing answer at once and asks a final heard during playback as the next question', async () => {
+    state.media = createMediaObservation()
+    const { browser, page } = await openPresenter(1024)
+    try {
+      const ai = page.getByRole('switch', { name: en['controls.switch'] })
+      await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      await ai.click({ timeout: 2_000 })
+      await expect.poll(() => overlayFlag(page, 'speaking'), { timeout: 5_000 }).toBe(true)
+      expect(state.media.playbackStarted).toBe(true)
+      expect(state.media.playbackPaused).toBe(false)
+      sendHeard('Why does the handoff slow down?')
+      await expect.poll(() => state.media.playbackPaused, { timeout: 2_000 }).toBe(true)
+      await expect.poll(() => state.askBodies.map((body) => body.said)).toEqual([
+        'Where does the handoff slow down?',
+        'Why does the handoff slow down?',
+      ])
+    } finally {
+      await closeBrowser(browser)
+    }
+  }, 30_000)
+
   it('CP15: stops the active co-presenter before Home leaves, keeps the overlay out of the bottom and a return starts off', async () => {
     state.media = createMediaObservation()
     const { browser, page } = await openPresenter(390)

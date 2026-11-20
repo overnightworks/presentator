@@ -281,7 +281,7 @@ function releaseCapture() {
 }
 
 function onFinal(text, askedLanguage, heardTraceparent) {
-  if (!on.value || speaking.value) return
+  if (!on.value) return
   if (isEcho(text, spokenText)) return
   void ask(text, askedLanguage, heardTraceparent)
 }
