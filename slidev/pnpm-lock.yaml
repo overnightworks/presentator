@@ -240,8 +240,8 @@ importers:
         specifier: 3.2.0
         version: 3.2.0
       magic-string:
-        specifier: 0.30.21
-        version: 0.30.21
+        specifier: 1.4.5
+        version: 1.4.5
       overnightworks-speech-browser:
         specifier: https://github.com/overnightworks/speech/releases/download/v0.22.0/overnightworks-speech-browser-0.22.0.tgz
         version: https://github.com/overnightworks/speech/releases/download/v0.22.0/overnightworks-speech-browser-0.22.0.tgz

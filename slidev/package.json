@@ -43,7 +43,7 @@
     "istanbul-lib-report": "3.0.1",
     "istanbul-lib-source-maps": "5.0.6",
     "istanbul-reports": "3.2.0",
-    "magic-string": "0.30.21",
+    "magic-string": "1.4.5",
     "overnightworks-speech-browser": "https://github.com/overnightworks/speech/releases/download/v0.22.0/overnightworks-speech-browser-0.22.0.tgz",
     "playwright-chromium": "1.65.0",
     "slidev-addon-presentator": "link:.",
