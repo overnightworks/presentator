@@ -92,7 +92,6 @@ def a_step(root: Path, kind: StepKind = StepKind.BUILD) -> BuildStep:
         place=place,
         slug="my-deck",
         name=kind,
-        arguments=(),
         watched=lambda: None,
         line=StepTimer("build_step.ended", logging.getLogger(__name__)),
     )

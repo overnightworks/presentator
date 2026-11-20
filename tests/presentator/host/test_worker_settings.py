@@ -4,11 +4,12 @@ import re
 import subprocess
 import sys
 import threading
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
-from presentator.host.config import Settings
+from presentator.host.config import Settings, load_settings
 from presentator.host.environment import ConfigurationError
 from presentator.host.worker_self_check import TOOLCHAIN_PROJECT
 from presentator.host.worker_settings import (
@@ -119,6 +120,33 @@ def test_a_refusal_of_the_megabytes_never_quotes_the_value_it_refuses(
     monkeypatch.setenv(MEGABYTES_VARIABLE, value)
 
     assert_refusal_never_quotes(load_worker_settings, value)
+
+
+UNUSABLE_BOUNDS = [
+    (TIMEOUT_VARIABLE, "0"),
+    (TIMEOUT_VARIABLE, "-1"),
+    (TIMEOUT_VARIABLE, "inf"),
+    (TIMEOUT_VARIABLE, "1e300"),
+    (MEGABYTES_VARIABLE, "0"),
+    (MEGABYTES_VARIABLE, "-1"),
+    (MEGABYTES_VARIABLE, "1.5"),
+]
+
+
+@pytest.mark.parametrize(("variable", "value"), UNUSABLE_BOUNDS)
+@pytest.mark.parametrize("load", [load_settings, load_worker_settings])
+def test_the_web_and_the_worker_refuse_an_unusable_build_bound_naming_its_variable(
+    environment: pytest.MonkeyPatch,
+    load: Callable[[], object],
+    variable: str,
+    value: str,
+) -> None:
+    environment.setenv(variable, value)
+
+    with pytest.raises(ConfigurationError) as refused:
+        load()
+
+    assert refused.value.variables == (variable,)
 
 
 def test_a_refusal_never_quotes_the_value_it_refuses(

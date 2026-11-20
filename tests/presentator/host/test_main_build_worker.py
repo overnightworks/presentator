@@ -1,7 +1,9 @@
 """The composition root builds a deck through the runner it is told to."""
 
 import asyncio
+import os
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -11,7 +13,7 @@ from sqlalchemy import Engine
 from presentator.adapters.postgres.deck_store import PostgresDeckStore
 from presentator.adapters.toolchain_identity import toolchain_identity_of
 from presentator.contracts.models import Role, User
-from presentator.host import main
+from presentator.host import main, worker
 from presentator.host.config import load_settings
 from presentator.host.deck_toolchain import build_bound_of, the_build_worker
 from presentator.host.environment import ConfigurationError
@@ -91,6 +93,61 @@ def test_a_worker_run_without_its_address_or_key_file_refuses_to_start(
 
     with pytest.raises(ConfigurationError, match="build_worker"):
         load_settings()
+
+
+VALID_HELLO_KEYS = {
+    "32 bytes": b"k" * 32,
+    "4096 bytes": b"k" * 4096,
+    "sixteen two-byte characters": ("é" * 16).encode(),
+    "2048 two-byte characters": ("é" * 2048).encode(),
+}
+REFUSED_HELLO_KEYS = {
+    "31 bytes": b"k" * 31,
+    "4097 bytes": b"k" * 4097,
+    "fifteen two-byte characters": ("é" * 15).encode(),
+    "2049 two-byte characters": ("é" * 2049).encode(),
+}
+
+
+def _web_reads(_key_file: Path) -> bytes:
+    return load_settings().build_worker.key.get_secret_value().encode()
+
+
+def _worker_reads(key_file: Path) -> bytes:
+    return worker.read_key(key_file, controller_uid=os.getuid())
+
+
+@pytest.mark.parametrize("read", [_web_reads, _worker_reads])
+@pytest.mark.parametrize("key", VALID_HELLO_KEYS.values(), ids=VALID_HELLO_KEYS.keys())
+def test_the_web_and_the_worker_both_read_a_key_of_32_to_4096_bytes(
+    environment: pytest.MonkeyPatch,
+    key_file: Path,
+    read: Callable[[Path], bytes],
+    key: bytes,
+) -> None:
+    key_file.write_bytes(key)
+    key_file.chmod(0o400)
+    a_worker_run(environment, key_file)
+
+    assert read(key_file) == key
+
+
+@pytest.mark.parametrize("read", [_web_reads, _worker_reads])
+@pytest.mark.parametrize(
+    "key", REFUSED_HELLO_KEYS.values(), ids=REFUSED_HELLO_KEYS.keys()
+)
+def test_the_web_and_the_worker_both_refuse_a_key_outside_32_to_4096_bytes(
+    environment: pytest.MonkeyPatch,
+    key_file: Path,
+    read: Callable[[Path], bytes],
+    key: bytes,
+) -> None:
+    key_file.write_bytes(key)
+    key_file.chmod(0o400)
+    a_worker_run(environment, key_file)
+
+    with pytest.raises((ConfigurationError, worker.StartRefusedError)):
+        read(key_file)
 
 
 @pytest.mark.parametrize(

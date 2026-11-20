@@ -89,8 +89,7 @@ _RECORDED_ENVIRONMENT = "environment"
 _A_BUILT_PAGE = "index.html"
 _WHAT_A_TALK_SAYS = "a talk"
 
-# Builds as above, then its export step turns one name of what was written
-# into a link, the way a deck's own `vite.config.ts` could.
+# Builds as above, then its export links a written name, as `vite.config.ts` could.
 _A_TOOLCHAIN_THAT_PLANTS_A_LINK = (
     _A_TOOLCHAIN_THAT_BUILDS
     + """case "$out" in
@@ -744,7 +743,8 @@ def test_a_talk_larger_than_a_build_may_leave_is_refused_with_that_reason(
         BuildFailureReason.OUTPUT_MEGABYTES,
         "info",
     )
-    assert ended["written_megabytes"] == _MEGABYTES_A_GREEDY_BUILD_WRITES
+    *_, last_step = lines_of(logged, "build_step.ended")
+    assert last_step["written_megabytes"] == _MEGABYTES_A_GREEDY_BUILD_WRITES
 
 
 def test_a_build_that_delivers_writes_one_line_per_step_and_one_for_the_build(
@@ -768,7 +768,7 @@ def test_a_build_that_delivers_writes_one_line_per_step_and_one_for_the_build(
     ]
     (ended,) = lines_of(logged, "deck_build.ended")
     assert ended["outcome"] == "ok"
-    assert ended["entry_count"] == len(list(built.directory.parent.rglob("*")))
+    assert steps[-1]["entry_count"] == len(list(built.directory.parent.rglob("*")))
     assert all(one["deck_id"] == ended["deck_id"] for one in steps)
     assert isinstance(ended["duration_ms"], float)
     assert EXAMPLE_SLUG not in logged.text

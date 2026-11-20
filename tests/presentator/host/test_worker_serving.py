@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
+from presentator.adapters.build_wire import MINIMUM_KEY_BYTES
 from presentator.host import worker
 from presentator.host.lifecycle import StopLine
 from presentator.host.worker import StartRefusal
 from presentator.host.worker_serving import Serving
-from presentator.host.worker_settings import MINIMUM_KEY_LENGTH
 from tests.presentator.host.support.worker_boundary import LOADED_SETTINGS
 from tests.presentator.host.support.worker_lines import refusal_reasons
 from tests.support.log_lines import json_logged
@@ -70,7 +70,7 @@ def a_key_file_that_is_a_directory(path: Path) -> int:
 
 def a_key_file_that_is_too_short(path: Path) -> int:
     path.chmod(0o600)
-    path.write_bytes(b"k" * (MINIMUM_KEY_LENGTH - 1))
+    path.write_bytes(b"k" * (MINIMUM_KEY_BYTES - 1))
     path.chmod(0o400)
     return OWN_UID
 

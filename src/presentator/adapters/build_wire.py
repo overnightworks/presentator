@@ -47,6 +47,8 @@ MAXIMUM_ENTRIES = 100_000
 MEGABYTE = 1024 * 1024
 TOOLCHAIN_SCRATCH_NAME = TOOLCHAIN_SCRATCH_DIRECTORY.encode()
 HELLO_VERSION = 1
+MINIMUM_KEY_BYTES = 32
+MAXIMUM_KEY_BYTES = 4096
 NONCE_BYTES = 32
 TAG_BYTES = hashlib.sha256().digest_size
 CHALLENGE_BYTES = 1 + NONCE_BYTES
@@ -253,6 +255,11 @@ def verify_hello(connection: socket.socket, key: bytes, *, seconds: float) -> No
             hello_tag(key, HelloDirection.WORKER_TO_WEB, nonce, web_nonce)
         )
     connection.settimeout(None)
+
+
+def is_a_hello_key(key: bytes) -> bool:
+    """Whether the key's bytes are of a length the keyed hello accepts."""
+    return MINIMUM_KEY_BYTES <= len(key) <= MAXIMUM_KEY_BYTES
 
 
 def answer_hello(connection: socket.socket, key: bytes) -> None:
@@ -614,6 +621,16 @@ def _meets_step_contract(step: StepKind, position: int, entry: TreeEntry) -> boo
     return entry.components[0] == talk
 
 
+def over_the_bound(total_bytes: int, megabytes: int) -> bool:
+    """Whether that many bytes are more than the bound of that many megabytes."""
+    return total_bytes > megabytes * MEGABYTE
+
+
+def megabytes_written(total_bytes: int) -> int:
+    """The megabytes a refusal reports for that many bytes, rounded up."""
+    return (total_bytes + MEGABYTE - 1) // MEGABYTE
+
+
 def _survey(
     root: int,
     megabytes: int,
@@ -633,11 +650,10 @@ def _survey(
             total += entry.size
     if contract is not None and count == 0:
         raise TreeRefusedError(_SHAPE_REFUSAL)
-    if total > megabytes * MEGABYTE:
+    if over_the_bound(total, megabytes):
         raise TreeRefusedError(
             RefusedOutcome(
-                limit=RefusalLimit.MEGABYTES,
-                written=(total + MEGABYTE - 1) // MEGABYTE,
+                limit=RefusalLimit.MEGABYTES, written=megabytes_written(total)
             )
         )
 

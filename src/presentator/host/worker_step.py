@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from presentator.adapters.build_wire import WireRefusedError, read_record
-from presentator.adapters.builds import BuildPlace, slidev_arguments
+from presentator.adapters.builds import BuildPlace, slidev_command
 
 RECORD_REFUSED_EXIT_STATUS = 3
 
@@ -28,16 +28,8 @@ def main(
     finally:
         os.close(arguments.record_fd)
     place = BuildPlace(root=arguments.work, run=Path())
-    execute(
-        "pnpm",
-        [
-            "pnpm",
-            "exec",
-            "slidev",
-            header.step,
-            *slidev_arguments(header.step, place=place, slug=header.slug),
-        ],
-    )
+    command = slidev_command(header.step, place=place, slug=header.slug)
+    execute(command[0], list(command))
     return 0
 
 
