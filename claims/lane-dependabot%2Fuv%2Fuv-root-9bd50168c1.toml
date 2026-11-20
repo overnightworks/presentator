@@ -1,7 +1,0 @@
-claim_id = "feb0352b8ee34c2d8c93215df49e0692"
-agent = "Claude 5d9860ec-23d0-455e-86fe-195b872a5fbf"
-role = "builder"
-base = "3b96e05d9b3228894c9f02bdc1cb1a1cb67a4694"
-branch = "dependabot/uv/uv-root-9bd50168c1"
-scope = ["pyproject.toml", "tests/support/copresenter_support.py", "uv.lock"]
-opened_commit = "6c266ca5439e4cd82a39f7c7528e6d3faa35ea71"
