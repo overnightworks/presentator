@@ -20,8 +20,10 @@ _UP: Final = ".."
 class Added:
     """What adding up one run's talk found, and what stopped the adding up.
 
-    A pass that was stopped carries no size: it says how far it came, and the
-    caller refuses the build rather than believing a number nobody counted.
+    A pass stopped by the entry limit or by the time carries no size: it says
+    how far it came, and the caller refuses the build rather than believing a
+    number nobody counted. A pass stopped by an entry it could not read carries
+    the bytes of the names it had read before it, which are no total.
     """
 
     entries: int
@@ -76,7 +78,7 @@ def _walked(still_open: list[int], *, ends_by: float, entries_up_to: float) -> A
                         return stopped
                     held += _size_of(entry, held_by=holder, still_open=still_open)
         except OSError as unreadable:
-            return Added(entries=entries, unreadable=str(unreadable))
+            return Added(entries=entries, bytes=held, unreadable=str(unreadable))
         finally:
             os.close(holder)
     return Added(entries=entries, bytes=held)

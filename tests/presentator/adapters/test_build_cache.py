@@ -297,6 +297,25 @@ def test_a_run_holding_what_cannot_be_read_does_not_stop_the_bound_taking_it(
     assert "run-1" not in on_disk(cache)
 
 
+def test_a_run_holding_what_cannot_be_read_counts_for_what_was_read_against_the_bound(
+    tmp_path: Path, store: DirectoryRunObjects
+) -> None:
+    cache = a_cache(tmp_path / "a", store)
+    unreadable = built_run(cache, "run-1")
+    assert cache.keep("run-1")
+    os.utime(unreadable / OUTPUT_DIRECTORY, (1, 1))
+    (unreadable / OUTPUT_DIRECTORY / "big").write_bytes(b"x" * 3 * _A_RUNS_BYTES)
+    closed = unreadable / OUTPUT_DIRECTORY / "inner" / "closed"
+    closed.mkdir(parents=True)
+    closed.chmod(0)
+    tight = a_cache(cache.root, store, bound=2 * _A_RUNS_BYTES)
+    built_run(tight, "run-2")
+
+    assert tight.keep("run-2")
+
+    assert on_disk(cache) == {"run-2"}
+
+
 def test_a_run_gone_while_the_bound_adds_up_the_disk_stops_neither_keep_nor_local(
     tmp_path: Path, store: DirectoryRunObjects, monkeypatch: pytest.MonkeyPatch
 ) -> None:

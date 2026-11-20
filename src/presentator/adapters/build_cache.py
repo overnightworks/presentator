@@ -223,10 +223,12 @@ def _is_a_regular_file(path: Path) -> bool:
 
 
 def _bytes_of(run: Path) -> int:
-    """What of that run's tree is readable, added up by the one walker.
+    """The bytes the one walker read of that run's tree.
 
-    A run that is gone or holds what cannot be read counts for what was read,
-    so the bound can still take it off disk.
+    A run that is gone counts for nothing. One that holds an entry it cannot
+    read counts for the names read before the walk stopped there: a lower
+    bound on what it holds, never a total, so the bound can still take it off
+    disk once what was read alone is too much.
     """
     return added_up(run, ends_by=math.inf, entries_up_to=math.inf).bytes
 
