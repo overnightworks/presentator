@@ -644,7 +644,7 @@ def arrange_the_issuer(hosts: Hosts, scenario: Scenario) -> None:
     scenario.arrange(hosts)
 
 
-def drive(engine: Engine, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
+def drive(engine: Engine, scenario: Scenario = Scenario()) -> Run:
     """Sign an admin in at the talk host, then ask once."""
     gateway = scenario.gateway()
     limiter = RecordingLimiter()
