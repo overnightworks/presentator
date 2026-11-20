@@ -6,7 +6,7 @@ database of its own on it, so tests stay parallel-safe.
 
 import os
 import uuid
-from collections.abc import Generator, Mapping
+from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import timedelta
@@ -101,8 +101,11 @@ def migrated_template() -> Generator[str]:
 
 
 @contextmanager
-def database_at(revision: str) -> Generator[Engine]:
-    """An engine on a throwaway database migrated to `revision`, dropped after."""
+def database_at(revision: str, rows: Sequence[str] = ()) -> Generator[Engine]:
+    """An engine on a throwaway database migrated to `revision`, dropped after.
+
+    `rows` are INSERT statements run, in order, on the database at `revision`.
+    """
     config = Config()
     config.set_main_option("script_location", str(MIGRATIONS_DIRECTORY))
     with created_database() as database_url:
@@ -111,6 +114,9 @@ def database_at(revision: str) -> Generator[Engine]:
             with engine.begin() as connection:
                 config.attributes["connection"] = connection
                 command.upgrade(config, revision)
+            with engine.begin() as connection:
+                for row in rows:
+                    connection.execute(text(row))
             yield engine
         finally:
             engine.dispose()

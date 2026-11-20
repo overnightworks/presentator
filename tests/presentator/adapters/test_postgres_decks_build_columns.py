@@ -25,21 +25,17 @@ _A_DECK = (
 @pytest.fixture
 def database_with_the_old_columns() -> Iterator[Engine]:
     """A database one revision before the drop, a deck holding both old columns."""
-    with database_at("0005") as engine:
-        with engine.begin() as connection:
-            connection.execute(
-                text(
-                    "INSERT INTO users (id, username, role)"
-                    " VALUES ('u1', 'ada', 'admin')"
-                )
-            )
-            connection.execute(
-                text(
-                    "INSERT INTO sources (id, name, url, ref, encrypted_secret,"
-                    " owner_id) VALUES ('src', 'n', 'u', 'main', ''::bytea, 'u1')"
-                )
-            )
-            connection.execute(text(_A_DECK))
+    with database_at(
+        "0005",
+        rows=(
+            "INSERT INTO users (id, username, role) VALUES ('u1', 'ada', 'admin')",
+            (
+                "INSERT INTO sources (id, name, url, ref, encrypted_secret, owner_id)"
+                " VALUES ('src', 'n', 'u', 'main', ''::bytea, 'u1')"
+            ),
+            _A_DECK,
+        ),
+    ) as engine:
         yield engine
 
 

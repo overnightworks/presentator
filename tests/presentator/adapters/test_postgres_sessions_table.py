@@ -36,21 +36,17 @@ def _only_the_sessions_table(
 @pytest.fixture
 def database_before_the_extra() -> Iterator[Engine]:
     """A database one revision before the extra's table, holding a live session."""
-    with database_at("0004") as engine:
-        with engine.begin() as connection:
-            connection.execute(
-                text(
-                    "INSERT INTO users (id, username, role)"
-                    " VALUES ('u1', 'ada', 'admin')"
-                )
-            )
-            connection.execute(
-                text(
-                    "INSERT INTO host_key_pins (host, public_key)"
-                    " VALUES ('git.example', 'ssh-ed25519 A')"
-                )
-            )
-            connection.execute(text(_THE_OLD_SHAPE))
+    with database_at(
+        "0004",
+        rows=(
+            "INSERT INTO users (id, username, role) VALUES ('u1', 'ada', 'admin')",
+            (
+                "INSERT INTO host_key_pins (host, public_key)"
+                " VALUES ('git.example', 'ssh-ed25519 A')"
+            ),
+            _THE_OLD_SHAPE,
+        ),
+    ) as engine:
         yield engine
 
 
