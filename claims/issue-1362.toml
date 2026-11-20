@@ -1,8 +1,0 @@
-claim_id = "da6e57381d2f43b785eb986c8a6eb778"
-agent = "Claude 8ee5fb01-f0ec-4dfd-8667-519e2cc2cc19"
-role = "builder"
-base = "fbffd5a7f9eecd811887f330869ae1e039eb2835"
-branch = "claude/issue-1362-one-decider-each-for-the-build-output-bo"
-scope = ["docs/configuration.md", "scripts/probe_build_worker/web_client.py", "src/presentator/adapters/build_cache.py", "src/presentator/adapters/build_tree.py", "src/presentator/adapters/build_wire.py", "src/presentator/adapters/build_worker.py", "src/presentator/adapters/builds.py", "src/presentator/host/config.py", "src/presentator/host/worker.py", "src/presentator/host/worker_settings.py", "src/presentator/host/worker_step.py", "tests/presentator/adapters/support/build_worker_support.py", "tests/presentator/adapters/test_build_cache.py", "tests/presentator/adapters/test_build_wire_walk.py", "tests/presentator/adapters/test_builds.py", "tests/presentator/adapters/test_builds_held.py", "tests/presentator/adapters/test_builds_output_bound.py", "tests/presentator/host/test_main_build_worker.py", "tests/presentator/host/test_worker.py", "tests/presentator/host/test_worker_serving.py", "tests/presentator/host/test_worker_settings.py", "tests/presentator/host/test_worker_step.py"]
-opened_commit = "c81112bb48e754cba814bdc92c506d78cf2f1ea5"
-whole_reason = "The four fixes share the build bound's owners (wire, tree, settings), and splitting them would touch the same files four times."
