@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Browser, BrowserContext, Frame, Page } from 'playwright-chromium'
 
-import { buildStagedDeck, closeBrowser, launchBrowser } from './presenter-overlay-harness'
+import { buildStagedDeck, closeBrowser, launchBrowser, serveFile } from './presenter-overlay-harness'
 
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 })
 
@@ -23,7 +23,7 @@ type ContentRequest = { path: string, fetchMode: string | undefined, hasCookie: 
 type Loopback = { server: Server, origin: string }
 
 const contentRequests: ContentRequest[] = []
-const contentResponseHeaders: Record<string, string | number | string[] | undefined>[] = []
+const contentResponseHeaders: Promise<Record<string, string>>[] = []
 let buildDirectory = ''
 let deckDirectory = ''
 let content: Loopback
@@ -40,7 +40,7 @@ function listen(handler: (request: IncomingMessage, response: ServerResponse) =>
   })
 }
 
-async function serveBuild(request: IncomingMessage, response: ServerResponse) {
+function serveBuild(request: IncomingMessage, response: ServerResponse) {
   const { pathname } = new URL(request.url ?? '/', 'http://content.test')
   const prefix = `/t/${TOKEN}/`
   contentRequests.push({
@@ -52,16 +52,7 @@ async function serveBuild(request: IncomingMessage, response: ServerResponse) {
     response.writeHead(404).end()
     return
   }
-  const { readFile, stat } = await import('node:fs/promises')
-  const relative = pathname.slice(prefix.length)
-  const candidate = join(buildDirectory, relative)
-  const isAsset = relative.includes('.') && candidate.startsWith(`${buildDirectory}/`)
-  const file = isAsset && (await stat(candidate).catch(() => null))?.isFile() ? candidate : join(buildDirectory, 'index.html')
-  const type = file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.html') ? 'text/html' : 'application/octet-stream'
-  const headers = { 'content-type': type, 'access-control-allow-origin': '*' }
-  contentResponseHeaders.push(headers)
-  response.writeHead(200, headers)
-  response.end(await readFile(file))
+  return serveFile(buildDirectory, pathname.slice(prefix.length - 1), response, { 'access-control-allow-origin': '*' })
 }
 
 // The stage page frames the build and relays between windows through a
@@ -109,6 +100,9 @@ beforeAll(async () => {
   })
   browser = await launchBrowser()
   context = await browser.newContext()
+  context.on('response', (response) => {
+    if (response.url().startsWith(content.origin)) contentResponseHeaders.push(response.allHeaders())
+  })
 })
 
 afterAll(async () => {
@@ -121,8 +115,17 @@ afterAll(async () => {
 
 type Opened = { page: Page, deck: Frame, problems: string[] }
 
+// Every page a test opens is closed after it, so a failed test leaves no page
+// on the shared stage origin's BroadcastChannel to relay into the next one.
+const openedPages: Page[] = []
+
+afterEach(async () => {
+  await Promise.all(openedPages.splice(0).map((page) => page.close()))
+})
+
 async function openStage(role: 'presenter' | 'projector'): Promise<Opened> {
   const page = await context.newPage()
+  openedPages.push(page)
   const problems: string[] = []
   page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`))
   page.on('console', (message) => {
@@ -140,65 +143,91 @@ async function openStage(role: 'presenter' | 'projector'): Promise<Opened> {
 
 const shownSlide = (deck: Frame) => deck.locator('.slidev-page:visible h1').first().innerText()
 const seen = (page: Page) => page.evaluate(() => (window as unknown as { seen: number[][] }).seen)
+const goTo = (page: Page, slide: number, click: number) =>
+  page.evaluate(([s, c]: [number, number]) => (window as unknown as { goTo: (s: number, c: number) => void }).goTo(s, c), [slide, click] as [number, number])
+
+// A message each check of the bridge must drop, one per check.
+const hostileMessages = [
+  { name: 'a slide above the total', slide: 99, click: 0 },
+  { name: 'a slide that is not an integer', slide: 1.5, click: 0 },
+  { name: 'a slide that is a string', slide: '2', click: 0 },
+  { name: 'a click below zero', slide: 2, click: -1 },
+  { name: 'a click above the clicks total', slide: 1, click: 50 },
+]
 
 describe('a Slidev build in a sandboxed opaque-origin frame', () => {
-  it('frames with exactly allow-scripts, no permissions, and an opaque origin', async () => {
-    const { page, deck } = await openStage('presenter')
-    const frameElement = page.locator('#deck')
-    expect(await frameElement.getAttribute('sandbox')).toBe(SANDBOX)
-    expect(await frameElement.getAttribute('allow')).toBeNull()
+  it('frames the build with exactly allow-scripts', async () => {
+    const { page } = await openStage('presenter')
+    expect(await page.locator('#deck').getAttribute('sandbox')).toBe('allow-scripts')
+  })
+
+  it('frames the build with no permissions policy', async () => {
+    const { page } = await openStage('presenter')
+    expect(await page.locator('#deck').getAttribute('allow')).toBeNull()
+  })
+
+  it('gives the framed deck an opaque origin', async () => {
+    const { deck } = await openStage('presenter')
     expect(await deck.evaluate(() => window.origin)).toBe('null')
+  })
+
+  it('renders the first slide in the frame', async () => {
+    const { deck } = await openStage('presenter')
     await expect(shownSlide(deck)).resolves.toBe('Slide one')
-    await page.close()
   })
 
   it('serves module scripts in CORS mode from the token path with no cookie', async () => {
-    const { page } = await openStage('presenter')
+    await openStage('presenter')
     const scripts = contentRequests.filter((request) => request.path.endsWith('.js'))
     expect(scripts.length).toBeGreaterThan(0)
     expect(scripts.every((request) => request.fetchMode === 'cors')).toBe(true)
     expect(contentRequests.every((request) => request.path.startsWith(`/t/${TOKEN}/`) && !request.hasCookie)).toBe(true)
-    expect(contentResponseHeaders.some((headers) => 'set-cookie' in headers)).toBe(false)
-    await page.close()
+    expect((await Promise.all(contentResponseHeaders)).some((headers) => 'set-cookie' in headers)).toBe(false)
   })
 
   it('moves the projector window when the presenter window goes to a slide and a click', async () => {
     const presenter = await openStage('presenter')
     const projector = await openStage('projector')
-    await presenter.page.evaluate(() => (window as unknown as { goTo: (s: number, c: number) => void }).goTo(2, 0))
+    await goTo(presenter.page, 2, 0)
     await vi.waitFor(async () => expect(await shownSlide(projector.deck)).toBe('Slide two'))
-    await presenter.page.evaluate(() => (window as unknown as { goTo: (s: number, c: number) => void }).goTo(2, 1))
+    await goTo(presenter.page, 2, 1)
     await vi.waitFor(async () => expect((await seen(projector.page)).at(-1)).toEqual([2, 1]))
-    await presenter.page.evaluate(() => (window as unknown as { goTo: (s: number, c: number) => void }).goTo(3, 0))
+    await goTo(presenter.page, 3, 0)
     await vi.waitFor(async () => expect(await shownSlide(projector.deck)).toBe('Slide three'))
     expect(projector.deck.url().startsWith(`${content.origin}/t/${TOKEN}/`)).toBe(true)
-    await presenter.page.close()
-    await projector.page.close()
   })
 
-  it('drops a go-to or a report that is not an integer inside the deck', async () => {
-    const presenter = await openStage('presenter')
+  it.each(hostileMessages)('drops a go-to with $name', async ({ slide, click }) => {
     const projector = await openStage('projector')
-    for (const bad of [{ slide: 99, click: 0 }, { slide: 1.5, click: 0 }, { slide: '2', click: 0 }, { slide: 2, click: -1 }, { slide: 1, click: 50 }]) {
-      await projector.page.evaluate((message) => {
-        const frame = document.getElementById('deck') as HTMLIFrameElement
-        frame.contentWindow!.postMessage({ type: 'go', ...message }, '*')
-      }, bad)
-      await presenter.deck.evaluate((message) => parent.postMessage({ type: 'state', total: 3, ...message }, '*'), bad)
-    }
-    await presenter.page.waitForTimeout(500)
-    expect(await shownSlide(projector.deck)).toBe('Slide one')
-    expect(await seen(projector.page)).toEqual([[1, 0]])
-    expect(await seen(presenter.page)).toEqual([[1, 0]])
-    await presenter.page.close()
-    await projector.page.close()
+    await projector.page.evaluate((message) => {
+      const frame = document.getElementById('deck') as HTMLIFrameElement
+      frame.contentWindow!.postMessage({ type: 'go', ...message }, '*')
+    }, { slide, click })
+    await goTo(projector.page, 3, 0)
+    await vi.waitFor(async () => expect((await seen(projector.page)).at(-1)).toEqual([3, 0]))
+    expect(await seen(projector.page)).toEqual([[1, 0], [3, 0]])
   })
 
-  it('blocks storage and a cross-window BroadcastChannel in the opaque origin, and the shim and page relay cover both', async () => {
+  it.each(hostileMessages)('drops a report with $name', async ({ slide, click }) => {
     const presenter = await openStage('presenter')
-    const projector = await openStage('projector')
-    expect(await presenter.deck.evaluate(() => (window as unknown as { blockedStorage: string[] }).blockedStorage))
+    const report = (message: Record<string, unknown>) =>
+      presenter.deck.evaluate((state) => parent.postMessage({ type: 'state', total: 3, clicksTotal: 2, ...state }, '*'), message)
+    await report({ slide, click })
+    await report({ slide: 3, click: 1 })
+    await vi.waitFor(async () => expect((await seen(presenter.page)).at(-1)).toEqual([3, 1]))
+    expect(await seen(presenter.page)).toEqual([[1, 0], [3, 1]])
+  })
+
+  it('has no storage in the opaque origin', async () => {
+    const { deck } = await openStage('presenter')
+    expect(await deck.evaluate(() => (window as unknown as { blockedStorage: string[] }).blockedStorage))
       .toEqual(['localStorage', 'sessionStorage'])
+  })
+
+  // Guards Chromium's partitioning of an opaque origin, which the relay relies on.
+  it('hears no BroadcastChannel message from another window', async () => {
+    const presenter = await openStage('presenter')
+    const projector = await openStage('projector')
     await presenter.deck.evaluate(() => {
       const w = window as unknown as { heard: unknown[] }
       w.heard = []
@@ -206,11 +235,16 @@ describe('a Slidev build in a sandboxed opaque-origin frame', () => {
       channel.onmessage = (event) => w.heard.push(event.data)
     })
     await projector.deck.evaluate(() => new BroadcastChannel('probe').postMessage('hello'))
-    await presenter.page.waitForTimeout(500)
-    expect(await presenter.deck.evaluate(() => (window as unknown as { heard: unknown[] }).heard)).toEqual([])
-    // The deck's only complaint is Slidev asking for the screen wake lock the frame is not granted.
+    await presenter.deck.evaluate(() => new BroadcastChannel('probe').postMessage('sentinel'))
+    const heard = () => presenter.deck.evaluate(() => (window as unknown as { heard: unknown[] }).heard)
+    await vi.waitFor(async () => expect(await heard()).toContain('sentinel'))
+    expect(await heard()).toEqual(['sentinel'])
+  })
+
+  it('raises no console error in the deck beyond the screen wake lock', async () => {
+    const presenter = await openStage('presenter')
+    await vi.waitFor(async () => expect(await shownSlide(presenter.deck)).toBe('Slide one'))
+    // The frame is not granted the screen wake lock Slidev asks for.
     expect(presenter.problems.filter((problem) => !/wake[ -]?lock/i.test(problem))).toEqual([])
-    await presenter.page.close()
-    await projector.page.close()
   })
 })
