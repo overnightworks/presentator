@@ -588,16 +588,27 @@ jobs:
       # The gate downloads the one artifact `coverage`; its Sonar scan reads
       # coverage.xml (pytest and the lobby drive), lcov.info (the overlay's
       # vitest and browser tests) and lcov-lobby.info (the lobby's vitest and
-      # drive) from the artifact's root. The parts stay: a rerun of only the
-      # failed jobs re-uploads just their reports, and this merge must still
-      # find all three.
-      - name: Merge the coverage reports into one artifact
-        uses: actions/upload-artifact/merge@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      # drive) from the artifact's root. The overlay's and the lobby's parts
+      # stay as their own artifacts: a rerun of only the failed jobs
+      # re-uploads just their reports. This job's own report joins them by
+      # file, because the artifact listing can lag a second behind an upload
+      # and a merge by pattern then misses it.
+      - name: Download the overlay's and the lobby's coverage reports
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: coverage-*
+          path: reports/merged
+          merge-multiple: true
+
+      - name: Add this job's Python report
+        run: cp reports/coverage.xml reports/merged/coverage.xml
+
+      - name: Publish the one artifact the gate downloads
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage
-          pattern: coverage-*
-          delete-merged: false
-          separate-directories: false
+          path: reports/merged
+          if-no-files-found: error
           retention-days: 7
           overwrite: true
 
