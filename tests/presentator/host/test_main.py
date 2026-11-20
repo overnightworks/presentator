@@ -6,6 +6,7 @@ import signal
 from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 import uvicorn
@@ -76,7 +77,7 @@ def signed_in(
     peer: str = "testclient",
     app: ASGIApp | None = None,
 ) -> TestClient:
-    """A browser at that stack, or at `app` over it, signed in as the admin."""
+    """A browser at that stack as the host serves it, signed in as the admin."""
     seed_user(engine, _ADMIN)
     now = datetime.now(UTC)
     session = PostgresSessions(engine).create(
@@ -89,7 +90,7 @@ def signed_in(
         account_language=None,
     )
     client = TestClient(
-        app or instance.lobby,
+        main.served_by_host(instance, load_settings()) if app is None else app,
         base_url=base_url,
         follow_redirects=False,
         client=(peer, 50000),
@@ -284,8 +285,9 @@ def test_the_hook_address_names_https_only_behind_a_trusted_proxy(
     # header to reach the lobby the way a proxy that terminated TLS would.
     cookie = "; ".join(f"{name}={value}" for name, value in browser.cookies.items())
 
+    lobby_host = urlsplit(A_BROWSERS_ADDRESS).hostname
     source = browser.get(
-        f"http://presentator.test/api/sources/{_SOURCE_NAME}",
+        f"http://{lobby_host}/api/sources/{_SOURCE_NAME}",
         headers={
             "accept": "application/json",
             "x-forwarded-proto": "https",
@@ -295,7 +297,7 @@ def test_the_hook_address_names_https_only_behind_a_trusted_proxy(
 
     assert (
         source.json()["hook_url"]
-        == f"{hook_scheme}://presentator.test{hook_address(_SOURCE_NAME)}"
+        == f"{hook_scheme}://{lobby_host}{hook_address(_SOURCE_NAME)}"
     )
 
 

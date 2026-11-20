@@ -124,10 +124,14 @@ some of them.
 
 The client address is the ASGI peer. Empty `PRESENTATOR_TRUSTED_PROXIES` is
 correct for a direct run. Behind a proxy every request shares the proxy's address.
-Setting the list to that peer makes the library read `X-Forwarded-For` and
-`X-Forwarded-Proto`: the per-address rate limit counts the real client instead
-of the proxy, and the fetch-now hook address the Sources page shows names the
-https the proxy saw, not the plain http the app itself is served over.
+Setting the list to that peer makes the host's one client-address writer, which
+wraps the router that holds both the lobby and the talk host, read
+`X-Forwarded-For` and `X-Forwarded-Proto`: the per-address rate limit counts the
+real client instead of the proxy, the fetch-now hook address the Sources page
+shows names the https the proxy saw, not the plain http the app itself is served
+over, and every answer's request line, the router's own 404 and 405 included,
+names the forwarded client. A request from a peer outside the list is logged
+and counted as that peer, whatever it forwards.
 The guard against another site's form does not depend on this list
 (webauth's [host contract](https://github.com/overnightworks/webauth/blob/main/docs/host-contract.md)).
 
