@@ -195,6 +195,6 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
 - Deck code shares the talk origin with the session, the origin-wide microphone grant and the overlay
   that draws the AI notice: as the owner it can ask, hear, read other decks, set `Domain=` cookies and
   hide the notice. Only the operator presents his own decks today; #1251 owns the fix.
-- The overlay's palette can clash; nothing enforces one speaker; the bar rides unpromised Slidev markup.
+- The overlay's palette can clash; nothing enforces one speaker; the presenter bar is teleported into Slidev's presenter markup, which Slidev does not promise.
 - A toolchain rollout can let one deck's build reach the old worker pod, its result recorded under
   the new identity until its next push; the update strategy must not be `OnDelete`.
