@@ -1,8 +1,0 @@
-claim_id = "096f6c0887ea461f909c68d7e13826f8"
-agent = "Claude 5d9860ec-23d0-455e-86fe-195b872a5fbf"
-role = "builder"
-base = "094a2e87551f2a9a0482248874a64b23b4e168d7"
-branch = "claude/issue-1317-question-while-ai-speaks"
-scope = ["docs/co-presenter.md", "slidev/components/CoPresenter.vue", "slidev/tests"]
-opened_commit = "9358cb8bcf0a61c1f0973c296602ffb28692b6c9"
-whole_reason = "One behaviour: the overlay change, its doc sentence and its browser test."
