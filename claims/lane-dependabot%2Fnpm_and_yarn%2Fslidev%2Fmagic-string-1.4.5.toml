@@ -1,0 +1,7 @@
+claim_id = "f3f9fd1cf4154340aba03bf8648a47cf"
+agent = "Claude 5d9860ec-23d0-455e-86fe-195b872a5fbf"
+role = "builder"
+base = "96c6e872f18172bc81d1846a0574516e3eec0a74"
+branch = "dependabot/npm_and_yarn/slidev/magic-string-1.4.5"
+scope = ["slidev/package.json", "slidev/pnpm-lock.yaml"]
+opened_commit = "b26f0b9bb88ca4fb9d87083d1fb0a33ae94fc746"
