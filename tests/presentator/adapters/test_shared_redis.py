@@ -143,6 +143,17 @@ async def test_more_than_twenty_questions_in_a_row_are_admitted(
 
 
 @on_an_event_loop
+async def test_a_running_hold_lapses_after_the_lasts_the_pod_passes(
+    redis_url: str, server: Redis
+) -> None:
+    async with _shared(redis_url) as shared:
+        await shared.ask_limiter(lasts=_LASTS).admit(_A_SESSION)
+
+        (key,) = stored_keys(server)
+        assert 0 < server.pttl(key) <= _LASTS // timedelta(milliseconds=1)
+
+
+@on_an_event_loop
 async def test_every_key_starts_with_the_app_prefix(
     redis_url: str, server: Redis
 ) -> None:
