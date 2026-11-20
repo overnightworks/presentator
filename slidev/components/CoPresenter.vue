@@ -83,6 +83,11 @@ function errorEventLine(data) {
 
 const on = ref(false)
 const heard = ref('')
+// The language of the latest final transcript, the only kind that names one.
+const heardLanguage = ref('')
+// The language the question was asked in. The answer stream names no language
+// of its own, so the answer line takes the asked-in one.
+const answerLanguage = ref('')
 const answer = ref('')
 const error = ref('')
 const speaking = ref(false)
@@ -146,6 +151,8 @@ async function turnOn() {
   on.value = true
   error.value = ''
   heard.value = ''
+  heardLanguage.value = ''
+  answerLanguage.value = ''
   answer.value = ''
   spokenText = ''
   let hearingReady
@@ -255,6 +262,7 @@ function onHeard(data) {
   const payload = JSON.parse(data)
   if (!payload.text) return
   heard.value = payload.text
+  if (payload.language) heardLanguage.value = payload.language
   if (payload.final) onFinal(payload.text, payload.language, payload.traceparent)
 }
 
@@ -272,10 +280,10 @@ function releaseCapture() {
   if (mediaStream) stopStream(mediaStream)
 }
 
-function onFinal(text, utteranceLanguage, heardTraceparent) {
+function onFinal(text, askedLanguage, heardTraceparent) {
   if (!on.value || speaking.value) return
   if (isEcho(text, spokenText)) return
-  void ask(text, utteranceLanguage, heardTraceparent)
+  void ask(text, askedLanguage, heardTraceparent)
 }
 
 function isEcho(text, spoken) {
@@ -316,12 +324,13 @@ function randomHex(byteCount) {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-async function ask(text, utteranceLanguage, heardTraceparent) {
+async function ask(text, askedLanguage, heardTraceparent) {
   invalidatePlayback()
   if (askAbort) askAbort.abort()
   const controller = new AbortController()
   askAbort = controller
   answer.value = ''
+  answerLanguage.value = askedLanguage
   error.value = ''
   spokenText = ''
   unvoicedSentence = ''
@@ -335,7 +344,7 @@ async function ask(text, utteranceLanguage, heardTraceparent) {
       body: JSON.stringify({
         said: text,
         slide: currentSlideNo.value,
-        language: utteranceLanguage,
+        language: askedLanguage,
         deck: DECK_SLUG,
       }),
       signal: controller.signal,
@@ -494,12 +503,16 @@ onUnmounted(() => {
       v-if="on && heard"
       class="panel"
     >
-      <p class="line heard">
+      <p
+        class="line heard"
+        :lang="heardLanguage"
+      >
         {{ heard }}
       </p>
       <p
         v-if="answer"
         class="line answer"
+        :lang="answerLanguage"
       >
         {{ answer }}
       </p>

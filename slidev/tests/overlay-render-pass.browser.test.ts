@@ -7,6 +7,7 @@ import {
   openPresenter,
   openRoomBrowser,
   registerOverlayHarness,
+  sendHeard,
   state,
   wordsOf,
 } from './presenter-overlay-harness'
@@ -111,6 +112,27 @@ describe('the overlay render pass', () => {
       await switchOn(page, language)
       await page.locator(`${CONTROLS_ROOT} .panel .heard`).waitFor({ state: 'visible' })
     })
+  })
+
+  it('marks the heard and answer lines with the utterance language when the controls speak another', async () => {
+    state.answerMode = 'moves-slide'
+    state.interfaceLanguage = 'en'
+    state.whoLanguage = 'de'
+    state.heardLanguage = 'de'
+    const { browser, page } = await openPresenter(1440)
+    try {
+      await page.locator(`${CONTROLS_ROOT}[aria-label]`).waitFor({ state: 'visible' })
+      await switchOn(page, 'en')
+      const lines = page.locator(`${CONTROLS_ROOT} .panel .line`)
+      await page.locator(`${CONTROLS_ROOT} .panel .answer`).waitFor({ state: 'visible' })
+      expect(await lines.evaluateAll((elements) => elements.map((element) => element.getAttribute('lang')))).toEqual(['de', 'de'])
+      sendHeard('And the next step', false)
+      await page.locator(`${CONTROLS_ROOT} .panel .heard`).filter({ hasText: 'And the next step' }).waitFor({ state: 'visible' })
+      expect(await lines.evaluateAll((elements) => elements.map((element) => element.getAttribute('lang')))).toEqual(['de', 'de'])
+      expect(await page.locator(CONTROLS_ROOT).getAttribute('lang')).toBe('en')
+    } finally {
+      await closeBrowser(browser)
+    }
   })
 
   it.each(CASES)('shows a fault with a number in $language at $width px without cut-off or unworded text', async ({ language, width }) => {
