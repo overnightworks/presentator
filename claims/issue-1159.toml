@@ -1,7 +1,0 @@
-claim_id = "1c8a657ab25d42b0bd147fef15bba8a7"
-agent = "Claude 5d9860ec-23d0-455e-86fe-195b872a5fbf"
-role = "builder"
-base = "756b2be9209bba64333e5261a0b095b820268d49"
-branch = "claude/issue-1159-overlay-lines-carry-own-language"
-scope = ["slidev/components/CoPresenter.vue", "slidev/tests/overlay-render-pass.browser.test.ts", "slidev/tests/presenter-overlay-harness.ts"]
-opened_commit = "75a7de133f5ddb0b5be86a59c291b9fbdc200b76"
