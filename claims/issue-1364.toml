@@ -1,8 +1,0 @@
-claim_id = "5b71855cfe9043b38710ddf331aa4ae3"
-agent = "Claude 8ee5fb01-f0ec-4dfd-8667-519e2cc2cc19"
-role = "builder"
-base = "1e4f17bda9fcb7942b4e9ad19021e3af7bb9e763"
-branch = "claude/issue-1364-speech-failures-tandem-promises-and-the"
-scope = ["tests/presentator/adapters/support/person_instance_support.py", "tests/presentator/adapters/support/person_postgres_support.py", "tests/presentator/adapters/test_build_runs.py", "tests/presentator/adapters/test_person_records.py", "tests/presentator/adapters/test_postgres_person_erasure.py", "tests/presentator/adapters/test_postgres_person_export.py", "tests/presentator/adapters/test_shared_redis.py", "tests/presentator/adapters/test_shared_redis_two_processes.py", "tests/presentator/api/test_copresenter_hearing.py", "tests/presentator/api/test_copresenter_speech.py", "tests/presentator/application/support/ask_leases.py", "tests/support/hearing_endings.py", "tests/support/speech_drive.py"]
-opened_commit = "3c67a3ab81532e4c90178a55bd53671dca0f5535"
-whole_reason = "Four small test-only cuts of one kind; each alone would save under a hundred lines."
