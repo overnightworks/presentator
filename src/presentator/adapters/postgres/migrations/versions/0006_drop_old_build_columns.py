@@ -11,6 +11,11 @@ down_revision = "0005"
 
 
 def upgrade() -> None:
-    """Drop both columns; the table lock waits only for statements already open."""
+    """Drop both columns under an exclusive table lock.
+
+    The lock waits for every open transaction on `decks` to end, and statements of
+    the release before queue behind it until this transaction commits; one that
+    queues past the statement timeout fails.
+    """
     op.drop_column("decks", "active_build")
     op.drop_column("decks", "pdf_export")
