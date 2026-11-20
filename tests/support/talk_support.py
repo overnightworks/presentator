@@ -274,6 +274,7 @@ def two_hosts(
     lobby, _ = a_lobby_app(
         people=people,
         signing_in=SigningIn(sessions=sessions, auth=lobby_auth, decks=decks),
+        trusted_proxies=None,
     )
     talk = _talk_over(
         PostgresSessions(database), decks, decks_store, talk_auth, copresenter

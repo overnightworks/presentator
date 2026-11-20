@@ -641,16 +641,18 @@ def test_without_a_named_client_the_admin_prefix_falls_to_the_session_gate(
 ) -> None:
     """PE28: the prefix answers like any unknown path until a client is named."""
     path = "/api/admin/people/someone"
+    settings = load_settings()
     browser = TestClient(
-        main.build_instance(load_settings()).lobby,
+        main.served_by_host(main.build_instance(settings), settings),
         base_url=A_BROWSERS_ADDRESS,
         follow_redirects=False,
     )
     without = browser.delete(path)
     elsewhere = browser.delete("/api/other/people/someone")
     environment.setenv("PRESENTATOR_TOKEN_CLIENTS", "hal")
+    settings = load_settings()
     gated = TestClient(
-        main.build_instance(load_settings()).lobby,
+        main.served_by_host(main.build_instance(settings), settings),
         base_url=A_BROWSERS_ADDRESS,
         follow_redirects=False,
     ).delete(path)

@@ -25,6 +25,7 @@ from speech_client import wire
 from webauth.config import WebAuthConfig, installed_web_auth_config
 from webauth.cookies import issue_session_cookies
 from webauth.jwt_verification import KeySetFetch
+from webauth.middleware import ClientAddressMiddleware
 from webauth.oidc import (
     OidcRelyingParty,
     TokenEndpointAnswer,
@@ -39,6 +40,7 @@ from webauth.ports import (
     SignInTransaction,
     UserRecord,
 )
+from webauth.proxies import TrustedProxies
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.builds import PackageJsonThemes
@@ -238,7 +240,6 @@ def a_web_auth(clock: FrozenClock) -> WebAuthConfig:
     """
     host_config = web_auth_config_for(
         SecretStr("t" * 32),
-        trusted_proxies="",
         origin=A_BROWSERS_ADDRESS,
         rate_limits=in_process_rate_limits(),
     )
@@ -249,7 +250,6 @@ def a_talk_web_auth(clock: FrozenClock) -> WebAuthConfig:
     """The talk host's library configuration, signing under its own derived key."""
     host_config = web_auth_config_for(
         SecretStr(talk_session_secret(a_settings().secret_key.get_secret_value())),
-        trusted_proxies="",
         origin=A_TALK_ADDRESS,
         rate_limits=in_process_rate_limits(),
     )
@@ -580,6 +580,21 @@ def an_agent_front(auth: InstalledAuth) -> AgentFront:
     )
 
 
+def with_the_client_address(app: FastAPI, trusted_proxies: str | None) -> FastAPI:
+    """`app` with the writer the host composition puts around its stacks.
+
+    `None` leaves the writer to `served_by_host`, for an app a host composition
+    wraps: its writer overwrites any record an inner one made, so a second writer
+    would replace the host's proxy policy with the builder's.
+    """
+    if trusted_proxies is not None:
+        app.add_middleware(
+            ClientAddressMiddleware,
+            trusted_proxies=TrustedProxies.parse(trusted_proxies),
+        )
+    return app
+
+
 def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
     *,
     people: FakePeople | None = None,
@@ -590,8 +605,14 @@ def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
     agent: AgentFront | None = None,
     texts: DeckTexts | None = None,
     shell: LobbyShell = LOBBY_SHELL,
+    trusted_proxies: str | None = "",
 ) -> tuple[FastAPI, FrozenClock]:
-    """The whole lobby wiring, so a test that needs two clients shares one app."""
+    """The whole lobby wiring, so a test that needs two clients shares one app.
+
+    The app carries the client-address writer the host composition adds, for the
+    proxy network `trusted_proxies` names; `None` leaves it to the host that
+    serves the app.
+    """
     crowd = a_crowd() if people is None else people
     clock = crowd.clock
     decks = (
@@ -620,26 +641,30 @@ def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
         ),
         shell=shell,
     )
-    return lobby, clock
+    return with_the_client_address(lobby, trusted_proxies), clock
 
 
 def a_talk_app(
     *,
     people: FakePeople,
     copresenter: CoPresenterSurface | None = None,
+    trusted_proxies: str | None = "",
 ) -> FastAPI:
     """The whole talk host over the lobby's people, with the co-presenter it serves."""
     clock = people.clock
-    return create_talk(
-        sessions=people.sessions,
-        decks=a_decks(NO_DECKS, clock),
-        auth=replace(
-            an_installed_auth(clock, transaction=SessionsOnly(people.sessions)),
-            config=a_talk_web_auth(clock),
-            content_security_policy=talk_content_security_policy(),
+    return with_the_client_address(
+        create_talk(
+            sessions=people.sessions,
+            decks=a_decks(NO_DECKS, clock),
+            auth=replace(
+                an_installed_auth(clock, transaction=SessionsOnly(people.sessions)),
+                config=a_talk_web_auth(clock),
+                content_security_policy=talk_content_security_policy(),
+            ),
+            lobby_origin=A_BROWSERS_ADDRESS,
+            copresenter=copresenter,
         ),
-        lobby_origin=A_BROWSERS_ADDRESS,
-        copresenter=copresenter,
+        trusted_proxies,
     )
 
 

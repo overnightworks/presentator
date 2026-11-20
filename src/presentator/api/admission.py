@@ -11,10 +11,12 @@ from http import HTTPStatus
 from agents.tools import not_an_agent_tool
 from fastapi import Request
 from starlette.requests import HTTPConnection
+from starlette.websockets import WebSocket
 from webauth.config import web_auth_config
 from webauth.dependencies import (
     ConnectionRefusal,
     admit_session,
+    authenticate_websocket,
     session_id_from_request,
 )
 from webauth.middleware.session_gate import admitted_user
@@ -79,12 +81,20 @@ def signed_in_connection(
     connection: HTTPConnection,
     sessions: SessionRecordStore,
 ) -> SignedInConnection | None:
-    """Resolve one HTTP or WebSocket connection through the library's one decider."""
+    """Resolve one HTTP or WebSocket connection through the library's deciders.
+
+    A socket goes through the library's handshake decider, which also names the
+    account on the socket's `websocket.ended` line.
+    """
     config = web_auth_config(connection)
     session_id = session_id_from_request(connection, config)
     if session_id is None:
         return None
-    admitted = admit_session(session_id, sessions=sessions, config=config)
+    admitted = (
+        authenticate_websocket(connection, sessions=sessions)
+        if isinstance(connection, WebSocket)
+        else admit_session(session_id, sessions=sessions, config=config)
+    )
     if isinstance(admitted, ConnectionRefusal):
         return None
     return SignedInConnection(person=user_of_admitted(admitted), session_id=session_id)

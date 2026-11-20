@@ -4,7 +4,6 @@ The backend counts by `time.monotonic`, so each case spends its budget for real
 and the sizes are read from the policies the hosts run.
 """
 
-from dataclasses import replace
 from http import HTTPStatus
 
 import pytest
@@ -19,7 +18,6 @@ from presentator.api.auth import (
 )
 from presentator.api.health import HEALTH_PATH
 from presentator.contracts.decks import DECK_PATH
-from presentator.host.main import web_auth_config_for
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_TALK_ADDRESS,
@@ -28,7 +26,6 @@ from tests.support.lobby import (
     a_lobby_app,
     an_installed_auth,
 )
-from tests.support.redis import in_process_rate_limits
 from tests.support.talk_support import Hosts, two_hosts
 
 _AN_OTHER_PATH = "/somewhere-else"
@@ -103,18 +100,10 @@ def test_a_path_that_only_starts_like_the_deck_directory_spends_the_default_budg
 def test_behind_a_trusted_proxy_each_forwarded_address_has_its_own_budget() -> None:
     people = a_crowd()
     auth = an_installed_auth(people.clock)
-    behind_a_proxy = replace(
-        auth,
-        config=web_auth_config_for(
-            auth.config.session_secret,
-            trusted_proxies=_PROXY_NETWORK,
-            origin=A_BROWSERS_ADDRESS,
-            rate_limits=in_process_rate_limits(),
-        ),
-    )
     app, _ = a_lobby_app(
         people=people,
-        signing_in=SigningIn(sessions=people.sessions, auth=behind_a_proxy),
+        signing_in=SigningIn(sessions=people.sessions, auth=auth),
+        trusted_proxies=_PROXY_NETWORK,
     )
     through_the_proxy = TestClient(
         app,
