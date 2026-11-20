@@ -7,11 +7,9 @@ import pytest
 from sqlalchemy import text
 
 from presentator.contracts.people import PersonErased
-from tests.presentator.adapters.support.person_instance_support import (
+from tests.presentator.adapters.support.person_postgres_support import (
     ANOTHER,
     THE_PERSON,
-)
-from tests.presentator.adapters.support.person_postgres_support import (
     PostgresInstance,
     an_instance_with_both_people_on_postgres,
     owned_row_keys,

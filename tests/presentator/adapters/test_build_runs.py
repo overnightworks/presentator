@@ -12,11 +12,9 @@ from presentator.adapters.build_runs import (
     taken_away,
 )
 from presentator.contracts.decks import BuildRun
-from tests.presentator.adapters.support.person_instance_support import (
+from tests.presentator.adapters.support.person_postgres_support import (
     ANOTHER,
     THE_PERSON,
-)
-from tests.presentator.adapters.support.person_postgres_support import (
     PostgresInstance,
     an_instance_with_both_people_on_postgres,
 )
