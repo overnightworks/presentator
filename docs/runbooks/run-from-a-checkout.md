@@ -1,68 +1,58 @@
 # Runbook: run an instance from a checkout
 
-Reader: a developer on a machine whose decks are all their own.
+Symptom: a developer wants an instance on a machine whose decks are all their
+own, and the start refuses or the pages do not answer. Impact: no local
+instance.
 
 A deck is code, so an instance normally builds every deck in the sealed build
-workers, which the web reaches over TCP at `PRESENTATOR_BUILD_WORKER_ADDRESS`
-with the key in `PRESENTATOR_BUILD_WORKER_KEY_FILE`, and a build that finds no
-worker fails as an outage
-([constraints and reasons](../ARCHITECTURE.md#6-constraints-and-reasons)). A run from a checkout
-is the one place that says otherwise: `PRESENTATOR_BUILD_RUNNER=host` executes
-a deck's Vue components as the server process, with its rights over every file
-and the network. Do not use it for a repository somebody else can push to.
-
-## Before you start
-
-- An https public origin and a front that terminates it. Served over plain
-  http the instance shows the signed-out pages only, because a browser does
-  not send a `Secure` cookie back over http, so a local sign-in needs an https
-  front.
-- A Keycloak client set up as in
-  [configure Keycloak](configure-keycloak.md), and its secret in a file.
-- The master key, a fresh random value of at least 32 characters, in a file
-  only you can read.
-- A Redis the checkout reaches, such as a local container; it holds the request
-  budgets and the ask lease, nothing that must survive.
-- The build toolchain on this machine
-  ([install it](install-the-host-build-toolchain.md)).
-- The built lobby. In `frontend/`, run `pnpm install --frozen-lockfile` and
-  then `pnpm build`; without `frontend/build` the start refuses.
-- A gitignored `.env` at the repository root may carry the values instead of
-  the shell.
-
-## Steps
-
-```sh
-export PRESENTATOR_SECRET_KEY_FILE=/run/user/"$(id -u)"/presentator/secret-key
-export PRESENTATOR_PUBLIC_ORIGIN=https://presentator.example.test
-export PRESENTATOR_TALK_ORIGIN=https://presentator-talk.example.test
-export PRESENTATOR_REDIS_URL=redis://localhost:6379/0
-export PRESENTATOR_OIDC_ISSUER=https://auth.example.test/realms/example
-export PRESENTATOR_OIDC_CLIENT_ID=presentator
-export PRESENTATOR_OIDC_CLIENT_SECRET_FILE=/run/user/"$(id -u)"/presentator/oidc-client-secret
-export PRESENTATOR_AGENT__GATEWAY__ORIGIN=http://litellm-front:4000
-export PRESENTATOR_AGENT__GATEWAY__KEY_FILE=/run/user/"$(id -u)"/presentator/litellm-key
-export PRESENTATOR_AGENT__API_GROUP=/services/agent-service/api
-export PRESENTATOR_SPEECH_SERVICE=http://speech:8080
-export PRESENTATOR_SPEECH_SERVICE_SCOPE=speech-service-audience
-export PRESENTATOR_BUILD_RUNNER=host
-uv run presentator
-```
-
-A checkout has no route to the cluster's speech service, so its speaking and hearing report
-the service as unreachable. The voices have defaults, set by
-`PRESENTATOR_SPEECH_VOICES`; a `.env` that still names the removed
-`PRESENTATOR_SPEECH_VOICE`, `_DE` or `_EN` refuses the start.
-
-The co-presenter cannot answer from a checkout: the model gateway is a
-service inside the cluster, which a checkout cannot reach, so every ask ends in an
-`error` event.
+workers ([constraints and reasons](../ARCHITECTURE.md#6-constraints-and-reasons)).
+A run from a checkout is the one place that says otherwise:
+`PRESENTATOR_BUILD_RUNNER=host` executes a deck's Vue components as the server
+process, with its rights over every file and the network. Do not use it for a
+repository somebody else can push to.
 
 ## Check
 
-Open the public origin, under its hostname: any other Host, 127.0.0.1
-included, gets 404, except the back-channel logout path, which answers a `POST`
-(other methods answer 405). A signed-out visitor sees `/login`. A refusal at
-start names the setting and what is wrong with it, never a secret's value.
+Open the public origin, under its hostname: a signed-out visitor sees
+`/login`. Any other `Host`, 127.0.0.1 included, gets 404, except the
+back-channel logout path, which answers a `POST` (other methods answer 405).
+`GET /health` answers 503 while the database or Redis does not answer. A
+refused start ends in one `process.failed` line that names the setting and
+what is wrong with it, never a secret's value
+([configuration](../configuration.md)).
 
-Related: [settings](../configuration.md).
+## Fix
+
+1. Supply every setting of [configuration](../configuration.md), in the shell
+   or in a gitignored `.env` at the repository root, with
+   `PRESENTATOR_BUILD_RUNNER=host`. The public and talk origins are https on
+   two hostnames behind a front that terminates it: over plain http a browser
+   does not send the `Secure` cookie back, so a local sign-in needs an https
+   front. Secrets are files only you can read: the master key (a fresh random
+   value of at least 32 characters), the database password and the Keycloak
+   client secret. Rollback: remove the `.env` and the files.
+2. Set up the Keycloak client as in [configure Keycloak](configure-keycloak.md).
+   Rollback: as that runbook says.
+3. Reach a Postgres and a Redis from the checkout, such as local containers.
+   Redis holds the request budgets and the ask lease, nothing that must
+   survive. Rollback: remove the containers.
+4. Install the build toolchain on this machine
+   ([install it](install-the-host-build-toolchain.md)).
+5. In `frontend/`, run `pnpm install --frozen-lockfile` and then
+   `pnpm build`; without `frontend/build` the start refuses. Rollback: delete
+   `frontend/build`.
+6. From the root, run `uv run presentator migrate`, then `uv run presentator`.
+   Rollback: stop the process; the database keeps its revision.
+7. Re-run the Check.
+
+A checkout has no route to the cluster's speech service or model gateway, so
+its speaking and hearing report the service as unreachable and every
+co-presenter ask ends in an `error` event.
+
+## Escalate
+
+A start the settings refuse is fixed in the setting the line names. When the
+identity provider turns the sign-in down, the Keycloak realm's owner fixes the
+client ([configure Keycloak](configure-keycloak.md)). When a deck must build
+for others, it does not run here: the platform owner runs the sealed build
+workers.
