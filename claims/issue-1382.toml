@@ -1,0 +1,8 @@
+claim_id = "3537fc8b81734e09bb2e71bdcecb7a00"
+agent = "Claude 5d9860ec-23d0-455e-86fe-195b872a5fbf"
+role = "builder"
+base = "094a2e87551f2a9a0482248874a64b23b4e168d7"
+branch = "claude/issue-1382-deck-in-opaque-frame-spike"
+scope = ["slidev/package.json", "slidev/pnpm-lock.yaml", "slidev/tests", "slidev/vitest.config.ts"]
+opened_commit = "9826a724eb21d1e76f9ca90975fbb4cde60a57cb"
+whole_reason = "One browser test with its harness, fixture and test runner config; the spike does not split."
