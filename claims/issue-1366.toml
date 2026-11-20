@@ -1,8 +1,0 @@
-claim_id = "008faf1072f34bafb504fe6e1dc39667"
-agent = "Claude 8ee5fb01-f0ec-4dfd-8667-519e2cc2cc19"
-role = "builder"
-base = "b682ce2863a18e1f80b6c8a9baf4ce56e26886a0"
-branch = "claude/issue-1366-one-wait-helper-one-refusal-assertion-pa"
-scope = ["tests/gitmirror/test_mirror.py", "tests/presentator/adapters/test_postgres_identity_stores.py", "tests/presentator/adapters/test_postgres_person_erasure.py", "tests/presentator/adapters/test_postgres_refresh_owner.py", "tests/presentator/adapters/test_postgres_sign_in_concurrency.py", "tests/presentator/adapters/test_postgres_source_writers.py", "tests/presentator/api/test_auth.py", "tests/presentator/application/test_decks.py", "tests/presentator/gitmirror/test_mirror.py", "tests/presentator/host/support/config_refusals.py", "tests/presentator/host/test_config_agent.py", "tests/presentator/host/test_config_database.py", "tests/presentator/host/test_config_redis.py", "tests/presentator/host/test_config_speech.py", "tests/presentator/host/test_main_client_address.py", "tests/presentator/host/test_main_migrate.py", "tests/presentator/host/test_main_stop.py", "tests/presentator/host/test_main_two_app_processes_drain.py", "tests/presentator/host/test_main_two_app_processes_refresh.py", "tests/support/waiting.py"]
-opened_commit = "2050e303f37010f20607b048411d296365550d88"
-whole_reason = "Small test-only cuts of one kind across many modules; each alone saves under a hundred lines, and the shared helpers tie them together."
