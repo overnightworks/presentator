@@ -168,20 +168,20 @@ export async function buildAddonDeck(base = '/'): Promise<string> {
   return outDirectory
 }
 
-async function serveFile(directory: string, pathname: string, response: ServerResponse) {
+export async function serveFile(directory: string, pathname: string, response: ServerResponse, extraHeaders = productionSecurityHeaders) {
   const requested = normalize(resolve(directory, `.${pathname}`))
   const candidate = requested.startsWith(`${directory}/`) ? requested : ''
   try {
     const info = candidate ? await stat(candidate) : null
     if (info?.isFile()) {
-      response.writeHead(200, { 'content-type': mimeType(candidate), ...productionSecurityHeaders })
+      response.writeHead(200, { 'content-type': mimeType(candidate), ...extraHeaders })
       response.end(await readFile(candidate))
       return
     }
   } catch {
     // The SPA fallback below owns client-side routes.
   }
-  response.writeHead(200, { 'content-type': 'text/html', ...productionSecurityHeaders })
+  response.writeHead(200, { 'content-type': 'text/html', ...extraHeaders })
   response.end(await readFile(join(directory, 'index.html')))
 }
 
