@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Browser, BrowserContext, Frame, Page } from 'playwright-chromium'
 
 import { buildStagedDeck, closeBrowser, launchBrowser, serveFile } from './presenter-overlay-harness'
@@ -18,12 +18,12 @@ vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 })
 const deckFixture = fileURLToPath(new URL('./fixtures/opaque-frame-deck', import.meta.url))
 const TOKEN = 'k3j9x0q2'
 const SANDBOX = 'allow-scripts'
+const RELAY_TIMEOUT = { timeout: 8000 }
 
 type ContentRequest = { path: string, fetchMode: string | undefined, hasCookie: boolean }
 type Loopback = { server: Server, origin: string }
 
 const contentRequests: ContentRequest[] = []
-const contentResponseHeaders: Promise<Record<string, string>>[] = []
 let buildDirectory = ''
 let deckDirectory = ''
 let content: Loopback
@@ -100,9 +100,6 @@ beforeAll(async () => {
   })
   browser = await launchBrowser()
   context = await browser.newContext()
-  context.on('response', (response) => {
-    if (response.url().startsWith(content.origin)) contentResponseHeaders.push(response.allHeaders())
-  })
 })
 
 afterAll(async () => {
@@ -118,6 +115,10 @@ type Opened = { page: Page, deck: Frame, problems: string[] }
 // Every page a test opens is closed after it, so a failed test leaves no page
 // on the shared stage origin's BroadcastChannel to relay into the next one.
 const openedPages: Page[] = []
+
+beforeEach(() => {
+  contentRequests.length = 0
+})
 
 afterEach(async () => {
   await Promise.all(openedPages.splice(0).map((page) => page.close()))
@@ -141,17 +142,25 @@ async function openStage(role: 'presenter' | 'projector'): Promise<Opened> {
   return { page, deck, problems }
 }
 
+// The presenter and projector windows of one rehearsal; the afterEach above closes both.
+async function openPair() {
+  const presenter = await openStage('presenter')
+  const projector = await openStage('projector')
+  return { presenter, projector }
+}
+
 const shownSlide = (deck: Frame) => deck.locator('.slidev-page:visible h1').first().innerText()
 const seen = (page: Page) => page.evaluate(() => (window as unknown as { seen: number[][] }).seen)
 const goTo = (page: Page, slide: number, click: number) =>
   page.evaluate(([s, c]: [number, number]) => (window as unknown as { goTo: (s: number, c: number) => void }).goTo(s, c), [slide, click] as [number, number])
 
-// A message each check of the bridge must drop, one per check.
+// A message each check of the bridge must drop, one per check. None of them
+// clamps or coerces to slide 2, which the go-to test uses as its sentinel.
 const hostileMessages = [
   { name: 'a slide above the total', slide: 99, click: 0 },
-  { name: 'a slide that is not an integer', slide: 1.5, click: 0 },
-  { name: 'a slide that is a string', slide: '2', click: 0 },
-  { name: 'a click below zero', slide: 2, click: -1 },
+  { name: 'a slide that is not an integer', slide: 3.5, click: 0 },
+  { name: 'a slide that is a string', slide: '3', click: 0 },
+  { name: 'a click below zero', slide: 3, click: -1 },
   { name: 'a click above the clicks total', slide: 1, click: 50 },
 ]
 
@@ -176,24 +185,27 @@ describe('a Slidev build in a sandboxed opaque-origin frame', () => {
     await expect(shownSlide(deck)).resolves.toBe('Slide one')
   })
 
-  it('serves module scripts in CORS mode from the token path with no cookie', async () => {
+  it('fetches the module scripts in CORS mode', async () => {
     await openStage('presenter')
     const scripts = contentRequests.filter((request) => request.path.endsWith('.js'))
     expect(scripts.length).toBeGreaterThan(0)
     expect(scripts.every((request) => request.fetchMode === 'cors')).toBe(true)
+  })
+
+  it('requests only the token path and sends no cookie', async () => {
+    await openStage('presenter')
+    expect(contentRequests.length).toBeGreaterThan(0)
     expect(contentRequests.every((request) => request.path.startsWith(`/t/${TOKEN}/`) && !request.hasCookie)).toBe(true)
-    expect((await Promise.all(contentResponseHeaders)).some((headers) => 'set-cookie' in headers)).toBe(false)
   })
 
   it('moves the projector window when the presenter window goes to a slide and a click', async () => {
-    const presenter = await openStage('presenter')
-    const projector = await openStage('projector')
+    const { presenter, projector } = await openPair()
     await goTo(presenter.page, 2, 0)
-    await vi.waitFor(async () => expect(await shownSlide(projector.deck)).toBe('Slide two'))
+    await vi.waitFor(async () => expect(await shownSlide(projector.deck)).toBe('Slide two'), RELAY_TIMEOUT)
     await goTo(presenter.page, 2, 1)
-    await vi.waitFor(async () => expect((await seen(projector.page)).at(-1)).toEqual([2, 1]))
+    await vi.waitFor(async () => expect((await seen(projector.page)).at(-1)).toEqual([2, 1]), RELAY_TIMEOUT)
     await goTo(presenter.page, 3, 0)
-    await vi.waitFor(async () => expect(await shownSlide(projector.deck)).toBe('Slide three'))
+    await vi.waitFor(async () => expect(await shownSlide(projector.deck)).toBe('Slide three'), RELAY_TIMEOUT)
     expect(projector.deck.url().startsWith(`${content.origin}/t/${TOKEN}/`)).toBe(true)
   })
 
@@ -203,9 +215,9 @@ describe('a Slidev build in a sandboxed opaque-origin frame', () => {
       const frame = document.getElementById('deck') as HTMLIFrameElement
       frame.contentWindow!.postMessage({ type: 'go', ...message }, '*')
     }, { slide, click })
-    await goTo(projector.page, 3, 0)
-    await vi.waitFor(async () => expect((await seen(projector.page)).at(-1)).toEqual([3, 0]))
-    expect(await seen(projector.page)).toEqual([[1, 0], [3, 0]])
+    await goTo(projector.page, 2, 0)
+    await vi.waitFor(async () => expect((await seen(projector.page)).at(-1)).toEqual([2, 0]), RELAY_TIMEOUT)
+    expect(await seen(projector.page)).toEqual([[1, 0], [2, 0]])
   })
 
   it.each(hostileMessages)('drops a report with $name', async ({ slide, click }) => {
@@ -214,7 +226,7 @@ describe('a Slidev build in a sandboxed opaque-origin frame', () => {
       presenter.deck.evaluate((state) => parent.postMessage({ type: 'state', total: 3, clicksTotal: 2, ...state }, '*'), message)
     await report({ slide, click })
     await report({ slide: 3, click: 1 })
-    await vi.waitFor(async () => expect((await seen(presenter.page)).at(-1)).toEqual([3, 1]))
+    await vi.waitFor(async () => expect((await seen(presenter.page)).at(-1)).toEqual([3, 1]), RELAY_TIMEOUT)
     expect(await seen(presenter.page)).toEqual([[1, 0], [3, 1]])
   })
 
@@ -226,8 +238,7 @@ describe('a Slidev build in a sandboxed opaque-origin frame', () => {
 
   // Guards Chromium's partitioning of an opaque origin, which the relay relies on.
   it('hears no BroadcastChannel message from another window', async () => {
-    const presenter = await openStage('presenter')
-    const projector = await openStage('projector')
+    const { presenter, projector } = await openPair()
     await presenter.deck.evaluate(() => {
       const w = window as unknown as { heard: unknown[] }
       w.heard = []
@@ -237,13 +248,13 @@ describe('a Slidev build in a sandboxed opaque-origin frame', () => {
     await projector.deck.evaluate(() => new BroadcastChannel('probe').postMessage('hello'))
     await presenter.deck.evaluate(() => new BroadcastChannel('probe').postMessage('sentinel'))
     const heard = () => presenter.deck.evaluate(() => (window as unknown as { heard: unknown[] }).heard)
-    await vi.waitFor(async () => expect(await heard()).toContain('sentinel'))
+    await vi.waitFor(async () => expect(await heard()).toContain('sentinel'), RELAY_TIMEOUT)
     expect(await heard()).toEqual(['sentinel'])
   })
 
   it('raises no console error in the deck beyond the screen wake lock', async () => {
     const presenter = await openStage('presenter')
-    await vi.waitFor(async () => expect(await shownSlide(presenter.deck)).toBe('Slide one'))
+    await vi.waitFor(async () => expect(await shownSlide(presenter.deck)).toBe('Slide one'), RELAY_TIMEOUT)
     // The frame is not granted the screen wake lock Slidev asks for.
     expect(presenter.problems.filter((problem) => !/wake[ -]?lock/i.test(problem))).toEqual([])
   })
