@@ -133,23 +133,15 @@ def _sources_per_owner(engine: Engine) -> dict[str, int]:
     return dict(found)
 
 
-def test_two_processes_adding_the_same_names_at_once_get_one_source_each(
-    database_url: str, tmp_path: Path, engine: Engine, owners: tuple[str, ...]
+@pytest.mark.parametrize("mode", ["add-with-one-name", "add-with-one-url"])
+def test_two_processes_adding_the_same_names_or_urls_at_once_get_one_source_each(
+    database_url: str,
+    tmp_path: Path,
+    engine: Engine,
+    owners: tuple[str, ...],
+    mode: str,
 ) -> None:
-    first, second = _both_write(
-        "add-with-one-name", database_url, tmp_path, TypeAdapter(list[str])
-    )
-
-    assert sorted([*first, *second]) == sorted(NAMES)
-    assert _sources_per_owner(engine) == {owners[0]: len(NAMES)}
-
-
-def test_two_processes_adding_the_same_urls_at_once_get_one_source_each(
-    database_url: str, tmp_path: Path, engine: Engine, owners: tuple[str, ...]
-) -> None:
-    first, second = _both_write(
-        "add-with-one-url", database_url, tmp_path, TypeAdapter(list[str])
-    )
+    first, second = _both_write(mode, database_url, tmp_path, TypeAdapter(list[str]))
 
     assert sorted([*first, *second]) == sorted(NAMES)
     assert _sources_per_owner(engine) == {owners[0]: len(NAMES)}

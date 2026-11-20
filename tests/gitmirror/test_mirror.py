@@ -527,32 +527,20 @@ def test_a_url_without_a_user_name_authenticates_as_the_constant_user(
     assert served.authorization == expected
 
 
-def test_a_url_with_a_second_at_sends_no_secret_to_the_host_after_it(
-    remote: GitRemote,
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    "authority",
+    [
+        pytest.param("alice@other.invalid@", id="a second at"),
+        pytest.param("alice@/", id="an empty host"),
+    ],
+)
+def test_an_address_that_hides_its_host_sends_no_secret_to_the_host_after_it(
+    remote: GitRemote, tmp_path: Path, authority: str
 ) -> None:
     bare = _prepared_bare_repo(remote)
     with _dumb_http_remote(bare) as (url, served):
         mirror = a_mirror(
-            url.replace("://", "://alice@other.invalid@"),
-            directory=tmp_path,
-            credential=_TOKEN_REFERENCE,
-            resolver=OneKnownSecret(),
-        )
-        connection = mirror.connect()
-
-    assert connection.state is not ConnectionState.READY
-    assert served.authorization is None
-
-
-def test_a_url_with_an_empty_host_sends_no_secret_to_the_host_in_its_path(
-    remote: GitRemote,
-    tmp_path: Path,
-) -> None:
-    bare = _prepared_bare_repo(remote)
-    with _dumb_http_remote(bare) as (url, served):
-        mirror = a_mirror(
-            url.replace("://", "://alice@/"),
+            url.replace("://", f"://{authority}"),
             directory=tmp_path,
             credential=_TOKEN_REFERENCE,
             resolver=OneKnownSecret(),

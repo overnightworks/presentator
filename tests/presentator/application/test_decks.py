@@ -801,60 +801,47 @@ def test_a_successful_newest_run_lists_as_reachable_with_that_runs_stored_instan
     assert listed[0].fetched_at == NOW - timedelta(minutes=3)
 
 
-def test_a_failed_newest_run_lists_as_error_even_when_the_reason_is_unresolvable() -> (
-    None
-):
+@pytest.mark.parametrize(
+    ("reason", "state", "age"),
+    [
+        pytest.param(
+            SourceRunFailure.CREDENTIAL_UNRESOLVABLE,
+            SourceState.ERROR,
+            timedelta(hours=2),
+            id="an unresolvable credential lists as error",
+        ),
+        pytest.param(
+            SourceRunFailure.REFUSED,
+            SourceState.REFUSED,
+            timedelta(minutes=5),
+            id="a refused login lists as refused rather than error",
+        ),
+        pytest.param(
+            SourceRunFailure.FAILED,
+            SourceState.FAILED,
+            timedelta(minutes=7),
+            id="a host that answered with something else lists as failed",
+        ),
+    ],
+)
+def test_a_failed_newest_run_lists_as_the_state_of_its_reason(
+    reason: SourceRunFailure, state: SourceState, age: timedelta
+) -> None:
     runs = FakeSourceRunStore()
     runs.record(
         SourceRun(
             source_id=SOURCE.id,
-            at=NOW - timedelta(hours=2),
+            at=NOW - age,
             outcome=SourceRunOutcome.FAILURE,
             commit=None,
-            reason=SourceRunFailure.CREDENTIAL_UNRESOLVABLE,
+            reason=reason,
         ),
     )
 
     listed = decks_over(fakes=DecksFakes(source_runs=runs)).listed_sources()
 
-    assert listed[0].state is SourceState.ERROR
-    assert listed[0].fetched_at == NOW - timedelta(hours=2)
-
-
-def test_a_refused_login_lists_as_refused_rather_than_error() -> None:
-    runs = FakeSourceRunStore()
-    runs.record(
-        SourceRun(
-            source_id=SOURCE.id,
-            at=NOW - timedelta(minutes=5),
-            outcome=SourceRunOutcome.FAILURE,
-            commit=None,
-            reason=SourceRunFailure.REFUSED,
-        ),
-    )
-
-    listed = decks_over(fakes=DecksFakes(source_runs=runs)).listed_sources()
-
-    assert listed[0].state is SourceState.REFUSED
-    assert listed[0].fetched_at == NOW - timedelta(minutes=5)
-
-
-def test_a_host_that_answered_with_something_else_lists_as_failed() -> None:
-    runs = FakeSourceRunStore()
-    runs.record(
-        SourceRun(
-            source_id=SOURCE.id,
-            at=NOW - timedelta(minutes=7),
-            outcome=SourceRunOutcome.FAILURE,
-            commit=None,
-            reason=SourceRunFailure.FAILED,
-        ),
-    )
-
-    listed = decks_over(fakes=DecksFakes(source_runs=runs)).listed_sources()
-
-    assert listed[0].state is SourceState.FAILED
-    assert listed[0].fetched_at == NOW - timedelta(minutes=7)
+    assert listed[0].state is state
+    assert listed[0].fetched_at == NOW - age
 
 
 def test_the_list_reads_the_newest_run_only() -> None:

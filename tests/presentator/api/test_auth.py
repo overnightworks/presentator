@@ -51,25 +51,39 @@ _EVERY_SECURITY_HEADER = {
 }
 
 
-def test_the_lobby_sends_a_visitor_who_is_not_signed_in_to_the_login(
-    lobby: Lobby,
+@pytest.mark.parametrize(
+    ("path", "login"),
+    [
+        pytest.param("/", "/login/oidc?next=%2F", id="the front page"),
+        pytest.param(
+            "/settings/sources?tab=recent",
+            "/login/oidc?next=%2Fsettings%2Fsources%3Ftab%3Drecent",
+            id="a path and query it keeps",
+        ),
+        pytest.param(
+            "/deck/knowledge-fabric",
+            "/login/oidc?next=%2Fdeck%2Fknowledge-fabric",
+            id="an address the lobby does not know",
+        ),
+        pytest.param(
+            hook_address("talks"),
+            "/login/oidc?next=%2Fsources%2Ftalks%2Ffetch",
+            id="the hook address read",
+        ),
+        pytest.param(
+            "/_app/%2e%2e/deck/a-deck/",
+            "/login/oidc?next=%2F",
+            id="a dot segment beside the app assets",
+        ),
+    ],
+)
+def test_a_signed_out_request_is_sent_to_the_login_keeping_where_it_was_going(
+    lobby: Lobby, path: str, login: str
 ) -> None:
-    answer = lobby.client.get("/")
+    answer = lobby.client.get(path)
 
     assert answer.status_code == HTTPStatus.FOUND
-    assert answer.headers["location"] == "/login/oidc?next=%2F"
-
-
-def test_a_signed_out_browser_keeps_its_requested_path_and_query_at_login(
-    lobby: Lobby,
-) -> None:
-    asked = lobby.client.get("/settings/sources?tab=recent")
-
-    assert asked.status_code == HTTPStatus.FOUND
-    assert (
-        asked.headers["location"]
-        == "/login/oidc?next=%2Fsettings%2Fsources%3Ftab%3Drecent"
-    )
+    assert answer.headers["location"] == login
 
 
 @pytest.mark.parametrize(
@@ -340,22 +354,6 @@ def test_an_uncaught_error_still_carries_the_full_set_of_security_headers(
         assert answer.headers[name] == value
 
 
-def test_an_address_the_lobby_does_not_know_still_leads_to_the_login(
-    lobby: Lobby,
-) -> None:
-    answer = lobby.client.get("/deck/knowledge-fabric")
-
-    assert answer.status_code == HTTPStatus.FOUND
-    assert answer.headers["location"] == "/login/oidc?next=%2Fdeck%2Fknowledge-fabric"
-
-
-def test_reading_the_hook_address_leads_to_the_login(lobby: Lobby) -> None:
-    asked = lobby.client.get(hook_address("talks"))
-
-    assert asked.status_code == HTTPStatus.FOUND
-    assert asked.headers["location"] == "/login/oidc?next=%2Fsources%2Ftalks%2Ffetch"
-
-
 def test_a_form_naming_the_public_host_is_accepted_without_a_fetch_site() -> None:
     lobby = a_lobby_that_claims_no_origin_of_its_own()
 
@@ -384,15 +382,6 @@ def test_a_same_site_or_schemeless_form_post_is_refused(
 
     assert refused.status_code == HTTPStatus.FORBIDDEN
     assert signed_in_lobby.client.get("/").status_code == HTTPStatus.OK
-
-
-def test_a_dot_segment_beside_the_app_assets_still_asks_for_the_login(
-    lobby: Lobby,
-) -> None:
-    walked_out = lobby.client.get("/_app/%2e%2e/deck/a-deck/")
-
-    assert walked_out.status_code == HTTPStatus.FOUND
-    assert walked_out.headers["location"] == "/login/oidc?next=%2F"
 
 
 def test_a_signed_in_page_carries_no_hex_colour_and_no_inline_style(
