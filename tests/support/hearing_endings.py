@@ -68,7 +68,7 @@ HEARING_ENDS: Final[dict[str, Ending]] = {
                     close_code=code, close_reason=PLANTED
                 )
             ),
-                HopClose.SERVICE_FAILED,
+            HopClose.SERVICE_FAILED,
         )
         for code in (1009, 1011, 1013)
     },
