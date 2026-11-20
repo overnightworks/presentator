@@ -3,6 +3,6 @@ agent = "Claude 8ee5fb01-f0ec-4dfd-8667-519e2cc2cc19"
 role = "builder"
 base = "372c71937b7a8773c9d1b23dbe5e5be99ac182cd"
 branch = "claude/issue-1282-s11-drop-decks-active-build-and-decks-pd"
-scope = ["src/presentator/adapters/postgres", "tests/presentator/adapters"]
+scope = ["src/presentator/adapters/postgres", "tests/presentator/adapters", "tests/support/postgres.py"]
 opened_commit = "426f54c467d430d2165686ae7ab86df6337bcde0"
 whole_reason = "One migration with its schema record and its migration test; the files are named by the revision."
