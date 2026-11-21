@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from gitmirror.model import CredentialReference
+from presentator_gitmirror.model import CredentialReference
 
 
 @dataclass(frozen=True, slots=True)

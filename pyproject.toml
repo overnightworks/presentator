@@ -49,7 +49,7 @@ dev = [
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/gitmirror", "src/presentator"]
+packages = ["src/presentator_gitmirror", "src/presentator"]
 
 [tool.pytest.ini_options]
 addopts = "--strict-config --strict-markers --import-mode=importlib"
@@ -176,12 +176,12 @@ convention = "google"
 # Builds the temporary git repositories every layer that reads one is proven on.
 "tests/support/git_remote.py" = ["S603", "S607"]
 # Asks the real `git` whether it accepts the credential configuration it is given.
-"tests/gitmirror/test_mirror.py" = ["S603", "S607"]
+"tests/presentator_gitmirror/test_mirror.py" = ["S603", "S607"]
 # Asks the same of the credential a source's own row carries.
 "tests/presentator/adapters/test_decks.py" = ["S603", "S607"]
 
 [tool.importlinter]
-root_packages = ["presentator", "gitmirror"]
+root_packages = ["presentator", "presentator_gitmirror"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
@@ -258,17 +258,17 @@ as_packages = true
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
-id = "gitmirror-is-independent"
-name = "gitmirror never imports the product"
+id = "presentator_gitmirror-is-independent"
+name = "presentator_gitmirror never imports the product"
 type = "forbidden"
-# gitmirror mirrors any remote, so it carries none of the product's vocabulary.
-source_modules = ["gitmirror"]
+# presentator_gitmirror mirrors any remote, so it carries none of the product's vocabulary.
+source_modules = ["presentator_gitmirror"]
 forbidden_modules = ["presentator"]
 as_packages = true
 
 [[tool.importlinter.contracts]]
-id = "gitmirror-belongs-to-an-adapter"
-name = "Only an adapter names gitmirror"
+id = "presentator_gitmirror-belongs-to-an-adapter"
+name = "Only an adapter names presentator_gitmirror"
 type = "forbidden"
 source_modules = [
     "presentator.host",
@@ -277,7 +277,7 @@ source_modules = [
     "presentator.ports",
     "presentator.contracts",
 ]
-forbidden_modules = ["gitmirror"]
+forbidden_modules = ["presentator_gitmirror"]
 as_packages = true
 # The host composes the adapter that owns it, so the legal chain runs through
 # it; only naming the package in a layer above is the violation.

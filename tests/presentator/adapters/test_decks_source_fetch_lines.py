@@ -10,7 +10,6 @@ from typing import Final
 
 import pytest
 
-from gitmirror.model import CredentialReference, CredentialResolver
 from presentator.adapters.secrets import generate_deploy_key
 from presentator.application.source_state import source_state_of
 from presentator.contracts.decks import (
@@ -19,6 +18,7 @@ from presentator.contracts.decks import (
     SourceRunOutcome,
     SourceState,
 )
+from presentator_gitmirror.model import CredentialReference, CredentialResolver
 from tests.support.deck_source_support import PUSHED_AT, a_source, folders_under
 from tests.support.git_remote import GitRemote, with_the_program
 from tests.support.log_lines import json_logged

@@ -34,7 +34,6 @@ from typing import IO, BinaryIO, Final, Protocol, cast
 
 from logline import StepTimer
 
-from gitmirror.model import MirrorError, Revision
 from presentator.adapters.build_cache import BuildCache
 from presentator.adapters.build_runs import RUN_DIRECTORY_MODE, taken_away
 from presentator.adapters.build_tree import added_up, opened_without_a_link
@@ -67,6 +66,7 @@ from presentator.contracts.decks import (
     run_name_holding,
     talk_address,
 )
+from presentator_gitmirror.model import MirrorError, Revision
 
 _TOOLCHAIN: Final = "pnpm"
 _SLIDEV: Final = "slidev"

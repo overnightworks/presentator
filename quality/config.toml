@@ -32,6 +32,24 @@ date = 2026-11-12
 reason = "the contract is renamed, not dropped: \"Only adapters read the manifest format\" forbids the same source modules from importing tomllib; babel left the runtime dependencies with the catalog adapter, so no layer imports it and the words come from the generated module"
 
 [[gate.loosened]]
+what = 'import contract "Only an adapter names gitmirror" removed'
+item = "#1388"
+date = 2026-11-21
+reason = "the contract is renamed, not dropped: \"Only an adapter names presentator_gitmirror\" forbids the same source modules from importing the renamed package"
+
+[[gate.loosened]]
+what = 'import contract "gitmirror never imports the product" removed'
+item = "#1388"
+date = 2026-11-21
+reason = "the contract is renamed, not dropped: \"presentator_gitmirror never imports the product\" forbids the renamed package from importing presentator"
+
+[[gate.loosened]]
+what = "import-linter changes root_packages"
+item = "#1388"
+date = 2026-11-21
+reason = "the root package gitmirror is renamed to presentator_gitmirror under the fleet naming rule, so root_packages names the new package and nothing leaves the contracts' reach"
+
+[[gate.loosened]]
 what = 'mandatory job "Speech: lint, tests" removed'
 item = "#1130"
 date = 2026-11-13

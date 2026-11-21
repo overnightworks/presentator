@@ -34,7 +34,7 @@ flowchart TD
     agent --> contracts
     application --> ports
     ports --> contracts
-    adapters --> gitmirror
+    adapters --> presentator_gitmirror
     agent --> arc[agents]
     adapters --> src[speech_client]
     host & api & agent & adapters --> webauth
@@ -44,7 +44,7 @@ flowchart TD
   (import-linter in `pyproject.toml`). A library an adapter owns behind a port is barred above the
   adapters; webauth is barred only from `application`, `ports`, `contracts`. `api` alone may import
   `agents.tools`, to declare beside each route whether an agent may call it.
-- **`src/gitmirror`** mirrors any remote read-only through `git` and does not import `presentator`;
+- **`src/presentator_gitmirror`** mirrors any remote read-only through `git` and does not import `presentator`;
   only adapters import it.
 - **`speech_client`** is the pinned package that owns the speech wire; only adapters import it.
 - **webauth** owns the sign-in routes, the gate, the origin check, the body caps and the cookies;

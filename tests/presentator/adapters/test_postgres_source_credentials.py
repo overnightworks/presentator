@@ -5,13 +5,13 @@ from collections.abc import Iterator
 import pytest
 from sqlalchemy import Engine
 
-from gitmirror.model import CredentialReference
 from presentator.adapters.identity import TokenIdentifierFactory
 from presentator.adapters.postgres.sources import (
     PostgresSourceCredentials,
     PostgresSourceStore,
 )
 from presentator.adapters.secrets import secret_box
+from presentator_gitmirror.model import CredentialReference
 from tests.presentator.adapters.support.source_stores_support import (
     ANOTHER_INSTANCE_KEY,
     INSTANCE_KEY,

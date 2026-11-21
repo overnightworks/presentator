@@ -2,8 +2,8 @@
 
 from sqlalchemy import Engine
 
-from gitmirror.model import HostKey
 from presentator.adapters.postgres.host_keys import PostgresHostKeyPins
+from presentator_gitmirror.model import HostKey
 
 _THE_KEY = HostKey(host="git.example", key="ssh-ed25519 AAAAthe-first-key")
 _A_CHANGED_KEY = HostKey(host="git.example", key="ssh-ed25519 AAAAa-changed-key")

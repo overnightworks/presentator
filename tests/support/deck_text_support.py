@@ -2,13 +2,13 @@
 
 from dataclasses import dataclass, field
 
-from gitmirror.model import MirrorError
 from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
     DeckText,
     SlideText,
 )
 from presentator.contracts.decks import Deck, Source
+from presentator_gitmirror.model import MirrorError
 
 A_DECK_TEXT = DeckText(
     title="Kundenfeedback",

@@ -1,11 +1,11 @@
-"""The host_key_pins table on Postgres, behind gitmirror's `HostKeyPins`."""
+"""The host_key_pins table on Postgres, behind presentator_gitmirror's `HostKeyPins`."""
 
 from dataclasses import dataclass
 from typing import Final
 
 from sqlalchemy import Engine, text
 
-from gitmirror.model import HostKey
+from presentator_gitmirror.model import HostKey
 
 _PINNED: Final = text("SELECT host, public_key FROM host_key_pins ORDER BY host")
 _PIN: Final = text(
