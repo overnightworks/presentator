@@ -14,6 +14,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection, Engine, TextClause, text
+from webauth.proxies import TrustedProxies
 
 from presentator.adapters.postgres.locks import (
     MIGRATION_LOCK,
@@ -78,6 +79,7 @@ def test_leaving_the_lifespan_stops_the_chores_before_it_closes_the_instance() -
     instance = Instance(
         lobby=FastAPI(),
         talk=FastAPI(),
+        trusted_proxies=TrustedProxies.parse(""),
         poller=a_schedule(ChoreCode.SOURCE_POLL),
         session_sweep=a_schedule(ChoreCode.SESSION_SWEEP),
         close=lambda: happened.append("closed"),

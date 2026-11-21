@@ -13,6 +13,7 @@ from pydantic import SecretStr
 from sqlalchemy import Engine, text
 from starlette.types import ASGIApp, Message, Scope
 from webauth.config import WebAuthConfig, installed_web_auth_config
+from webauth.proxies import TrustedProxies
 from webauth.web_auth import WebAuth
 
 from presentator.adapters.audit import LoggingAuditSink
@@ -269,6 +270,7 @@ def _served_by_host(lobby: FastAPI, talk: FastAPI) -> ASGIApp:
         Instance(
             lobby=lobby,
             talk=talk,
+            trusted_proxies=TrustedProxies.parse(""),
             poller=_never(ChoreCode.SOURCE_POLL),
             session_sweep=_never(ChoreCode.SESSION_SWEEP),
         ),

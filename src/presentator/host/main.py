@@ -170,6 +170,7 @@ class Instance:
 
     lobby: FastAPI
     talk: FastAPI
+    trusted_proxies: TrustedProxies
     poller: Schedule
     session_sweep: Schedule
     close: Callable[[], None] = _nothing_to_close
@@ -232,6 +233,7 @@ def build_instance(
             redis=redis,
             issuer_calls=issuer_calls,
         )
+        trusted_proxies = TrustedProxies.parse(settings.trusted_proxies)
         return Instance(
             lobby=_lobby(
                 settings,
@@ -241,6 +243,7 @@ def build_instance(
                 preferences=preferences,
                 texts=texts,
                 shell=shell,
+                trusted_proxies=trusted_proxies,
             ),
             talk=_talk(
                 settings,
@@ -251,6 +254,7 @@ def build_instance(
                 redis=redis,
                 stopping=stopping,
             ),
+            trusted_proxies=trusted_proxies,
             poller=_poller(settings, decks),
             session_sweep=_session_sweep(stores.sessions, SystemClock()),
             close=stores.close,
@@ -367,6 +371,7 @@ def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
     preferences: Preferences,
     texts: DeckTexts,
     shell: LobbyShell,
+    trusted_proxies: TrustedProxies,
 ) -> FastAPI:
     """The lobby over the use cases, the sign-in wiring and the agent's front."""
     return create_lobby(
@@ -379,7 +384,7 @@ def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
         agent=agent_front(
             origin=settings.public_origin,
             issuer=settings.oidc_issuer,
-            trusted_proxies=TrustedProxies.parse(settings.trusted_proxies),
+            trusted_proxies=trusted_proxies,
         ),
         own_decks=OwnDecks(
             decks=decks.store,
@@ -757,7 +762,7 @@ def served_by_host(instance: Instance, settings: Settings) -> ASGIApp:
             redirect_slashes=False,
             lifespan=lifespan,
         ),
-        trusted_proxies=TrustedProxies.parse(settings.trusted_proxies),
+        trusted_proxies=instance.trusted_proxies,
     )
 
 

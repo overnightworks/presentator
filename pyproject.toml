@@ -378,11 +378,10 @@ id = "webauth-library"
 name = "Only adapters and the host import webauth"
 type = "forbidden"
 # The library owns the login mechanism. Adapters fill its ports;
-# the host composes WebAuthConfig. The api is not in this list because the
-# routes must read the installed config, sign and clear cookies, answer an
-# unauthenticated request, and read client identity, and the policy records
-# the lobby's auth is built from (webauth.config, webauth.cookies,
-# webauth.dependencies, webauth.proxies, webauth.middleware, webauth.ports).
+# the host composes WebAuthConfig. The api is not in this list because it
+# builds each host's whole auth through webauth.web_auth and its policy
+# records, and its routes read the installed config, sign and clear cookies,
+# answer an unauthenticated request, and read client identity.
 source_modules = [
     "presentator.application",
     "presentator.ports",
