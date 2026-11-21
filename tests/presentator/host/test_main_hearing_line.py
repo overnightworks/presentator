@@ -1,4 +1,4 @@
-"""A hearing socket's ended line names its person and the forwarded client."""
+"""A hearing socket's ended line names its person, client and trace."""
 
 from collections.abc import Iterator
 from contextlib import closing
@@ -33,7 +33,7 @@ _THE_SESSION_EVENT = "hearing_session.ended"
 
 def _ended_lines_of_both(app: App) -> tuple[LogLine, LogLine]:
     """The socket's ended line and the hearing session's, in either order."""
-    seen: dict[object, LogLine] = {}
+    seen: dict[str, LogLine] = {}
 
     def both_seen(line: LogLine) -> bool:
         if line["event"] in {WEBSOCKET_EVENT, _THE_SESSION_EVENT}:
@@ -60,15 +60,7 @@ def app(
         yield first
 
 
-@pytest.mark.parametrize(
-    ("app", "ip"),
-    [(_THE_PROXY, _THE_CLIENT), (_A_NETWORK_NOT_THE_PEERS, _THE_PROXY)],
-    indirect=["app"],
-    ids=["a trusted peer", "an untrusted peer"],
-)
-def test_a_hearing_sockets_ended_line_names_its_person_and_the_resolved_client(
-    app: App, ip: str
-) -> None:
+def _hear_once(app: App) -> None:
     person = Browser(host=TALK_HOST)
     person.sign_in(app, "alice", groups=[*ADMIN, AN_API_GROUP])
 
@@ -81,8 +73,27 @@ def test_a_hearing_sockets_ended_line_names_its_person_and_the_resolved_client(
     )
     with closing(hearing):
         assert hearing.hear_after_saying() != ""
-    line, session = _ended_lines_of_both(app)
+
+
+@pytest.mark.parametrize(
+    ("app", "ip"),
+    [(_THE_PROXY, _THE_CLIENT), (_A_NETWORK_NOT_THE_PEERS, _THE_PROXY)],
+    indirect=["app"],
+    ids=["a trusted peer", "an untrusted peer"],
+)
+def test_a_hearing_sockets_ended_line_names_its_person_and_the_resolved_client(
+    app: App, ip: str
+) -> None:
+    _hear_once(app)
+    line, _session = _ended_lines_of_both(app)
 
     assert line["sub"] == "alice"
     assert line["ip"] == ip
+
+
+@pytest.mark.parametrize("app", [_THE_PROXY], indirect=True)
+def test_a_hearing_sockets_ended_line_shares_the_hearings_trace(app: App) -> None:
+    _hear_once(app)
+    line, session = _ended_lines_of_both(app)
+
     assert line["trace_id"] == session["trace_id"]
