@@ -1,5 +1,5 @@
 claim_id = "38f468c530c347f19ba70ca7312fa071"
-agent = "Claude f5ef8508-30cb-4d21-92c7-316e44a4064d"
+agent = "Claude 6af5319b-a035-428d-827a-7754e58b79dc"
 role = "builder"
 base = "941e71053b1a9e5c18b69d0b9a84fda2305d3408"
 branch = "claude/issue-1396-take-webauth-0-43-0"
