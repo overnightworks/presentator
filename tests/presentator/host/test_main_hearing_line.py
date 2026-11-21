@@ -5,6 +5,7 @@ from contextlib import closing
 from pathlib import Path
 
 import pytest
+from logline import WEBSOCKET_EVENT
 
 from tests.presentator.host.support.app_processes import (
     TALK_HOST,
@@ -28,7 +29,7 @@ _BEHIND_THE_PROXY = {"x-forwarded-for": _THE_CLIENT}
 
 
 def _the_ended_socket(line: LogLine) -> bool:
-    return line["event"] == "websocket.ended"
+    return line["event"] == WEBSOCKET_EVENT
 
 
 @pytest.fixture
