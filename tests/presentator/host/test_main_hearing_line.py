@@ -38,7 +38,7 @@ def _ended_lines_of_both(app: App) -> tuple[LogLine, LogLine]:
     def both_seen(line: LogLine) -> bool:
         if line["event"] in {WEBSOCKET_EVENT, _THE_SESSION_EVENT}:
             seen[line["event"]] = line
-        return len(seen) == 2
+        return seen.keys() == {WEBSOCKET_EVENT, _THE_SESSION_EVENT}
 
     app.log_line_where(both_seen)
     return seen[WEBSOCKET_EVENT], seen[_THE_SESSION_EVENT]
