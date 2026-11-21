@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 from sqlalchemy import Engine
 
-from gitmirror.model import HostKey
 from presentator.adapters.postgres.host_keys import PostgresHostKeyPins
 from presentator.host import main
+from presentator_gitmirror.model import HostKey
 from tests.support.postgres import point_at
 
 _THE_PINNED_KEY = HostKey(host="git.example", key="ssh-ed25519 AAAAthe-first-key")

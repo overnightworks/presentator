@@ -4,8 +4,13 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 
-from gitmirror.mirror import GitMirror
-from gitmirror.model import CredentialReference, GitSource, HostKey, KnownHosts
+from presentator_gitmirror.mirror import GitMirror
+from presentator_gitmirror.model import (
+    CredentialReference,
+    GitSource,
+    HostKey,
+    KnownHosts,
+)
 from tests.support.git_remote import MAIN_BRANCH
 
 A_GENEROUS_BOUND = timedelta(seconds=30)

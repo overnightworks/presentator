@@ -11,19 +11,19 @@ from typing import cast
 
 import pytest
 
-from gitmirror import mirror as mirror_module
-from gitmirror.mirror import (
+from presentator.adapters.secrets import generate_deploy_key
+from presentator_gitmirror import mirror as mirror_module
+from presentator_gitmirror.mirror import (
     check_connection,
     remove_leftover_known_hosts,
 )
-from gitmirror.model import (
+from presentator_gitmirror.model import (
     ConnectionState,
     CredentialReference,
     HostKey,
     HostKeyPins,
     KnownHosts,
 )
-from presentator.adapters.secrets import generate_deploy_key
 from tests.support.git_remote import MAIN_BRANCH, GitRemote, with_the_program
 from tests.support.mirror_support import (
     A_GENEROUS_BOUND,

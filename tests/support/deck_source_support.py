@@ -5,13 +5,13 @@ from pathlib import Path
 
 from sqlalchemy import Engine, text
 
-from gitmirror.model import CredentialResolver
 from presentator.adapters.decks import MirroredDeckFolders, SourceMirrors
 from presentator.adapters.identity import TokenIdentifierFactory
 from presentator.adapters.postgres.sources import PostgresSourceStore
 from presentator.adapters.secrets import secret_box
 from presentator.contracts.decks import Build, BuildRun, Deck, Source, SourceWrite
 from presentator.contracts.models import Role, User
+from presentator_gitmirror.model import CredentialResolver
 from tests.presentator.adapters.support.credentials_support import OpenCredentials
 from tests.presentator.adapters.support.key_draft_support import INSTANCE_KEY
 from tests.support.git_remote import MAIN_BRANCH

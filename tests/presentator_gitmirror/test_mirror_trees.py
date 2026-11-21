@@ -8,7 +8,7 @@ from typing import Literal
 
 import pytest
 
-from gitmirror.model import MirrorError
+from presentator_gitmirror.model import MirrorError
 from tests.support.git_remote import GitRemote, with_the_program
 from tests.support.mirror_support import a_mirror
 

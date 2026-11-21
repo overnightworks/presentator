@@ -13,8 +13,8 @@ from socketserver import BaseServer
 
 import pytest
 
-from gitmirror.mirror import check_connection, connection_state_for_failure
-from gitmirror.model import (
+from presentator_gitmirror.mirror import check_connection, connection_state_for_failure
+from presentator_gitmirror.model import (
     ConnectionState,
     CredentialReference,
 )

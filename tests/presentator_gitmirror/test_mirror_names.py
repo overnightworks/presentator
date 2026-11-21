@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from gitmirror.model import Change
+from presentator_gitmirror.model import Change
 from tests.support.git_remote import GitRemote
 from tests.support.mirror_support import a_mirror
 

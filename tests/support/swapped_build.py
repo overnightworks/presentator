@@ -4,11 +4,11 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Final
 
-from gitmirror.model import CredentialReference
 from presentator.adapters.build_cache import BuildCache
 from presentator.adapters.builds import HostToolchain, SlidevBuilds
 from presentator.adapters.decks import SourceMirrors
 from presentator.contracts.decks import Build, BuildRun, Deck
+from presentator_gitmirror.model import CredentialReference
 from tests.presentator.application.support.fakes import THE_TOOLCHAIN, FakeDeckStore
 from tests.support.lobby import (
     ADMIN,

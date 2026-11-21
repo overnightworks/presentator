@@ -17,8 +17,8 @@ from typing import cast
 
 import pytest
 
-import gitmirror
-from gitmirror.mirror import (
+import presentator_gitmirror
+from presentator_gitmirror.mirror import (
     CREDENTIAL_USER_NAME,
     GitMirror,
     check_connection,
@@ -26,7 +26,7 @@ from gitmirror.mirror import (
     is_ssh_remote,
     unattended_environment,
 )
-from gitmirror.model import (
+from presentator_gitmirror.model import (
     Change,
     Connection,
     ConnectionCheck,
@@ -67,7 +67,7 @@ _AN_UNRESOLVABLE_HOST = "http://host.example.invalid/repo.git"
 
 
 def test_package_root_exports_the_mirror_contract() -> None:
-    assert set(gitmirror.__all__) == {
+    assert set(presentator_gitmirror.__all__) == {
         "Change",
         "Connection",
         "ConnectionCheck",
@@ -86,7 +86,9 @@ def test_package_root_exports_the_mirror_contract() -> None:
         "TreeEntry",
         "check_connection",
     }
-    assert tuple(getattr(gitmirror, name) for name in gitmirror.__all__) == (
+    assert tuple(
+        getattr(presentator_gitmirror, name) for name in presentator_gitmirror.__all__
+    ) == (
         Change,
         Connection,
         ConnectionCheck,

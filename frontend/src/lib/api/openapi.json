@@ -833,7 +833,7 @@
         "type": "object"
       },
       "SourceRunFailure": {
-        "description": "Why a poll failed, in this product's own words rather than gitmirror's.\n\nA separate enum from `gitmirror.model.ConnectionState` keeps that\npackage's exact wording from reaching a board by accident; the adapter,\nwhich already speaks both vocabularies, owns the translation between them.",
+        "description": "Why a poll failed, in this product's own words, not `presentator_gitmirror`'s.\n\nA separate enum from `presentator_gitmirror.model.ConnectionState` keeps that\npackage's exact wording from reaching a board by accident; the adapter,\nwhich already speaks both vocabularies, owns the translation between them.",
         "enum": [
           "credential-unresolvable",
           "refused",

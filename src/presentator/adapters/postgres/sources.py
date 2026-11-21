@@ -8,13 +8,13 @@ from psycopg.errors import UniqueViolation
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import IntegrityError
 
-from gitmirror.model import CredentialReference
 from presentator.adapters.decks import stored_source, written_source
 from presentator.adapters.postgres.key_drafts import locked_owned_draft, remove_in
 from presentator.adapters.postgres.refresh_owner import RefreshFence, fenced_write
 from presentator.adapters.secrets import DeployKeyPair, SecretBox, generate_deploy_key
 from presentator.contracts.decks import Source, SourceWrite
 from presentator.ports.identity import IdentifierFactory
+from presentator_gitmirror.model import CredentialReference
 
 _ADD_SOURCE: Final = text(
     "INSERT INTO sources (id, name, url, ref, encrypted_secret, hook_secret_hash,"
