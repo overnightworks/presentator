@@ -9,8 +9,6 @@ import pytest
 from sqlalchemy import Engine
 from sqlalchemy.exc import DBAPIError
 
-from gitmirror.mirror import credential_arguments, unattended_environment
-from gitmirror.model import CredentialReference
 from presentator.adapters.decks import MirroredConnectionChecker, MirroredDeckFolders
 from presentator.adapters.identity import TokenIdentifierFactory
 from presentator.adapters.postgres.deck_store import PostgresDeckStore
@@ -35,6 +33,8 @@ from presentator.contracts.decks import (
     SourceWrite,
 )
 from presentator.contracts.models import Role, User
+from presentator_gitmirror.mirror import credential_arguments, unattended_environment
+from presentator_gitmirror.model import CredentialReference
 from tests.presentator.adapters.support.key_draft_support import (
     INSTANCE_KEY as _INSTANCE_KEY,
 )

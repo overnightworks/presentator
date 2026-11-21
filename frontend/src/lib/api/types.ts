@@ -631,9 +631,9 @@ export interface components {
         };
         /**
          * SourceRunFailure
-         * @description Why a poll failed, in this product's own words rather than gitmirror's.
+         * @description Why a poll failed, in this product's own words, not `presentator_gitmirror`'s.
          *
-         *     A separate enum from `gitmirror.model.ConnectionState` keeps that
+         *     A separate enum from `presentator_gitmirror.model.ConnectionState` keeps that
          *     package's exact wording from reaching a board by accident; the adapter,
          *     which already speaks both vocabularies, owns the translation between them.
          * @enum {string}

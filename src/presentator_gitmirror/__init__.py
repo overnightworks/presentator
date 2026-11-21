@@ -4,8 +4,8 @@ An independent package beside the product's layers: it knows about
 git and credentials, and nothing about presentations.
 """
 
-from gitmirror.mirror import GitMirror, check_connection
-from gitmirror.model import (
+from presentator_gitmirror.mirror import GitMirror, check_connection
+from presentator_gitmirror.model import (
     Change,
     Connection,
     ConnectionCheck,

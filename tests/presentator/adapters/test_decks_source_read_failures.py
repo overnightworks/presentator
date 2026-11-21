@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pytest
 
-from gitmirror.model import CredentialReference
 from presentator.application.decks import Decks
 from presentator.contracts.decks import (
     BuildRun,
@@ -18,6 +17,7 @@ from presentator.contracts.decks import (
     SourceRunOutcome,
     SourceState,
 )
+from presentator_gitmirror.model import CredentialReference
 from tests.presentator.application.support.decks_support import DecksFakes, decks_over
 from tests.presentator.application.support.fakes import FakeSourceStore
 from tests.support.deck_source_support import a_source, folders_under, mirrors_under

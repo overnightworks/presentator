@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Final, TextIO
 
-from gitmirror.model import (
+from presentator_gitmirror.model import (
     Change,
     Connection,
     ConnectionCheck,
@@ -546,7 +546,7 @@ def _ssh_key_file(secret: str) -> Generator[Path]:
     A 0700 directory holding one 0600 file, both gone in the `finally`
     whatever the fetch did with them.
     """
-    directory = Path(tempfile.mkdtemp(prefix="gitmirror-deploy-key-"))
+    directory = Path(tempfile.mkdtemp(prefix="presentator_gitmirror-deploy-key-"))
     try:
         directory.chmod(_SSH_KEY_DIRECTORY_MODE)
         key = directory / _SSH_KEY_FILE_NAME

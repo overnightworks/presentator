@@ -1,6 +1,6 @@
 """Where decks come from: git and TOML.
 
-`gitmirror` owns talking to the remote; this module translates
+`presentator_gitmirror` owns talking to the remote; this module translates
 between its vocabulary and the product's. It holds the mirrors and how a
 source's folders are read from them, and the source rows' translation that the
 Postgres stores share.
@@ -17,22 +17,6 @@ from typing import Any, Final
 
 from logline import StepTimer
 
-from gitmirror.mirror import (
-    GitMirror,
-    check_connection,
-    remove_leftover_known_hosts,
-)
-from gitmirror.model import (
-    ConnectionState,
-    CredentialReference,
-    CredentialResolver,
-    GitSource,
-    HostKeyPins,
-    InvalidCredentialError,
-    KnownHosts,
-    MirrorError,
-    Revision,
-)
 from presentator.adapters.deck_manifest import MalformedManifestError, titled_by
 from presentator.adapters.persisted import read_persisted
 from presentator.contracts.decks import (
@@ -48,6 +32,22 @@ from presentator.contracts.decks import (
     SourceWrite,
     access_kind_of,
 )
+from presentator_gitmirror.mirror import (
+    GitMirror,
+    check_connection,
+    remove_leftover_known_hosts,
+)
+from presentator_gitmirror.model import (
+    ConnectionState,
+    CredentialReference,
+    CredentialResolver,
+    GitSource,
+    HostKeyPins,
+    InvalidCredentialError,
+    KnownHosts,
+    MirrorError,
+    Revision,
+)
 
 _SOURCE_FETCH_ENDED: Final = "source_fetch.ended"
 _MANIFEST_REFUSED: Final = "manifest.refused"
@@ -55,8 +55,8 @@ _MIRROR_REFUSED: Final = "mirror_removal.refused"
 _MIRROR_STAYED: Final = "directory_not_removable"
 _MANIFEST_UNREADABLE: Final = "unreadable"
 _MIRROR_SUFFIX: Final = ".git"
-# `gitmirror`'s own words never reach a `SourceRun`; a connection that carries
-# no revision is always one of these states, never `READY`.
+# `presentator_gitmirror`'s own words never reach a `SourceRun`; a connection
+# that carries no revision is always one of these states, never `READY`.
 _FAILURE_BY_CONNECTION_STATE: Final[dict[ConnectionState, SourceRunFailure]] = {
     ConnectionState.CREDENTIAL_UNRESOLVABLE: SourceRunFailure.CREDENTIAL_UNRESOLVABLE,
     ConnectionState.REFUSED: SourceRunFailure.REFUSED,
