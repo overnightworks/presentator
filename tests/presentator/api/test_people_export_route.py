@@ -35,11 +35,10 @@ from tests.support.lobby import (
     NOW,
     NoSignInTransaction,
     SigningIn,
-    a_browser_at,
-    a_lobby_app,
     an_admin_people,
     an_issuer_calls,
 )
+from tests.support.lobby_app import a_browser_at, a_lobby_app
 from tests.support.log_lines import json_logged
 from tests.support.people import a_session_id
 

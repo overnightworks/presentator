@@ -32,11 +32,10 @@ from tests.support.lobby import (
     A_BROWSERS_HEADERS,
     A_LOBBY_ASSET,
     Lobby,
-    a_browser_at,
     a_content_security_policy,
     a_crowd,
-    a_lobby_app,
 )
+from tests.support.lobby_app import a_browser_at, a_lobby_app
 
 _JSON = {"accept": "application/json"}
 _HTML = {"accept": "text/html"}

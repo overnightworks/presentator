@@ -14,12 +14,8 @@ from sqlalchemy import Engine
 from presentator.api.problems import PROBLEM_MEDIA_TYPE
 from presentator.contracts.preferences import InstanceSettings, ThemeChoice
 from tests.presentator.application.support.fakes import FakePersonPreferencesStore
-from tests.support.lobby import (
-    NEIGHBOUR,
-    Lobby,
-    a_lobby,
-    a_lobby_that_claims_no_origin_of_its_own,
-)
+from tests.support.lobby import NEIGHBOUR, Lobby
+from tests.support.lobby_app import a_lobby, a_lobby_that_claims_no_origin_of_its_own
 from tests.support.sign_in_support import ADMIN, MEMBER, Scene, a_scene
 
 _ACCOUNT = "/api/account"

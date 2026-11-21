@@ -62,11 +62,9 @@ from tests.support.lobby import (
     SigningIn,
     a_configured_source,
     a_crowd,
-    a_lobby,
-    a_lobby_app,
     a_preferences,
-    behind_the_front,
 )
+from tests.support.lobby_app import a_lobby, a_lobby_app, behind_the_front
 
 _LOOPBACK: Final = "127.0.0.1"
 _DRIVE_HOST: Final = "localhost"

@@ -59,11 +59,10 @@ from tests.support.lobby import (
     AN_API_GROUP,
     SOURCE_ID,
     Lobby,
-    a_browser_at,
     a_crowd,
-    a_talk_app,
     an_agent_config,
 )
+from tests.support.lobby_app import a_browser_at, a_talk_app
 from tests.support.talk_support import A_DECK as A_TALKED_DECK
 from tests.support.talk_support import A, Hosts, two_hosts
 

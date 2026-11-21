@@ -45,11 +45,13 @@ from tests.support.lobby import (
     Lobby,
     NoSignInTransaction,
     SigningIn,
+    an_admin_people,
+    an_issuer_calls,
+)
+from tests.support.lobby_app import (
     a_browser_at,
     a_lobby_app,
     a_talk_app,
-    an_admin_people,
-    an_issuer_calls,
     behind_the_front,
 )
 from tests.support.log_lines import json_lines, json_logged

@@ -217,53 +217,73 @@ def build_instance(
     # A refusal after the stores opened releases their connections, which
     # nothing else holds.
     try:
-        mirrors = _source_mirrors(settings, stores)
-        cache = _build_cache(settings)
-        decks = _decks(
-            settings, stores, mirrors=mirrors, cache=cache, toolchain=toolchain
-        )
-        texts = BuiltDeckTexts(cache=cache)
-        preferences = _preferences(stores)
-        lobby_auth, talk_auth = built_auths(
+        return _instance_over(
             settings,
-            sign_in=stores.identity_writes,
-            sessions=stores.sessions,
-            preferences=preferences,
-            shell=shell,
+            stores,
             redis=redis,
-            issuer_calls=issuer_calls,
-        )
-        trusted_proxies = TrustedProxies.parse(settings.trusted_proxies)
-        return Instance(
-            lobby=_lobby(
-                settings,
-                stores,
-                decks=decks,
-                web_auth=lobby_auth,
-                preferences=preferences,
-                texts=texts,
-                shell=shell,
-                trusted_proxies=trusted_proxies,
-            ),
-            talk=_talk(
-                settings,
-                stores,
-                decks,
-                talk_auth,
-                texts,
-                redis=redis,
-                stopping=stopping,
-            ),
-            trusted_proxies=trusted_proxies,
-            poller=_poller(settings, decks),
-            session_sweep=_session_sweep(stores.sessions, SystemClock()),
-            close=stores.close,
-            aclose=redis.aclose,
+            shell=shell,
+            toolchain=toolchain,
             stopping=stopping,
+            issuer_calls=issuer_calls,
         )
     except BaseException:
         stores.close()
         raise
+
+
+def _instance_over(  # noqa: PLR0913 - the composition root hands the instance each owner
+    settings: Settings,
+    stores: Stores,
+    *,
+    redis: SharedRedis,
+    shell: LobbyShell,
+    toolchain: ToolchainIdentity,
+    stopping: Stopping,
+    issuer_calls: IssuerCalls | None,
+) -> Instance:
+    """The two hosts and the schedules beside them, over the opened stores."""
+    mirrors = _source_mirrors(settings, stores)
+    cache = _build_cache(settings)
+    decks = _decks(settings, stores, mirrors=mirrors, cache=cache, toolchain=toolchain)
+    texts = BuiltDeckTexts(cache=cache)
+    preferences = _preferences(stores)
+    lobby_auth, talk_auth = built_auths(
+        settings,
+        sign_in=stores.identity_writes,
+        sessions=stores.sessions,
+        preferences=preferences,
+        shell=shell,
+        redis=redis,
+        issuer_calls=issuer_calls,
+    )
+    trusted_proxies = TrustedProxies.parse(settings.trusted_proxies)
+    return Instance(
+        lobby=_lobby(
+            settings,
+            stores,
+            decks=decks,
+            web_auth=lobby_auth,
+            preferences=preferences,
+            texts=texts,
+            shell=shell,
+            trusted_proxies=trusted_proxies,
+        ),
+        talk=_talk(
+            settings,
+            stores,
+            decks,
+            talk_auth,
+            texts,
+            redis=redis,
+            stopping=stopping,
+        ),
+        trusted_proxies=trusted_proxies,
+        poller=_poller(settings, decks),
+        session_sweep=_session_sweep(stores.sessions, SystemClock()),
+        close=stores.close,
+        aclose=redis.aclose,
+        stopping=stopping,
+    )
 
 
 def _with_redis(stores: Stores, redis: SharedRedis) -> Stores:

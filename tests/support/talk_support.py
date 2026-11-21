@@ -41,13 +41,13 @@ from tests.support.lobby import (
     a_client,
     a_crowd,
     a_decks,
-    a_lobby_app,
     a_settings,
     a_talk_auth,
     an_issuer_calls,
     hand_over_session_cookies,
     put_a_built_deck,
 )
+from tests.support.lobby_app import a_lobby_app
 from tests.support.people import a_session_id, seed_user
 
 ONLY_THIS_TEST_WROTE_IT: Final = "the secret beside the build directory"
@@ -199,6 +199,18 @@ def _talk_over(
     )
 
 
+def _decks_over_a_store(
+    given: GivenDecks | None, clock: FrozenClock
+) -> tuple[Decks, FakeDeckStore]:
+    """The decks and the store beneath them, A's and B's unless given."""
+    store = FakeDeckStore() if given is None or given.store is None else given.store
+    if given is None:
+        put_a_built_deck(store, slug=A_DECK, owner_id=A.id)
+        put_a_built_deck(store, slug=B_DECK, owner_id=B.id)
+    decks = a_decks(replace(NO_DECKS if given is None else given, store=store), clock)
+    return decks, store
+
+
 def two_hosts(
     database: Engine,
     *,
@@ -216,15 +228,7 @@ def two_hosts(
     """
     people = a_crowd()
     clock = people.clock
-    decks_store = (
-        FakeDeckStore() if given is None or given.store is None else given.store
-    )
-    if given is None:
-        put_a_built_deck(decks_store, slug=A_DECK, owner_id=A.id)
-        put_a_built_deck(decks_store, slug=B_DECK, owner_id=B.id)
-    decks = a_decks(
-        replace(NO_DECKS if given is None else given, store=decks_store), clock
-    )
+    decks, decks_store = _decks_over_a_store(given, clock)
     sessions = PostgresSessions(database)
     issuer = FakeIssuer(issuer=AN_ISSUER, client_id=A_CLIENT_ID, now=clock.now())
     transaction = PostgresIdentityWrites(database, LoggingAuditSink())

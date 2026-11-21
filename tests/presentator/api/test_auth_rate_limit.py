@@ -24,9 +24,8 @@ from tests.support.lobby import (
     NoSignInTransaction,
     SigningIn,
     a_crowd,
-    a_lobby_app,
-    behind_the_front,
 )
+from tests.support.lobby_app import a_lobby_app, behind_the_front
 from tests.support.talk_support import Hosts, two_hosts
 
 _AN_OTHER_PATH = "/somewhere-else"

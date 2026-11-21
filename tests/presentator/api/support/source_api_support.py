@@ -38,14 +38,13 @@ from tests.support.lobby import (
     Lobby,
     SessionsOnly,
     SigningIn,
-    a_browser_at,
     a_crowd,
     a_decks,
-    a_lobby_app,
 )
 from tests.support.lobby import (
     ADMIN as ADMIN_PERSON,
 )
+from tests.support.lobby_app import a_browser_at, a_lobby_app
 from tests.support.sign_in_support import ADMIN as ADMIN_GROUPS
 from tests.support.sign_in_support import Scene, a_scene
 

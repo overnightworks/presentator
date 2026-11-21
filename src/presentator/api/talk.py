@@ -76,6 +76,17 @@ def talk_content_security_policy() -> str:
     )
 
 
+def _talk_security_headers() -> SecurityHeadersPolicy:
+    """The headers every answer of the talk host carries."""
+    return SecurityHeadersPolicy(
+        content_security_policy=talk_content_security_policy(),
+        permissions_policy=TALK_PERMISSIONS_POLICY,
+        cache_control_rules=(
+            CacheControlRule(PathRules(prefixes=(_ROOT,)), "no-store"),
+        ),
+    )
+
+
 def talk_web_auth(  # noqa: PLR0913 - the host's one call names each input of the talk host's auth
     *,
     config: WebAuthConfig,
@@ -106,13 +117,7 @@ def talk_web_auth(  # noqa: PLR0913 - the host's one call names each input of th
             sign_in_paths=TALK_SIGN_IN,
             keeps_id_token=False,
             max_sessions=None,
-            security_headers=SecurityHeadersPolicy(
-                content_security_policy=talk_content_security_policy(),
-                permissions_policy=TALK_PERMISSIONS_POLICY,
-                cache_control_rules=(
-                    CacheControlRule(PathRules(prefixes=(_ROOT,)), "no-store"),
-                ),
-            ),
+            security_headers=_talk_security_headers(),
             csrf_origin=CsrfPolicy(),
             body_size=BodySizePolicy(default_max_bytes=DEFAULT_BODY_BYTES),
             rate_limit=TALK_RATE_LIMIT,

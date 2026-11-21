@@ -23,13 +23,15 @@ from tests.support.lobby import (
     NEIGHBOUR,
     USERNAME,
     Lobby,
-    a_browser_at,
     a_crowd,
+    a_preferences,
+    hand_over_session_cookies,
+)
+from tests.support.lobby_app import (
+    a_browser_at,
     a_lobby,
     a_lobby_app,
     a_lobby_that_claims_no_origin_of_its_own,
-    a_preferences,
-    hand_over_session_cookies,
 )
 from tests.support.sign_in_support import ADMIN, MEMBER, Scene, a_scene
 

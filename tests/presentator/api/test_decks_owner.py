@@ -29,8 +29,8 @@ from tests.support.lobby import (
     THE_EXAMPLE_RUN,
     GivenDecks,
     a_configured_source,
-    a_lobby,
 )
+from tests.support.lobby_app import a_lobby
 from tests.support.lobby_reads import deck_list, listed_titles
 from tests.support.talk_support import cookies_without_values, two_hosts
 

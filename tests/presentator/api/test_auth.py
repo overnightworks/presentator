@@ -30,6 +30,8 @@ from tests.support.lobby import (
     USERNAME,
     Lobby,
     a_content_security_policy,
+)
+from tests.support.lobby_app import (
     a_lobby_app,
     a_lobby_that_claims_no_origin_of_its_own,
     behind_the_front,

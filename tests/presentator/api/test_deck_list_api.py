@@ -29,9 +29,9 @@ from tests.support.lobby import (
     Lobby,
     a_configured_source,
     a_decks,
-    a_lobby,
     put_a_built_deck,
 )
+from tests.support.lobby_app import a_lobby
 from tests.support.sign_in_support import MEMBER, a_scene
 
 

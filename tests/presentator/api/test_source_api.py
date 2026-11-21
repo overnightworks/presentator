@@ -31,15 +31,8 @@ from tests.presentator.api.support.source_api_support import (
 from tests.presentator.application.support.fakes import (
     FakeDeckStore,
 )
-from tests.support.lobby import (
-    ADMIN,
-    NEIGHBOUR,
-    NOW,
-    GivenDecks,
-    a_configured_source,
-    a_lobby,
-    a_signed_in_lobby,
-)
+from tests.support.lobby import ADMIN, NEIGHBOUR, NOW, GivenDecks, a_configured_source
+from tests.support.lobby_app import a_lobby, a_signed_in_lobby
 from tests.support.sign_in_support import ADMIN as ADMIN_GROUPS
 from tests.support.sign_in_support import MEMBER, Scene, a_scene
 

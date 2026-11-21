@@ -24,8 +24,8 @@ from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_TALK_ADDRESS,
     a_content_security_policy,
-    a_lobby,
 )
+from tests.support.lobby_app import a_lobby
 from tests.support.sign_in_support import Scene, a_scene
 
 _FORM = "application/x-www-form-urlencoded"

@@ -46,8 +46,8 @@ from tests.support.lobby import (
     AN_ISSUER,
     a_crowd,
     a_settings,
-    a_talk_app,
 )
+from tests.support.lobby_app import a_talk_app
 from tests.support.log_lines import request_lines
 from tests.support.sign_in_support import ADMIN, MEMBER, a_scene
 
