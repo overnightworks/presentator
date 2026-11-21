@@ -91,7 +91,7 @@ def signed_in_connection(
     if session_id is None:
         return None
     admitted = (
-        authenticate_websocket(connection, sessions=sessions)
+        authenticate_websocket(connection)
         if isinstance(connection, WebSocket)
         else admit_session(session_id, sessions=sessions, config=config)
     )

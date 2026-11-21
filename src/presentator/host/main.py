@@ -9,7 +9,7 @@ import copy
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import timedelta
 from functools import partial
 from pathlib import Path
@@ -18,14 +18,13 @@ from urllib.parse import urlsplit
 
 from botocore.exceptions import ConfigParseError
 from fastapi import FastAPI
-from logline import RequestLineMiddleware
 from pydantic import SecretStr
 from starlette.routing import Host, Route, Router
+from starlette.types import ASGIApp
 from webauth.config import SessionLifetime, WebAuthConfig
-from webauth.middleware import ClientAddressMiddleware
-from webauth.oidc import OidcClientConfig, OidcRelyingParty
-from webauth.ports import RateLimitBackend, SignInTransaction
+from webauth.ports import RateLimitBackend
 from webauth.proxies import TrustedProxies
+from webauth.web_auth import IssuerCalls, WebAuth, web_auth_front
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.build_cache import BuildCache
@@ -83,16 +82,15 @@ from presentator.agent.mcp import install_mcp_front
 from presentator.api.auth import (
     BACKCHANNEL_LOGOUT_PATH,
     AgentFront,
-    InstalledAuth,
     LobbyPrivate,
-    content_security_policy,
     create_lobby,
+    lobby_web_auth,
 )
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.api.health import Readiness, Stopping
 from presentator.api.lobby_shell import LobbyBuildError, LobbyShell
 from presentator.api.people import AdminPeople
-from presentator.api.talk import create_talk, talk_content_security_policy
+from presentator.api.talk import create_talk, talk_web_auth
 from presentator.application.copresenter import CoPresenterUse
 from presentator.application.decks import Decks
 from presentator.application.identity import SESSION_LIFETIME, SESSION_SWEEP_INTERVAL
@@ -120,11 +118,7 @@ from presentator.host.lifecycle import (
     end_failed,
     signals_end_as_a_stop,
 )
-from presentator.host.oidc import (
-    admission_of,
-    client_configs_of,
-    relying_party,
-)
+from presentator.host.oidc import admission_of, client_configs_of
 from presentator.host.polling import ChoreCode, Schedule
 from presentator.host.stopping_server import (
     StoppingServer,
@@ -153,8 +147,6 @@ from presentator.ports.preferences import (
 _log = logging.getLogger(__name__)
 
 SERVICE_NAME = "presentator"
-
-RelyingPartyFor = Callable[[OidcClientConfig], OidcRelyingParty]
 
 
 def _nothing_to_close() -> None:
@@ -206,7 +198,7 @@ class Stores:
 
 def build_instance(
     settings: Settings,
-    relying_party_for: RelyingPartyFor = relying_party,
+    issuer_calls: IssuerCalls | None = None,
     migrations_directory: Path = MIGRATIONS_DIRECTORY,
 ) -> Instance:
     """Choose the adapter behind every port and hand the routes their use cases.
@@ -230,15 +222,22 @@ def build_instance(
             settings, stores, mirrors=mirrors, cache=cache, toolchain=toolchain
         )
         texts = BuiltDeckTexts(cache=cache)
-        lobby_auth, talk_auth = installed_auths(
-            settings, shell, stores.identity_writes, redis, relying_party_for
+        preferences = _preferences(stores)
+        lobby_auth, talk_auth = built_auths(
+            settings,
+            stores,
+            preferences=preferences,
+            shell=shell,
+            redis=redis,
+            issuer_calls=issuer_calls,
         )
         return Instance(
             lobby=_lobby(
                 settings,
                 stores,
                 decks=decks,
-                auth=lobby_auth,
+                web_auth=lobby_auth,
+                preferences=preferences,
                 texts=texts,
                 shell=shell,
             ),
@@ -363,7 +362,8 @@ def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
     stores: Stores,
     *,
     decks: Decks,
-    auth: InstalledAuth,
+    web_auth: WebAuth,
+    preferences: Preferences,
     texts: DeckTexts,
     shell: LobbyShell,
 ) -> FastAPI:
@@ -371,14 +371,11 @@ def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
     return create_lobby(
         sessions=stores.sessions,
         decks=decks,
-        preferences=_preferences(stores),
-        auth=auth,
+        preferences=preferences,
+        web_auth=web_auth,
+        talk_origin=settings.talk_origin,
         private=_lobby_private(settings, stores, decks),
-        agent=agent_front(
-            origin=settings.public_origin,
-            issuer=settings.oidc_issuer,
-            transaction=auth.transaction,
-        ),
+        agent=agent_front(origin=settings.public_origin, issuer=settings.oidc_issuer),
         own_decks=OwnDecks(
             decks=decks.store,
             sources=decks.sources,
@@ -389,20 +386,10 @@ def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
     )
 
 
-def agent_front(
-    *,
-    origin: str,
-    issuer: str,
-    transaction: SignInTransaction,
-) -> AgentFront:
+def agent_front(*, origin: str, issuer: str) -> AgentFront:
     """The MCP front, installed over the lobby's routes once they are in."""
     return AgentFront(
-        install_resource=partial(
-            install_mcp_front,
-            origin=origin,
-            issuer=issuer,
-            transaction=transaction,
-        ),
+        install_resource=partial(install_mcp_front, origin=origin, issuer=issuer),
     )
 
 
@@ -486,7 +473,7 @@ def _talk(  # noqa: PLR0913 - the composition root hands the talk host each owne
     settings: Settings,
     stores: Stores,
     decks: Decks,
-    auth: InstalledAuth,
+    web_auth: WebAuth,
     texts: DeckTexts,
     *,
     redis: SharedRedis,
@@ -496,10 +483,10 @@ def _talk(  # noqa: PLR0913 - the composition root hands the talk host each owne
     return create_talk(
         sessions=stores.sessions,
         decks=decks,
-        auth=auth,
+        web_auth=web_auth,
         lobby_origin=settings.public_origin,
         copresenter=_copresenter_surface(
-            settings, stores.sessions, decks, auth, texts, redis, stopping
+            settings, stores.sessions, decks, web_auth, texts, redis, stopping
         ),
         readiness=stores.readiness,
     )
@@ -509,13 +496,13 @@ def _copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands
     settings: Settings,
     sessions: PostgresSessions,
     decks: Decks,
-    auth: InstalledAuth,
+    web_auth: WebAuth,
     texts: DeckTexts,
     redis: SharedRedis,
     stopping: Stopping,
 ) -> CoPresenterSurface:
     """What only a signed-in admin may reach at the talk host: the gateway's answers."""
-    answers = gateway_answerer(settings.agent, auth.relying_party)
+    answers = gateway_answerer(settings.agent, web_auth.relying_party)
     return CoPresenterSurface(
         use=CoPresenterUse(
             answers=answers,
@@ -530,9 +517,9 @@ def _copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands
                 settings.speech_service, voices=settings.speech_voices
             ),
             person_access=SessionAccess(
-                auth.relying_party,
+                web_auth.relying_party,
                 sessions,
-                auth.config,
+                web_auth.config,
                 speech_scope=settings.speech_service_scope,
             ),
         ),
@@ -574,14 +561,16 @@ def _lobby_private(settings: Settings, stores: Stores, decks: Decks) -> LobbyPri
     )
 
 
-def installed_auths(
+def built_auths(  # noqa: PLR0913 - the composition root hands the builders each owner
     settings: Settings,
+    stores: Stores,
+    *,
+    preferences: Preferences,
     shell: LobbyShell,
-    identity_writes: PostgresIdentityWrites,
     redis: SharedRedis,
-    relying_party_for: RelyingPartyFor = relying_party,
-) -> tuple[InstalledAuth, InstalledAuth]:
-    """The lobby's sign-in wiring and the talk host's, over one identity-writes owner.
+    issuer_calls: IssuerCalls | None = None,
+) -> tuple[WebAuth, WebAuth]:
+    """The lobby's auth and the talk host's, over one identity-writes owner.
 
     Each host spends its own budgets in the Redis every pod shares.
 
@@ -591,28 +580,33 @@ def installed_auths(
     lock, which also reports to the one audit sink.
     """
     lobby_client, talk_client = client_configs_of(settings)
-    lobby = InstalledAuth(
+    admission = admission_of(settings)
+    lobby = lobby_web_auth(
         config=web_auth_config_for(
             settings.secret_key,
             origin=settings.public_origin,
             rate_limits=redis.rate_limits(RateLimitedHost.LOBBY),
         ),
-        relying_party=relying_party_for(lobby_client),
-        admission=admission_of(settings),
-        transaction=identity_writes,
-        content_security_policy=content_security_policy(shell),
-        talk_origin=settings.talk_origin,
-        issuer=settings.oidc_issuer,
+        client=lobby_client,
+        admission=admission,
+        sign_in=stores.identity_writes,
+        sessions=stores.sessions,
+        preferences=preferences,
+        shell=shell,
+        issuer_calls=issuer_calls,
     )
-    talk = replace(
-        lobby,
+    talk = talk_web_auth(
         config=web_auth_config_for(
             SecretStr(talk_session_secret(settings.secret_key.get_secret_value())),
             origin=settings.talk_origin,
             rate_limits=redis.rate_limits(RateLimitedHost.TALK),
         ),
-        relying_party=relying_party_for(talk_client),
-        content_security_policy=talk_content_security_policy(),
+        client=talk_client,
+        admission=admission,
+        sign_in=stores.identity_writes,
+        sessions=stores.sessions,
+        lobby_origin=settings.public_origin,
+        issuer_calls=issuer_calls,
     )
     return lobby, talk
 
@@ -661,7 +655,7 @@ def web_auth_config_for(
 
 def main(
     arguments: Sequence[str] | None = None,
-    relying_party_for: RelyingPartyFor = relying_party,
+    issuer_calls: IssuerCalls | None = None,
     migrations_directory: Path = MIGRATIONS_DIRECTORY,
 ) -> None:
     """Migrate the database or unpin a host when asked to, else serve the lobby.
@@ -686,9 +680,7 @@ def main(
             _log.info("process.started")
             settings = load_settings()
             try:
-                instance = build_instance(
-                    settings, relying_party_for, migrations_directory
-                )
+                instance = build_instance(settings, issuer_calls, migrations_directory)
             except StoreFault as fault:
                 raise store_refusal(fault, settings.postgres.url) from None
         except DatabaseRefusedError as refused:
@@ -703,7 +695,7 @@ def main(
         asyncio.run(_serve(instance, settings, stop_line))
 
 
-def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddleware:
+def served_by_host(instance: Instance, settings: Settings) -> ASGIApp:
     """The app that answers each hostname, and one route for any other.
 
     The `Host` header alone chooses: a request for a hostname this instance does
@@ -715,8 +707,8 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
     answer 405. The talk hostname stays the talk app's alone, so the path is a
     404 there. Nothing the caller sent builds a redirect.
 
-    One writer of the client address wraps the router, so the stacks behind it
-    and the router's own 404 and 405 name the client the trusted proxies resolve.
+    webauth's front wraps the router, so the stacks behind it and the router's
+    own 404 and 405 name the client the trusted proxies resolve.
 
     While the app runs, it polls the sources and sweeps the sessions; its end
     waits for a chore in flight, then closes the instance.
@@ -741,21 +733,17 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
             finally:
                 instance.close()
 
-    return RequestLineMiddleware(
-        ClientAddressMiddleware(
-            Router(
-                routes=[
-                    Host(
-                        str(urlsplit(settings.public_origin).hostname), instance.lobby
-                    ),
-                    Host(str(urlsplit(settings.talk_origin).hostname), instance.talk),
-                    Route(BACKCHANNEL_LOGOUT_PATH, instance.lobby, methods=["POST"]),
-                ],
-                redirect_slashes=False,
-                lifespan=lifespan,
-            ),
-            trusted_proxies=TrustedProxies.parse(settings.trusted_proxies),
-        )
+    return web_auth_front(
+        Router(
+            routes=[
+                Host(str(urlsplit(settings.public_origin).hostname), instance.lobby),
+                Host(str(urlsplit(settings.talk_origin).hostname), instance.talk),
+                Route(BACKCHANNEL_LOGOUT_PATH, instance.lobby, methods=["POST"]),
+            ],
+            redirect_slashes=False,
+            lifespan=lifespan,
+        ),
+        trusted_proxies=TrustedProxies.parse(settings.trusted_proxies),
     )
 
 

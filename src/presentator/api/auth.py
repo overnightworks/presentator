@@ -12,28 +12,27 @@ from contextlib import nullcontext
 from dataclasses import dataclass
 from http import HTTPMethod, HTTPStatus
 from typing import Final
-from urllib.parse import urlsplit
 
+from agents.mcp_wire import MCP_ENDPOINT_PATH
 from agents.tools import not_an_agent_tool
 from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from logline import set_route
+from starlette.middleware import Middleware
 from starlette.responses import RedirectResponse
 from starlette.types import Receive, Scope, Send
 from webauth.admission import AdmissionConfig
-from webauth.config import WebAuthConfig, install_web_auth_config
+from webauth.config import WebAuthConfig
 from webauth.middleware.bearer_gate import (
     BearerGate,
     MachinePaths,
     PersonPaths,
     ProtectedResource,
-    install_resource_metadata,
 )
 from webauth.middleware.session_gate import SessionGate
-from webauth.middleware.stack import install_web_auth_middleware
-from webauth.oidc import OidcRelyingParty
+from webauth.oidc import OidcClientConfig
 from webauth.policies import (
     AuthorizedParties,
     BodySizePolicy,
@@ -50,11 +49,14 @@ from webauth.policies import (
     default_content_security_policy,
 )
 from webauth.ports import SessionRecordStore, SignInTransaction
-from webauth.sign_in_routes import (
-    LogoutPageText,
-    RefusalPage,
-    SignInPaths,
-    install_sign_in_routes,
+from webauth.sign_in_routes import LogoutPageText, RefusalPage, SignInPaths
+from webauth.web_auth import (
+    IssuerCalls,
+    ServedBehind,
+    SignInPages,
+    WebAuth,
+    WebAuthSettings,
+    WebAuthStores,
 )
 
 from presentator.api.deck_list_api import deck_list_routes
@@ -221,32 +223,6 @@ def content_security_policy(shell: LobbyShell) -> str:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class InstalledAuth:
-    """The library configuration this host runs the lobby with."""
-
-    config: WebAuthConfig
-    relying_party: OidcRelyingParty
-    admission: AdmissionConfig
-    transaction: SignInTransaction
-    content_security_policy: str
-    # The talk host signs in through its own installation of the same wiring;
-    # the lobby sends a refused talk sign-in's retry there.
-    talk_origin: str
-    # The realm that signs people in, which also serves their central account.
-    issuer: str
-
-    @property
-    def talk_sign_in_address(self) -> str:
-        """Where a sign-in starts at the talk host."""
-        return f"{self.talk_origin}{START_SIGN_IN_PATH}"
-
-    @property
-    def account_console_url(self) -> str:
-        """Where the person manages their central account."""
-        return f"{self.issuer}/account"
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class LobbyPrivate:
     """Private capabilities the authenticated lobby may expose to an admin."""
 
@@ -274,7 +250,6 @@ class _Surfaces:
 
     preferences: Preferences
     sessions: SessionRecordStore
-    auth: InstalledAuth
     shell: LobbyShell
 
     def lobby_app(
@@ -340,30 +315,77 @@ def _install_lobby_app(lobby: FastAPI, surfaces: _Surfaces) -> None:
     lobby.router.default = lobby_app_or_not_found
 
 
-def _logout_page_text(request: Request, surfaces: _Surfaces) -> LogoutPageText:
-    language = appearance_of(request, surfaces.preferences, surfaces.sessions).language
+def _logout_page_text(
+    request: Request, preferences: Preferences, sessions: SessionRecordStore
+) -> LogoutPageText:
+    language = appearance_of(request, preferences, sessions).language
     return LogoutPageText(
         language=language, button_label=text(language, "logout.button")
     )
 
 
-def _install_sign_in(lobby: FastAPI, surfaces: _Surfaces) -> None:
-    """The library's sign-in routes, and the 403 shell at every refusal address."""
-    auth = surfaces.auth
-    install_sign_in_routes(
-        lobby,
-        paths=LOBBY_SIGN_IN,
-        relying_party=lambda _request: auth.relying_party,
-        admission=auth.admission,
-        transaction=auth.transaction,
-        refused=lambda _request, refusal: RedirectResponse(
-            sign_in_refusal_path(refusal.page), status_code=HTTPStatus.SEE_OTHER
+def lobby_web_auth(  # noqa: PLR0913 - the host's one call names each input of the lobby's auth
+    *,
+    config: WebAuthConfig,
+    client: OidcClientConfig,
+    admission: AdmissionConfig,
+    sign_in: SignInTransaction,
+    sessions: SessionRecordStore,
+    preferences: Preferences,
+    shell: LobbyShell,
+    issuer_calls: IssuerCalls | None = None,
+) -> WebAuth:
+    """The lobby's auth, built before its routes and installed after the last one.
+
+    Every answer, including the gate's redirect and a refusal, carries the
+    security headers. The gate's store calls commit on their own and `touch` is
+    one update-only statement, so the gate's admission takes no lock.
+    """
+    return WebAuth.build(
+        WebAuthSettings(
+            config=config,
+            client=client,
+            sign_in_paths=LOBBY_SIGN_IN,
+            keeps_id_token=True,
+            max_sessions=None,
+            security_headers=SecurityHeadersPolicy(
+                content_security_policy=content_security_policy(shell),
+                permissions_policy=PERMISSIONS_POLICY,
+                cache_control_rules=(
+                    CacheControlRule(PathRules(prefixes=("/",)), "no-store"),
+                ),
+            ),
+            csrf_origin=_CSRF_POLICY,
+            body_size=LOBBY_BODY_SIZE,
+            rate_limit=LOBBY_RATE_LIMIT,
         ),
-        keeps_id_token=True,
-        max_sessions=None,
-        ui_language=lambda request: language_of(request, surfaces.sessions),
-        logout_page_text=lambda request: _logout_page_text(request, surfaces),
+        stores=WebAuthStores(sign_in=sign_in, sessions=lambda: nullcontext(sessions)),
+        groups=admission,
+        pages=SignInPages(
+            refused=lambda _request, refusal: RedirectResponse(
+                sign_in_refusal_path(refusal.page), status_code=HTTPStatus.SEE_OTHER
+            ),
+            logout_page_text=lambda request: _logout_page_text(
+                request, preferences, sessions
+            ),
+            ui_language=lambda request: language_of(request, sessions),
+        ),
+        front=ServedBehind.SHARED_FRONT,
+        gate=SessionGate(
+            login_redirect=LOGIN_REDIRECT,
+            public=_PUBLIC_RULES,
+            optional=PathRules(exact=frozenset({SESSION_PATH})),
+        ),
+        # Added inside the gates, so a body is read once the person is known.
+        inside=(
+            Middleware(StorableJsonBodies, own_readers=frozenset({MCP_ENDPOINT_PATH})),
+        ),
+        issuer_calls=issuer_calls,
     )
+
+
+def _add_refusal_pages(lobby: FastAPI, surfaces: _Surfaces) -> None:
+    """The 403 shell at every refusal address."""
     for path in _REFUSAL_PATHS:
         lobby.add_api_route(
             path,
@@ -373,76 +395,30 @@ def _install_sign_in(lobby: FastAPI, surfaces: _Surfaces) -> None:
         )
 
 
-def _install_middleware(
-    lobby: FastAPI,
-    auth: InstalledAuth,
-    sessions: SessionRecordStore,
-    admin: AdminPeople | None,
-    resource: ProtectedResource,
-) -> None:
-    """Install the library's stack once, in its own order.
+def _bearer_gate(admin: AdminPeople | None, resource: ProtectedResource) -> BearerGate:
+    """The gate: the resource's token always, the people's only with token clients.
 
-    Every answer, including the gate's redirect and a refusal, carries the
-    security headers. The gate's store calls commit on their own and `touch` is
-    one update-only statement, so the gate's admission takes no lock.
     The admin prefix, when it is served, takes a bearer token and no cookie.
     While the admin prefix is served, `/api/` takes a person's token as that
     person; a request without a token is decided by the session cookie. The
-    resource takes the agents client's token at `/mcp` and on
-    the routes marked as tools; its discovery document is public.
+    resource takes the agents client's token at `/mcp` and on the routes marked
+    as tools; its discovery document is public.
     """
-    install_error_answers(lobby)
-    # Added before the library stack, these run inside the gates.
-    lobby.add_middleware(
-        StorableJsonBodies, own_readers=frozenset({urlsplit(resource.url).path})
-    )
-    install_web_auth_middleware(
-        lobby,
-        sign_in_paths=LOBBY_SIGN_IN,
-        security_headers=SecurityHeadersPolicy(
-            content_security_policy=auth.content_security_policy,
-            permissions_policy=PERMISSIONS_POLICY,
-            cache_control_rules=(
-                CacheControlRule(PathRules(prefixes=("/",)), "no-store"),
-            ),
-        ),
-        body_size=LOBBY_BODY_SIZE,
-        rate_limit=LOBBY_RATE_LIMIT,
-        bearer_gate=_bearer_gate(auth, admin, resource),
-        csrf_origin=_CSRF_POLICY,
-        session_gate=SessionGate(
-            session_transaction=lambda: nullcontext(sessions),
-            login_redirect=LOGIN_REDIRECT,
-            public=(*_PUBLIC_RULES, resource.public_rule),
-            optional=PathRules(exact=frozenset({SESSION_PATH})),
-        ),
-    )
-
-
-def _bearer_gate(
-    auth: InstalledAuth, admin: AdminPeople | None, resource: ProtectedResource
-) -> BearerGate:
-    """The gate: the resource's token always, the people's only with token clients."""
     if admin is None:
-        return BearerGate(
-            relying_party=auth.relying_party,
-            admission=auth.admission,
-            resource=resource,
-        )
+        return BearerGate(resource=resource)
     parties = AuthorizedParties(admin.admitted_clients)
     return BearerGate(
-        relying_party=auth.relying_party,
-        admission=auth.admission,
         machine_paths=MachinePaths(PathRules(prefixes=(ADMIN_PREFIX,)), parties),
-        person_paths=PersonPaths(
-            PathRules(prefixes=(_PERSON_API,)), parties, auth.transaction
-        ),
+        person_paths=PersonPaths(PathRules(prefixes=(_PERSON_API,)), parties),
         resource=resource,
     )
 
 
 def _session_routes(
-    preferences: Preferences, sessions: SessionRecordStore, auth: InstalledAuth
+    preferences: Preferences,
+    sessions: SessionRecordStore,
+    web_auth: WebAuth,
+    talk_origin: str,
 ) -> APIRouter:
     return session_routes(
         preferences=preferences,
@@ -450,19 +426,10 @@ def _session_routes(
         addresses=SessionAddresses(
             start=START_SIGN_IN_PATH,
             logout=LOGOUT_PATH,
-            talk_start=auth.talk_sign_in_address,
-            account_console_url=auth.account_console_url,
+            talk_start=f"{talk_origin}{START_SIGN_IN_PATH}",
+            account_console_url=f"{web_auth.relying_party.issuer}/account",
         ),
     )
-
-
-def _install_resource(
-    lobby: FastAPI, agent: AgentFront, issuer: str
-) -> ProtectedResource:
-    """The resource and its public discovery document, once every route is in."""
-    resource = agent.install_resource(lobby)
-    install_resource_metadata(lobby, resource, issuer=issuer)
-    return resource
 
 
 def create_lobby(  # noqa: PLR0913 - the composition root's one call names each owner
@@ -470,7 +437,8 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     sessions: SessionRecordStore,
     decks: Decks,
     preferences: Preferences,
-    auth: InstalledAuth,
+    web_auth: WebAuth,
+    talk_origin: str,
     private: LobbyPrivate,
     agent: AgentFront,
     own_decks: OwnDecks,
@@ -482,16 +450,15 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     The fetch hook always stands under `/sources/`; a call that cannot name a
     stored source and its secret is answered alike, and GET stays behind the
     session. The app's shell answers what no route claims, and the refusal
-    addresses under 403.
+    addresses under 403. The talk host signs in through its own auth; the
+    lobby sends a refused talk sign-in's retry there.
     """
-    surfaces = _Surfaces(
-        preferences=preferences, sessions=sessions, auth=auth, shell=shell
-    )
+    surfaces = _Surfaces(preferences=preferences, sessions=sessions, shell=shell)
     lobby = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-    install_web_auth_config(lobby, auth.config)
-    _install_sign_in(lobby, surfaces)
+    install_error_answers(lobby)
+    _add_refusal_pages(lobby, surfaces)
     add_health_route(lobby, readiness)
-    lobby.include_router(_session_routes(preferences, sessions, auth))
+    lobby.include_router(_session_routes(preferences, sessions, web_auth, talk_origin))
     lobby.include_router(deck_list_routes(decks=decks))
     lobby.include_router(deck_text_routes(own_decks=own_decks))
     lobby.include_router(preference_api_routes(preferences=preferences))
@@ -499,7 +466,7 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     add_deck_pages(
         lobby,
         decks=decks,
-        talk_origin=auth.talk_origin,
+        talk_origin=talk_origin,
         not_found=surfaces.not_found_page,
     )
     lobby.include_router(fetch_hook(decks=decks))
@@ -508,10 +475,10 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
             people_routes(
                 admin=private.admin_people,
                 # The app is the last segment of the group its people sign in by.
-                app=str(auth.admission.login_group).rsplit("/", 1)[-1],
+                app=str(web_auth.admission.login_group).rsplit("/", 1)[-1],
             )
         )
-    resource = _install_resource(lobby, agent, auth.issuer)
-    _install_middleware(lobby, auth, sessions, private.admin_people, resource)
     _install_lobby_app(lobby, surfaces)
+    resource = agent.install_resource(lobby)
+    web_auth.install(lobby, bearer=_bearer_gate(private.admin_people, resource))
     return lobby

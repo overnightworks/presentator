@@ -24,7 +24,6 @@ from webauth.middleware.bearer_gate import (
     resource_person,
 )
 from webauth.policies import AuthorizedParties
-from webauth.ports import SignInTransaction
 
 # The realm names the front is built on; no deployment varies them.
 # The scope is the one the realm's `mcp-presentator` client scope grants.
@@ -74,7 +73,6 @@ def install_mcp_front(
     *,
     origin: str,
     issuer: str,
-    transaction: SignInTransaction,
 ) -> ProtectedResource:
     """Serve `/mcp` on `lobby` and answer the resource its gate admits tokens for.
 
@@ -96,6 +94,5 @@ def install_mcp_front(
         required_group=MCP_GROUP,
         agent_group=AGENT_GROUP,
         authorized_parties=AuthorizedParties(frozenset({MCP_CLIENT_ID})),
-        transaction=transaction,
         marked_routes=tools.marks,
     )
