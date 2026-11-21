@@ -65,6 +65,7 @@ from tests.support.lobby import (
     a_lobby,
     a_lobby_app,
     a_preferences,
+    behind_the_front,
 )
 
 _LOOPBACK: Final = "127.0.0.1"
@@ -390,7 +391,7 @@ def _serve(build: Path, port: int) -> None:
     # handles interrupts while it serves and restores this disposition when it
     # stops, so a late one cannot break off the coverage data written at exit.
     signal.signal(signal.SIGINT, signal.SIG_IGN)
-    uvicorn.run(app, host=_LOOPBACK, port=port, log_level="warning")
+    uvicorn.run(behind_the_front(app), host=_LOOPBACK, port=port, log_level="warning")
 
 
 def _write_openapi(target: Path) -> None:
