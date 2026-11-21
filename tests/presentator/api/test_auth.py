@@ -32,6 +32,7 @@ from tests.support.lobby import (
     a_content_security_policy,
     a_lobby_app,
     a_lobby_that_claims_no_origin_of_its_own,
+    behind_the_front,
 )
 from tests.support.lobby_reads import signed_in_username
 
@@ -137,7 +138,9 @@ def test_an_unlisted_mutating_route_refuses_a_request_without_own_provenance(
         return Response(status_code=HTTPStatus.NO_CONTENT)
 
     lobby.add_api_route("/a-new-write", a_new_write, methods=[method])
-    refused = TestClient(lobby).request(method, "/a-new-write", headers=claims)
+    refused = TestClient(behind_the_front(lobby)).request(
+        method, "/a-new-write", headers=claims
+    )
 
     assert refused.status_code == HTTPStatus.FORBIDDEN
 
@@ -339,7 +342,7 @@ def test_an_uncaught_error_still_carries_the_full_set_of_security_headers(
 
     signed_in_lobby.app.add_api_route("/it-breaks", it_breaks, methods=["GET"])
     client = TestClient(
-        signed_in_lobby.app,
+        signed_in_lobby.served,
         base_url=A_BROWSERS_ADDRESS,
         follow_redirects=False,
         headers=A_BROWSERS_HEADERS,

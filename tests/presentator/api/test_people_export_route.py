@@ -33,12 +33,12 @@ from tests.support.lobby import (
     A_CLIENT_ID,
     AN_ISSUER,
     NOW,
+    NoSignInTransaction,
     SigningIn,
     a_browser_at,
     a_lobby_app,
-    a_relying_party,
     an_admin_people,
-    an_installed_auth,
+    an_issuer_calls,
 )
 from tests.support.log_lines import json_logged
 from tests.support.people import a_session_id
@@ -109,14 +109,13 @@ def a_scene() -> Scene:
     clock = FrozenClock(instant=an_offset_instant)
     people = FakePeople(users=instance.users, sessions=instance.sessions, clock=clock)
     issuer = FakeIssuer(issuer=AN_ISSUER, client_id=A_CLIENT_ID, now=NOW)
-    auth = an_installed_auth(
-        clock,
-        relying_party=a_relying_party(clock, fetch_key_set=issuer.fetch_key_set),
-    )
     app, _ = a_lobby_app(
         people=people,
         signing_in=SigningIn(
-            sessions=instance.sessions, auth=auth, decks=instance.decks
+            sessions=instance.sessions,
+            transaction=NoSignInTransaction(),
+            issuer_calls=an_issuer_calls(fetch_key_set=issuer.fetch_key_set),
+            decks=instance.decks,
         ),
         admin_people=an_admin_people(
             People(

@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from http import HTTPMethod, HTTPStatus
 from typing import Final
 
-from agents.mcp_wire import MCP_ENDPOINT_PATH
 from agents.tools import not_an_agent_tool
 from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.concurrency import run_in_threadpool
@@ -333,9 +332,12 @@ def lobby_web_auth(  # noqa: PLR0913 - the host's one call names each input of t
     sessions: SessionRecordStore,
     preferences: Preferences,
     shell: LobbyShell,
+    own_body_readers: frozenset[str],
     issuer_calls: IssuerCalls | None = None,
 ) -> WebAuth:
     """The lobby's auth, built before its routes and installed after the last one.
+
+    The paths in `own_body_readers` read their request bodies themselves.
 
     Every answer, including the gate's redirect and a refusal, carries the
     security headers. The gate's store calls commit on their own and `touch` is
@@ -377,9 +379,7 @@ def lobby_web_auth(  # noqa: PLR0913 - the host's one call names each input of t
             optional=PathRules(exact=frozenset({SESSION_PATH})),
         ),
         # Added inside the gates, so a body is read once the person is known.
-        inside=(
-            Middleware(StorableJsonBodies, own_readers=frozenset({MCP_ENDPOINT_PATH})),
-        ),
+        inside=(Middleware(StorableJsonBodies, own_readers=own_body_readers),),
         issuer_calls=issuer_calls,
     )
 

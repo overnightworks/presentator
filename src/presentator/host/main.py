@@ -22,7 +22,7 @@ from pydantic import SecretStr
 from starlette.routing import Host, Route, Router
 from starlette.types import ASGIApp
 from webauth.config import SessionLifetime, WebAuthConfig
-from webauth.ports import RateLimitBackend
+from webauth.ports import RateLimitBackend, SessionRecordStore, SignInTransaction
 from webauth.proxies import TrustedProxies
 from webauth.web_auth import IssuerCalls, WebAuth, web_auth_front
 
@@ -78,7 +78,7 @@ from presentator.adapters.session_access import SessionAccess
 from presentator.adapters.shared_redis import RateLimitedHost, SharedRedis
 from presentator.adapters.speech import SpeechHearing, SpeechSpeaking
 from presentator.agent.backend import gateway_answerer
-from presentator.agent.mcp import install_mcp_front
+from presentator.agent.mcp import MCP_ENDPOINT_PATH, install_mcp_front
 from presentator.api.auth import (
     BACKCHANNEL_LOGOUT_PATH,
     AgentFront,
@@ -225,7 +225,8 @@ def build_instance(
         preferences = _preferences(stores)
         lobby_auth, talk_auth = built_auths(
             settings,
-            stores,
+            sign_in=stores.identity_writes,
+            sessions=stores.sessions,
             preferences=preferences,
             shell=shell,
             redis=redis,
@@ -375,7 +376,11 @@ def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
         web_auth=web_auth,
         talk_origin=settings.talk_origin,
         private=_lobby_private(settings, stores, decks),
-        agent=agent_front(origin=settings.public_origin, issuer=settings.oidc_issuer),
+        agent=agent_front(
+            origin=settings.public_origin,
+            issuer=settings.oidc_issuer,
+            trusted_proxies=TrustedProxies.parse(settings.trusted_proxies),
+        ),
         own_decks=OwnDecks(
             decks=decks.store,
             sources=decks.sources,
@@ -386,10 +391,17 @@ def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
     )
 
 
-def agent_front(*, origin: str, issuer: str) -> AgentFront:
+def agent_front(
+    *, origin: str, issuer: str, trusted_proxies: TrustedProxies
+) -> AgentFront:
     """The MCP front, installed over the lobby's routes once they are in."""
     return AgentFront(
-        install_resource=partial(install_mcp_front, origin=origin, issuer=issuer),
+        install_resource=partial(
+            install_mcp_front,
+            origin=origin,
+            issuer=issuer,
+            trusted_proxies=trusted_proxies,
+        ),
     )
 
 
@@ -563,8 +575,9 @@ def _lobby_private(settings: Settings, stores: Stores, decks: Decks) -> LobbyPri
 
 def built_auths(  # noqa: PLR0913 - the composition root hands the builders each owner
     settings: Settings,
-    stores: Stores,
     *,
+    sign_in: SignInTransaction,
+    sessions: SessionRecordStore,
     preferences: Preferences,
     shell: LobbyShell,
     redis: SharedRedis,
@@ -589,10 +602,11 @@ def built_auths(  # noqa: PLR0913 - the composition root hands the builders each
         ),
         client=lobby_client,
         admission=admission,
-        sign_in=stores.identity_writes,
-        sessions=stores.sessions,
+        sign_in=sign_in,
+        sessions=sessions,
         preferences=preferences,
         shell=shell,
+        own_body_readers=frozenset({MCP_ENDPOINT_PATH}),
         issuer_calls=issuer_calls,
     )
     talk = talk_web_auth(
@@ -603,8 +617,8 @@ def built_auths(  # noqa: PLR0913 - the composition root hands the builders each
         ),
         client=talk_client,
         admission=admission,
-        sign_in=stores.identity_writes,
-        sessions=stores.sessions,
+        sign_in=sign_in,
+        sessions=sessions,
         lobby_origin=settings.public_origin,
         issuer_calls=issuer_calls,
     )

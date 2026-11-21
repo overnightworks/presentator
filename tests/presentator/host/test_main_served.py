@@ -1,11 +1,12 @@
 """What the composition root hands the server it serves through."""
 
 from http import HTTPStatus
+from typing import cast
 
 import pytest
 import uvicorn
 from fastapi.testclient import TestClient
-from logline import RequestLineMiddleware
+from starlette.types import ASGIApp
 
 from presentator.api.health import Stopping
 from presentator.host import main
@@ -15,16 +16,14 @@ from tests.support.lobby import A_BROWSERS_ADDRESS, A_BROWSERS_HEADERS
 pytestmark = pytest.mark.usefixtures("redis_environment", "served_database")
 
 
-type ServedByMain = tuple[
-    list[RequestLineMiddleware], list[uvicorn.Config], list[Stopping]
-]
+type ServedByMain = tuple[list[ASGIApp], list[uvicorn.Config], list[Stopping]]
 
 
 @pytest.fixture
 def served_by_main(environment: pytest.MonkeyPatch, json_logging: None) -> ServedByMain:
     """What the composition root hands the server, recorded instead of served."""
     del json_logging
-    served: list[RequestLineMiddleware] = []
+    served: list[ASGIApp] = []
     configs: list[uvicorn.Config] = []
     stoppings: list[Stopping] = []
 
@@ -33,10 +32,9 @@ def served_by_main(environment: pytest.MonkeyPatch, json_logging: None) -> Serve
             self, config: uvicorn.Config, stopping: Stopping, stop_line: StopLine
         ) -> None:
             del stop_line
-            assert isinstance(config.app, RequestLineMiddleware)
             configs.append(config)
             stoppings.append(stopping)
-            self.app = config.app
+            self.app = cast("ASGIApp", config.app)
 
         async def serve(self) -> None:
             served.append(self.app)

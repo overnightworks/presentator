@@ -60,7 +60,7 @@ def world(engine: Engine) -> Iterator[World]:
 def an_instance(world: World) -> Instance:
     return Instance(
         lobby=world.scene.lobby_for_a_host(),
-        talk=a_talk_app(people=a_crowd(), trusted_proxies=None),
+        talk=a_talk_app(people=a_crowd()),
         poller=Schedule(
             chore=lambda: None,
             chore_code=ChoreCode.SOURCE_POLL,

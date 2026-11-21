@@ -42,7 +42,6 @@ from tests.support.lobby import (
     a_crowd,
     a_decks,
     a_lobby_app,
-    an_installed_auth,
 )
 from tests.support.lobby import (
     ADMIN as ADMIN_PERSON,
@@ -110,9 +109,7 @@ def a_lobby_over(decks: Decks, *, headers: dict[str, str] | None = None) -> Lobb
         people=people,
         signing_in=SigningIn(
             sessions=people.sessions,
-            auth=an_installed_auth(
-                people.clock, transaction=SessionsOnly(people.sessions)
-            ),
+            transaction=SessionsOnly(people.sessions),
             decks=decks,
         ),
     )
@@ -177,7 +174,7 @@ def whole_answers_of(instance: Instance, name: str) -> str:
 def without_raising(lobby: Lobby) -> TestClient:
     """The signed-in browser, answering a server error instead of raising it."""
     return TestClient(
-        lobby.app,
+        lobby.served,
         base_url=str(lobby.client.base_url),
         follow_redirects=False,
         headers=dict(lobby.client.headers),
@@ -257,7 +254,7 @@ def remove(
 def a_client_with_no_header_of_its_own(scene: Scene) -> TestClient:
     """Reaches the scene's lobby with nothing but what the test adds per request."""
     return TestClient(
-        scene.lobby.app, base_url=A_BROWSERS_ADDRESS, follow_redirects=False
+        scene.lobby.served, base_url=A_BROWSERS_ADDRESS, follow_redirects=False
     )
 
 

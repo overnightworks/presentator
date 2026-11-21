@@ -236,7 +236,7 @@ def test_a_failing_store_answers_500_without_deck_data() -> None:
     lobby = a_lobby(given=GivenDecks(store=_BrokenStore()))
     lobby.sign_in()
     client = TestClient(
-        lobby.app,
+        lobby.served,
         base_url=str(lobby.client.base_url),
         headers=dict(lobby.client.headers),
         cookies=lobby.client.cookies,

@@ -249,7 +249,7 @@ def test_a_failing_store_is_the_plain_500_not_a_problem() -> None:
     lobby = a_lobby(person_preferences=Unreadable())
     lobby.sign_in(username=NEIGHBOUR)
     quiet = TestClient(
-        lobby.app,
+        lobby.served,
         base_url=str(lobby.client.base_url),
         follow_redirects=False,
         headers=dict(lobby.client.headers),
@@ -357,7 +357,7 @@ def a_bearer(scene: Scene, *, subject: str, groups: list[str]) -> dict[str, str]
 
 def a_program(scene: Scene) -> TestClient:
     """A non-browser client: it claims no origin at all."""
-    return TestClient(scene.lobby.app, base_url=str(scene.lobby.client.base_url))
+    return TestClient(scene.lobby.served, base_url=str(scene.lobby.client.base_url))
 
 
 def test_a_members_bearer_reads_and_writes_the_members_own_account_without_origin(

@@ -88,7 +88,7 @@ def a_lobby_over(
     if raise_server_exceptions:
         return browser
     quiet = TestClient(
-        app,
+        browser.served,
         base_url=A_BROWSERS_ADDRESS,
         follow_redirects=False,
         headers=A_BROWSERS_HEADERS,
@@ -365,7 +365,7 @@ def test_a_dot_segment_reaching_the_route_unnormalised_is_gated(
         ],
     }
 
-    asyncio.run(lobby.app(scope, receive, send))
+    asyncio.run(lobby.served(scope, receive, send))
 
     assert sent[0]["status"] == status
 

@@ -19,7 +19,6 @@ from webauth.ports import AccountEvent, AuditSink, SignInStores, SignInTransacti
 from presentator.adapters.postgres.accounts import PostgresSubjectUserStore
 from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
-from presentator.api.auth import InstalledAuth
 from presentator.api.people import AdminPeople
 from presentator.application.decks import Decks
 from presentator.application.preferences import Preferences
@@ -36,12 +35,12 @@ from tests.support.lobby import (
     NoSignInTransaction,
     SigningIn,
     a_browser_at,
+    a_client,
     a_crowd,
     a_lobby_app,
     a_relying_party,
     an_admin_people,
-    an_agent_front,
-    an_installed_auth,
+    an_issuer_calls,
 )
 
 MEMBER = ["/apps/presentator"]
@@ -85,11 +84,11 @@ class Scene:
     config: WebAuthConfig
     clock: FrozenClock
     lobby_for_a_host: Callable[[], FastAPI]
-    """Another app over the same stores, for `served_by_host` to write the client."""
+    """Another app over the same stores, for `served_by_host` to front."""
 
     def browser(self, *, raise_server_exceptions: bool = True) -> TestClient:
         return TestClient(
-            self.lobby.app,
+            self.lobby.served,
             base_url=A_BROWSERS_ADDRESS,
             follow_redirects=False,
             headers=A_BROWSERS_HEADERS,
@@ -148,28 +147,6 @@ class Scene:
             return int(connection.execute(_COUNTS[table]).scalar_one())
 
 
-def _auth_through(
-    issuer: FakeIssuer,
-    clock: FrozenClock,
-    *,
-    token_requests: Callable[[TokenRequestPost], TokenRequestPost],
-    transaction: SignInTransaction,
-    realm: str,
-) -> InstalledAuth:
-    """The sign-in wiring whose relying party reaches the fake `issuer` alone."""
-    return an_installed_auth(
-        clock,
-        relying_party=a_relying_party(
-            clock,
-            post_token_request=token_requests(issuer.post_token_request),
-            fetch_key_set=issuer.fetch_key_set,
-            issuer=realm,
-        ),
-        transaction=transaction,
-        realm=realm,
-    )
-
-
 def _admin_of(token_clients: frozenset[str]) -> AdminPeople | None:
     """The people route, served only while a token client is named."""
     if not token_clients:
@@ -196,26 +173,29 @@ def a_scene(  # noqa: PLR0913
     users = PostgresSubjectUserStore(engine)
     recording = RecordingAudit()
     writes = PostgresIdentityWrites(engine, audit(recording))
-    auth = _auth_through(
-        issuer,
-        people.clock,
-        token_requests=token_requests,
-        transaction=transaction(writes),
-        realm=realm,
-    )
     sessions = PostgresSessions(engine)
+    issuer_calls = an_issuer_calls(
+        post_token_request=token_requests(issuer.post_token_request),
+        fetch_key_set=issuer.fetch_key_set,
+    )
+    signing_in = SigningIn(
+        sessions=sessions,
+        transaction=transaction(writes),
+        issuer_calls=issuer_calls,
+        client=a_client(issuer=realm),
+        decks=decks,
+    )
 
     lobby_over_the_stores = partial(
         a_lobby_app,
-        agent=an_agent_front(auth),
         texts=texts,
         people=people,
         preferences=preferences,
-        signing_in=SigningIn(sessions=sessions, auth=auth, decks=decks),
+        signing_in=signing_in,
         admin_people=_admin_of(token_clients),
     )
     lobby = a_browser_at(
-        lobby_over_the_stores(trusted_proxies="")[0],
+        lobby_over_the_stores()[0],
         people=people,
         base_url=A_BROWSERS_ADDRESS,
         headers=A_BROWSERS_HEADERS,
@@ -227,10 +207,15 @@ def a_scene(  # noqa: PLR0913
         users=users,
         audit=recording,
         sessions=sessions,
-        relying_party=auth.relying_party,
-        config=auth.config,
+        relying_party=a_relying_party(
+            people.clock,
+            post_token_request=issuer_calls.post_token_request,
+            fetch_key_set=issuer_calls.fetch_key_set,
+            issuer=realm,
+        ),
+        config=lobby.config,
         clock=people.clock,
-        lobby_for_a_host=lambda: lobby_over_the_stores(trusted_proxies=None)[0],
+        lobby_for_a_host=lambda: lobby_over_the_stores()[0],
     )
 
 

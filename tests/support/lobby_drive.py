@@ -65,7 +65,6 @@ from tests.support.lobby import (
     a_lobby,
     a_lobby_app,
     a_preferences,
-    an_installed_auth,
 )
 
 _LOOPBACK: Final = "127.0.0.1"
@@ -277,14 +276,6 @@ def _driven_lobby(build: Path, origin: str) -> FastAPI:
         ),
         wall_clock=lambda: clock.now().timestamp(),
     )
-    auth = replace(
-        an_installed_auth(
-            clock,
-            transaction=SessionsOnly(people.sessions),
-            shell=shell,
-        ),
-        config=config,
-    )
     store = FakeDeckStore()
     sources = FakeSourceStore()
     lobby, _ = a_lobby_app(
@@ -295,7 +286,11 @@ def _driven_lobby(build: Path, origin: str) -> FastAPI:
             source_store=sources,
             builder=FakeBuildRunner(served=dict(_SERVED)),
         ),
-        signing_in=SigningIn(sessions=people.sessions, auth=auth),
+        signing_in=SigningIn(
+            sessions=people.sessions,
+            transaction=SessionsOnly(people.sessions),
+            config=config,
+        ),
         shell=shell,
     )
     newcomers = _Newcomers(

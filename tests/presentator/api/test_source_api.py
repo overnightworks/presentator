@@ -477,7 +477,7 @@ def test_a_store_that_fails_is_the_plain_server_error_with_no_source_data() -> N
     lobby = a_lobby(given=GivenDecks(source=source, store=_UnreadableDecks()))
     lobby.sign_in()
     quiet = TestClient(
-        lobby.app,
+        lobby.served,
         base_url=str(lobby.client.base_url),
         follow_redirects=False,
         headers=dict(lobby.client.headers),

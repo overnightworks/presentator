@@ -143,7 +143,7 @@ def test_a_streamed_body_over_the_cap_on_the_back_channel_gets_413(
     body = padded_to_the_stream_size(urlencode({"logout_token": token}))
 
     streamed = stream_to(
-        scene.lobby.app,
+        scene.lobby.served,
         Upload(BACKCHANNEL_LOGOUT_PATH, {"content-type": _FORM}, body),
     )
 
@@ -160,7 +160,7 @@ def test_a_streamed_settings_write_over_the_cap_gets_413_and_saves_nothing() -> 
     body = a_settings_write(_BODY_SIZE - len(a_settings_write(0))).encode()
 
     streamed = stream_to(
-        admin.app,
+        admin.served,
         Upload(_SETTINGS, a_browsers_headers(admin.client, _JSON), body, method="PUT"),
     )
 
@@ -175,7 +175,7 @@ def test_a_settings_write_the_client_cuts_short_saves_nothing() -> None:
     before = admin.client.get(_SETTINGS).text
 
     stream_to(
-        admin.app,
+        admin.served,
         Upload(
             _SETTINGS,
             a_browsers_headers(admin.client, _JSON),
@@ -195,7 +195,7 @@ def test_a_streamed_ask_over_the_cap_gets_413_and_reaches_no_private_service() -
     body = (asked + " " * (_BODY_SIZE - len(asked))).encode()
 
     streamed = stream_to(
-        talk.app,
+        talk.served,
         Upload(
             _ASK, a_browsers_headers(talk.client, _JSON, origin=A_TALK_ADDRESS), body
         ),

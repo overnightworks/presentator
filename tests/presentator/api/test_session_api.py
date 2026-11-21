@@ -220,7 +220,7 @@ def test_a_preference_store_that_fails_is_an_error_never_a_default() -> None:
     lobby = a_lobby(person_preferences=_UnreadablePersonPreferences())
     lobby.sign_in()
     quiet = TestClient(
-        lobby.app,
+        lobby.served,
         base_url=str(lobby.client.base_url),
         follow_redirects=False,
         headers=dict(lobby.client.headers),
