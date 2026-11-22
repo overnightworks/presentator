@@ -73,11 +73,7 @@ from presentator.adapters.secrets import (
     secret_box,
     talk_session_secret,
 )
-from presentator.adapters.sentences import split_sentences
-from presentator.adapters.session_access import SessionAccess
 from presentator.adapters.shared_redis import RateLimitedHost, SharedRedis
-from presentator.adapters.speech import SpeechHearing, SpeechSpeaking
-from presentator.agent.backend import gateway_answerer
 from presentator.agent.mcp import MCP_ENDPOINT_PATH, install_mcp_front
 from presentator.api.auth import (
     BACKCHANNEL_LOGOUT_PATH,
@@ -86,12 +82,10 @@ from presentator.api.auth import (
     create_lobby,
     lobby_web_auth,
 )
-from presentator.api.copresenter import CoPresenterSurface
 from presentator.api.health import Readiness, Stopping
 from presentator.api.lobby_shell import LobbyBuildError, LobbyShell
 from presentator.api.people import AdminPeople
 from presentator.api.talk import create_talk, talk_web_auth
-from presentator.application.copresenter import CoPresenterUse
 from presentator.application.decks import Decks
 from presentator.application.identity import SESSION_LIFETIME, SESSION_SWEEP_INTERVAL
 from presentator.application.own_decks import OwnDecks
@@ -106,6 +100,7 @@ from presentator.host.command_line import (
     unpin_the_host,
 )
 from presentator.host.config import Settings, load_settings
+from presentator.host.copresenter_surface import copresenter_surface
 from presentator.host.deck_toolchain import (
     build_bound_of,
     identity_of_the_toolchain,
@@ -131,7 +126,7 @@ from presentator.host.store_connection import (
     reach_redis,
     timed_connection,
 )
-from presentator.ports.copresenter import AskLimiter, DeckTexts
+from presentator.ports.copresenter import DeckTexts
 from presentator.ports.decks import (
     DeckStore,
     DeployKeyDrafts,
@@ -159,9 +154,6 @@ async def _nothing_to_aclose() -> None:
 
 # The files boto3 reads the object store's key and configuration from.
 _OBJECT_STORE_FILES: Final = ("AWS_SHARED_CREDENTIALS_FILE", "AWS_CONFIG_FILE")
-# The wait between taking the lease and the answer's clock starting, so the lease
-# outlives the whole answer. It feeds the hold's `lasts`.
-ASK_LEASE_MARGIN_SECONDS: Final = 30
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -522,55 +514,10 @@ def _talk(  # noqa: PLR0913 - the composition root hands the talk host each owne
         decks=decks,
         web_auth=web_auth,
         lobby_origin=settings.public_origin,
-        copresenter=_copresenter_surface(
+        copresenter=copresenter_surface(
             settings, stores.sessions, decks, web_auth, texts, redis, stopping
         ),
         readiness=stores.readiness,
-    )
-
-
-def _copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands the surface each owner
-    settings: Settings,
-    sessions: PostgresSessions,
-    decks: Decks,
-    web_auth: WebAuth,
-    texts: DeckTexts,
-    redis: SharedRedis,
-    stopping: Stopping,
-) -> CoPresenterSurface:
-    """What only a signed-in admin may reach at the talk host: the gateway's answers."""
-    answers = gateway_answerer(settings.agent, web_auth.relying_party)
-    return CoPresenterSurface(
-        use=CoPresenterUse(
-            answers=answers,
-            speech=SpeechHearing(
-                settings.speech_service, voices=settings.speech_voices
-            ),
-            decks=decks.store,
-            sources=decks.sources,
-            texts=texts,
-            boundaries=split_sentences,
-            speaking=SpeechSpeaking(
-                settings.speech_service, voices=settings.speech_voices
-            ),
-            person_access=SessionAccess(
-                web_auth.relying_party,
-                sessions,
-                web_auth.config,
-                speech_scope=settings.speech_service_scope,
-            ),
-        ),
-        limiter=ask_limiter_of(redis, deadline_seconds=answers.deadline_seconds),
-        browser_origin=settings.talk_origin,
-        deadline_seconds=answers.deadline_seconds,
-        stopping=stopping,
-    )
-
-
-def ask_limiter_of(redis: SharedRedis, *, deadline_seconds: float) -> AskLimiter:
-    """The ask lease: the answer's deadline plus a margin, never renewed."""
-    return redis.ask_limiter(
-        lasts=timedelta(seconds=deadline_seconds + ASK_LEASE_MARGIN_SECONDS)
     )
 
 
