@@ -27,7 +27,7 @@ def _refusal() -> ConfigurationError:
     return refused.value
 
 
-def _set_realm_keys_in_a_dot_env(directory: Path, entries: dict[str, str]) -> None:
+def _write_a_dot_env(directory: Path, entries: dict[str, str]) -> None:
     lines = [f"{key}={value}" for key, value in entries.items()]
     (directory / ".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -160,7 +160,7 @@ def test_a_dot_env_holds_the_realm_and_the_settings_and_the_environment_wins(
         "REALM_MCP_CLIENT_ID": "mcp-client-of-the-file",
         "PRESENTATOR_S3_BUCKET": "bucket-of-the-file",
     }
-    _set_realm_keys_in_a_dot_env(tmp_path, entries)
+    _write_a_dot_env(tmp_path, entries)
     environment.setenv("REALM_CLIENT_ID", "client-of-the-environment")
 
     settings = load_settings()
@@ -179,7 +179,7 @@ def test_an_unknown_realm_key_in_a_dot_env_refuses_naming_it(
     environment: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     del environment
-    _set_realm_keys_in_a_dot_env(tmp_path, {"REALM_UNKNOWN_KEY_FOR_TEST": "1"})
+    _write_a_dot_env(tmp_path, {"REALM_UNKNOWN_KEY_FOR_TEST": "1"})
 
     assert _refusal().variables == ("REALM_UNKNOWN_KEY_FOR_TEST",)
 

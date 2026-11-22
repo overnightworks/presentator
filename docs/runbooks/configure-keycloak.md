@@ -52,15 +52,15 @@ to its token. Each route's tool or exclusion is declared beside the route. The
 realm names below are the values of the `REALM_` keys the deployment hands
 (see [configuration](../configuration.md)).
 
-1. Use the shared `agents` client: one public client for every app, with
-   client authentication off (no secret) and PKCE S256. Its id is
-   `REALM_MCP_CLIENT_ID`; it is no entry of `PRESENTATOR_TOKEN_CLIENTS`.
+1. Use the shared agents client (`REALM_MCP_CLIENT_ID`): one public client for
+   every app, with client authentication off (no secret) and PKCE S256; it is
+   no entry of `PRESENTATOR_TOKEN_CLIENTS`.
 2. Create one optional client scope for this app, named `REALM_MCP_SCOPE`.
    Give it an audience mapper whose included custom audience is
    `<PRESENTATOR_PUBLIC_ORIGIN>/mcp`, so a token requested with this scope has
    that as its only audience. Put no audience on the client itself: the other
    apps' fronts use the same client.
-3. Assign the scope to the `agents` client as an optional scope.
+3. Assign the scope to that client as an optional scope.
 4. Create the group `REALM_MCP_GROUP` for the people whose agents may
    call. A token needs this group
    besides the app's own.
