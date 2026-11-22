@@ -31,15 +31,8 @@ from tests.presentator.api.support.source_api_support import (
 from tests.presentator.application.support.fakes import (
     FakeDeckStore,
 )
-from tests.support.lobby import (
-    ADMIN,
-    NEIGHBOUR,
-    NOW,
-    GivenDecks,
-    a_configured_source,
-    a_lobby,
-    a_signed_in_lobby,
-)
+from tests.support.lobby import ADMIN, NEIGHBOUR, NOW, GivenDecks, a_configured_source
+from tests.support.lobby_app import a_lobby, a_signed_in_lobby
 from tests.support.sign_in_support import ADMIN as ADMIN_GROUPS
 from tests.support.sign_in_support import MEMBER, Scene, a_scene
 
@@ -477,7 +470,7 @@ def test_a_store_that_fails_is_the_plain_server_error_with_no_source_data() -> N
     lobby = a_lobby(given=GivenDecks(source=source, store=_UnreadableDecks()))
     lobby.sign_in()
     quiet = TestClient(
-        lobby.app,
+        lobby.served,
         base_url=str(lobby.client.base_url),
         follow_redirects=False,
         headers=dict(lobby.client.headers),

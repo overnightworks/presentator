@@ -109,9 +109,9 @@ if TYPE_CHECKING:
     from httpx2 import Response
     from sqlalchemy import Engine
     from starlette.types import Message, Scope
+    from webauth.web_auth import WebAuth
 
     from presentator.adapters.postgres.sessions import PostgresSessions
-    from presentator.api.auth import InstalledAuth
     from presentator.contracts.copresenter import (
         CoPresenterReadiness,
         CoPresenterUnavailableError,
@@ -285,12 +285,12 @@ def a_surface_over(  # noqa: PLR0913 - each part is one thing the instance varie
     deadline: ManualDeadline,
     errors: list[BaseException],
     speech_scope: str,
-) -> Callable[[FakeDeckStore, PostgresSessions, InstalledAuth], CoPresenterSurface]:
+) -> Callable[[FakeDeckStore, PostgresSessions, WebAuth], CoPresenterSurface]:
     """The talk host's surface over the real speech adapters and session access."""
     hearing, speaking = adapters
 
     def surface(
-        store: FakeDeckStore, sessions: PostgresSessions, auth: InstalledAuth
+        store: FakeDeckStore, sessions: PostgresSessions, auth: WebAuth
     ) -> CoPresenterSurface:
         return CoPresenterSurface(
             use=CoPresenterUse(

@@ -28,8 +28,8 @@ from tests.support.lobby import (
     Lobby,
     a_configured_source,
     a_decks,
-    a_lobby,
 )
+from tests.support.lobby_app import a_lobby
 from tests.support.sign_in_support import MEMBER, Scene, a_scene
 
 _ADDRESS = "git@heimserver:decks.git"
@@ -307,7 +307,7 @@ def test_a_store_that_fails_is_the_plain_server_error_never_a_problem() -> None:
     lobby = a_lobby_with(_UnreadableDecks())
     lobby.sign_in()
     quiet = TestClient(
-        lobby.app,
+        lobby.served,
         base_url=str(lobby.client.base_url),
         follow_redirects=False,
         headers=dict(lobby.client.headers),

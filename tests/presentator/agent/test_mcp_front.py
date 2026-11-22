@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 from mcp_types import UNSUPPORTED_PROTOCOL_VERSION
 from sqlalchemy import Engine
 from webauth.ports import AccountKind
+from webauth.proxies import TrustedProxies
 
 from presentator.agent.mcp import AGENT_GROUP, MCP_GROUP, MCP_SCOPE
 from presentator.api.deck_list_api import DECK_LIST_PATH
@@ -45,8 +46,8 @@ from tests.support.lobby import (
     AN_ISSUER,
     a_crowd,
     a_settings,
-    a_talk_app,
 )
+from tests.support.lobby_app import a_talk_app
 from tests.support.log_lines import request_lines
 from tests.support.sign_in_support import ADMIN, MEMBER, a_scene
 
@@ -60,7 +61,8 @@ def world(engine: Engine) -> Iterator[World]:
 def an_instance(world: World) -> Instance:
     return Instance(
         lobby=world.scene.lobby_for_a_host(),
-        talk=a_talk_app(people=a_crowd(), trusted_proxies=None),
+        talk=a_talk_app(people=a_crowd()),
+        trusted_proxies=TrustedProxies.parse(""),
         poller=Schedule(
             chore=lambda: None,
             chore_code=ChoreCode.SOURCE_POLL,

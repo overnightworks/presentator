@@ -62,11 +62,9 @@ from tests.support.lobby import (
     SigningIn,
     a_configured_source,
     a_crowd,
-    a_lobby,
-    a_lobby_app,
     a_preferences,
-    an_installed_auth,
 )
+from tests.support.lobby_app import a_lobby, a_lobby_app, behind_the_front
 
 _LOOPBACK: Final = "127.0.0.1"
 _DRIVE_HOST: Final = "localhost"
@@ -277,14 +275,6 @@ def _driven_lobby(build: Path, origin: str) -> FastAPI:
         ),
         wall_clock=lambda: clock.now().timestamp(),
     )
-    auth = replace(
-        an_installed_auth(
-            clock,
-            transaction=SessionsOnly(people.sessions),
-            shell=shell,
-        ),
-        config=config,
-    )
     store = FakeDeckStore()
     sources = FakeSourceStore()
     lobby, _ = a_lobby_app(
@@ -295,7 +285,11 @@ def _driven_lobby(build: Path, origin: str) -> FastAPI:
             source_store=sources,
             builder=FakeBuildRunner(served=dict(_SERVED)),
         ),
-        signing_in=SigningIn(sessions=people.sessions, auth=auth),
+        signing_in=SigningIn(
+            sessions=people.sessions,
+            transaction=SessionsOnly(people.sessions),
+            config=config,
+        ),
         shell=shell,
     )
     newcomers = _Newcomers(
@@ -395,7 +389,7 @@ def _serve(build: Path, port: int) -> None:
     # handles interrupts while it serves and restores this disposition when it
     # stops, so a late one cannot break off the coverage data written at exit.
     signal.signal(signal.SIGINT, signal.SIG_IGN)
-    uvicorn.run(app, host=_LOOPBACK, port=port, log_level="warning")
+    uvicorn.run(behind_the_front(app), host=_LOOPBACK, port=port, log_level="warning")
 
 
 def _write_openapi(target: Path) -> None:

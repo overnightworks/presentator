@@ -3,7 +3,9 @@
 The front is the exact route `/mcp` of the lobby app. The bearer gate has already
 admitted the agents client's token as that person, or an agent-group token as its own
 account, by the time it runs, and every tool call goes through the whole lobby app
-again, so it meets the same middleware as any request.
+again, so it meets the same middleware as any request. The lobby is built for the
+shared front, so a tool call reaches it through a front of its own, which believes
+the same trusted proxies as the host's.
 """
 
 from collections.abc import AsyncGenerator
@@ -24,7 +26,8 @@ from webauth.middleware.bearer_gate import (
     resource_person,
 )
 from webauth.policies import AuthorizedParties
-from webauth.ports import SignInTransaction
+from webauth.proxies import TrustedProxies
+from webauth.web_auth import web_auth_front
 
 # The realm names the front is built on; no deployment varies them.
 # The scope is the one the realm's `mcp-presentator` client scope grants.
@@ -48,9 +51,15 @@ class _NamedFront:
         await self.front(scope, receive, send)
 
 
-def marked_tools(lobby: FastAPI) -> RouteTools[MarkedRoute]:
+def marked_tools(
+    lobby: FastAPI, *, trusted_proxies: TrustedProxies
+) -> RouteTools[MarkedRoute]:
     """The tools of the lobby's marked routes, which call the complete `lobby`."""
-    return route_tools(lobby.openapi(), lobby, mark_route=MarkedRoute)
+    return route_tools(
+        lobby.openapi(),
+        web_auth_front(lobby, trusted_proxies=trusted_proxies),
+        mark_route=MarkedRoute,
+    )
 
 
 def _run_front_with_the_lobby(lobby: FastAPI, front: McpPersonFront) -> None:
@@ -74,13 +83,13 @@ def install_mcp_front(
     *,
     origin: str,
     issuer: str,
-    transaction: SignInTransaction,
+    trusted_proxies: TrustedProxies,
 ) -> ProtectedResource:
     """Serve `/mcp` on `lobby` and answer the resource its gate admits tokens for.
 
     Every schema-bearing route of `lobby` is registered already.
     """
-    tools = marked_tools(lobby)
+    tools = marked_tools(lobby, trusted_proxies=trusted_proxies)
 
     def person_of(scope: Scope) -> Principal:
         # The identity store keys an account by the issuer's `sub`, which is the id.
@@ -96,6 +105,5 @@ def install_mcp_front(
         required_group=MCP_GROUP,
         agent_group=AGENT_GROUP,
         authorized_parties=AuthorizedParties(frozenset({MCP_CLIENT_ID})),
-        transaction=transaction,
         marked_routes=tools.marks,
     )

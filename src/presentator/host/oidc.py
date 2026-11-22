@@ -1,13 +1,10 @@
-"""The relying party this instance signs people in through, built from settings."""
+"""The sign-in client and admission this instance runs, built from settings."""
 
-import time
 from typing import Final
 
 from pydantic import SecretStr
 from webauth.admission import AdmissionConfig
-from webauth.https_client import fetch_key_set_over_https
-from webauth.oidc import OidcClientConfig, OidcRelyingParty
-from webauth.oidc_transport import post_token_request_over_https
+from webauth.oidc import OidcClientConfig
 
 from presentator.api.auth import LOGIN_PATH, SIGN_IN_CALLBACK_PATH
 from presentator.host.config import Settings, read_secret_file
@@ -60,17 +57,6 @@ def oidc_client_config(
         message = f"the sign-in client configuration: {refused}"
         variables = tuple(variable_of(field) for field in _CLIENT_FIELDS)
         raise cannot_start(message, variables=variables) from None
-
-
-def relying_party(config: OidcClientConfig) -> OidcRelyingParty:
-    """The relying party over the library's production transports and clocks."""
-    return OidcRelyingParty(
-        config,
-        post_token_request=post_token_request_over_https,
-        fetch_key_set=fetch_key_set_over_https,
-        wall_clock=time.time,
-        monotonic_clock=time.monotonic,
-    )
 
 
 def client_configs_of(settings: Settings) -> tuple[OidcClientConfig, OidcClientConfig]:

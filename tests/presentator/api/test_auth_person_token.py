@@ -31,7 +31,7 @@ def a_token_client(
 ) -> TestClient:
     """A program that is no browser: it sends only what it names."""
     return TestClient(
-        scene.lobby.app,
+        scene.lobby.served,
         base_url=A_BROWSERS_ADDRESS,
         follow_redirects=False,
         headers=headers or {},

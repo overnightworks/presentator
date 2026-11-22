@@ -43,13 +43,16 @@ from tests.support.lobby import (
     AN_ISSUER,
     NOW,
     Lobby,
+    NoSignInTransaction,
     SigningIn,
+    an_admin_people,
+    an_issuer_calls,
+)
+from tests.support.lobby_app import (
     a_browser_at,
     a_lobby_app,
-    a_relying_party,
     a_talk_app,
-    an_admin_people,
-    an_installed_auth,
+    behind_the_front,
 )
 from tests.support.log_lines import json_lines, json_logged
 
@@ -103,7 +106,7 @@ class Scene:
             self.lobby.client
             if raise_server_exceptions
             else TestClient(
-                self.lobby.app,
+                self.lobby.served,
                 base_url=A_BROWSERS_ADDRESS,
                 headers=A_BROWSERS_HEADERS,
                 raise_server_exceptions=False,
@@ -129,14 +132,13 @@ def a_scene(
     clock = FrozenClock(instant=NOW)
     people = FakePeople(users=instance.users, sessions=instance.sessions, clock=clock)
     issuer = FakeIssuer(issuer=AN_ISSUER, client_id=A_CLIENT_ID, now=NOW)
-    auth = an_installed_auth(
-        clock,
-        relying_party=a_relying_party(clock, fetch_key_set=issuer.fetch_key_set),
-    )
     app, _ = a_lobby_app(
         people=people,
         signing_in=SigningIn(
-            sessions=instance.sessions, auth=auth, decks=instance.decks
+            sessions=instance.sessions,
+            transaction=NoSignInTransaction(),
+            issuer_calls=an_issuer_calls(fetch_key_set=issuer.fetch_key_set),
+            decks=instance.decks,
         ),
         admin_people=None
         if clients is None
@@ -497,7 +499,7 @@ def test_the_talk_host_serves_no_such_route() -> None:
     scene = a_scene()
     before = scene.state()
     talk = TestClient(
-        a_talk_app(people=scene.people),
+        behind_the_front(a_talk_app(people=scene.people)),
         base_url=A_TALK_ADDRESS,
         follow_redirects=False,
     )

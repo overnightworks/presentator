@@ -12,15 +12,15 @@ from httpx2 import Response
 from pydantic import SecretStr
 from sqlalchemy import Engine, text
 from starlette.types import ASGIApp, Message, Scope
-from webauth.config import WebAuthConfig
-from webauth.oidc import OidcRelyingParty
+from webauth.config import WebAuthConfig, installed_web_auth_config
+from webauth.proxies import TrustedProxies
+from webauth.web_auth import WebAuth
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
-from presentator.api.auth import InstalledAuth
 from presentator.api.copresenter import CoPresenterSurface
-from presentator.api.talk import create_talk, talk_content_security_policy
+from presentator.api.talk import create_talk
 from presentator.application.decks import Decks
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
@@ -38,16 +38,16 @@ from tests.support.lobby import (
     NO_DECKS,
     GivenDecks,
     SigningIn,
+    a_client,
     a_crowd,
     a_decks,
-    a_lobby_app,
-    a_relying_party,
     a_settings,
-    a_talk_web_auth,
-    an_installed_auth,
+    a_talk_auth,
+    an_issuer_calls,
     hand_over_session_cookies,
     put_a_built_deck,
 )
+from tests.support.lobby_app import a_lobby_app
 from tests.support.people import a_session_id, seed_user
 
 ONLY_THIS_TEST_WROTE_IT: Final = "the secret beside the build directory"
@@ -73,8 +73,6 @@ class Hosts:
     router: ASGIApp
     lobby: FastAPI
     talk: FastAPI
-    lobby_auth: InstalledAuth
-    talk_auth: InstalledAuth
     lobby_config: WebAuthConfig
     talk_config: WebAuthConfig
     issuer: FakeIssuer
@@ -176,69 +174,41 @@ class Hosts:
 
 
 type SurfaceFactory = Callable[
-    [FakeDeckStore, PostgresSessions, InstalledAuth], CoPresenterSurface
+    [FakeDeckStore, PostgresSessions, WebAuth], CoPresenterSurface
 ]
-
-
-def _relying_party_at(
-    issuer: FakeIssuer, clock: FrozenClock, origin: str, realm: str, speech_scope: str
-) -> OidcRelyingParty:
-    return a_relying_party(
-        clock,
-        post_token_request=issuer.post_token_request,
-        fetch_key_set=issuer.fetch_key_set,
-        origin=origin,
-        issuer=realm,
-        speech_scope=speech_scope,
-    )
-
-
-def _both_auths(
-    database: Engine,
-    issuer: FakeIssuer,
-    clock: FrozenClock,
-    realm: str,
-    speech_scope: str,
-) -> tuple[InstalledAuth, InstalledAuth]:
-    """The lobby's and the talk host's sign-in wiring over one issuer."""
-    lobby_auth = an_installed_auth(
-        clock,
-        relying_party=_relying_party_at(
-            issuer, clock, A_BROWSERS_ADDRESS, realm, speech_scope
-        ),
-        transaction=PostgresIdentityWrites(database, LoggingAuditSink()),
-        realm=realm,
-    )
-    talk_auth = replace(
-        lobby_auth,
-        config=a_talk_web_auth(clock),
-        relying_party=_relying_party_at(
-            issuer, clock, A_TALK_ADDRESS, realm, speech_scope
-        ),
-        content_security_policy=talk_content_security_policy(),
-    )
-    return lobby_auth, talk_auth
 
 
 def _talk_over(
     sessions: PostgresSessions,
     decks: Decks,
     decks_store: FakeDeckStore,
-    talk_auth: InstalledAuth,
+    web_auth: WebAuth,
     copresenter: SurfaceFactory | None,
 ) -> FastAPI:
     """The talk host, its co-presenter surface made over this instance's store."""
     return create_talk(
         sessions=sessions,
         decks=decks,
-        auth=talk_auth,
+        web_auth=web_auth,
         lobby_origin=A_BROWSERS_ADDRESS,
         copresenter=(
             None
             if copresenter is None
-            else copresenter(decks_store, sessions, talk_auth)
+            else copresenter(decks_store, sessions, web_auth)
         ),
     )
+
+
+def _decks_over_a_store(
+    given: GivenDecks | None, clock: FrozenClock
+) -> tuple[Decks, FakeDeckStore]:
+    """The decks and the store beneath them, A's and B's unless given."""
+    store = FakeDeckStore() if given is None or given.store is None else given.store
+    if given is None:
+        put_a_built_deck(store, slug=A_DECK, owner_id=A.id)
+        put_a_built_deck(store, slug=B_DECK, owner_id=B.id)
+    decks = a_decks(replace(NO_DECKS if given is None else given, store=store), clock)
+    return decks, store
 
 
 def two_hosts(
@@ -258,23 +228,29 @@ def two_hosts(
     """
     people = a_crowd()
     clock = people.clock
-    decks_store = (
-        FakeDeckStore() if given is None or given.store is None else given.store
-    )
-    if given is None:
-        put_a_built_deck(decks_store, slug=A_DECK, owner_id=A.id)
-        put_a_built_deck(decks_store, slug=B_DECK, owner_id=B.id)
-    decks = a_decks(
-        replace(NO_DECKS if given is None else given, store=decks_store), clock
-    )
+    decks, decks_store = _decks_over_a_store(given, clock)
     sessions = PostgresSessions(database)
     issuer = FakeIssuer(issuer=AN_ISSUER, client_id=A_CLIENT_ID, now=clock.now())
-    lobby_auth, talk_auth = _both_auths(database, issuer, clock, realm, speech_scope)
-    talk_config = talk_auth.config
+    transaction = PostgresIdentityWrites(database, LoggingAuditSink())
+    issuer_calls = an_issuer_calls(
+        post_token_request=issuer.post_token_request, fetch_key_set=issuer.fetch_key_set
+    )
     lobby, _ = a_lobby_app(
         people=people,
-        signing_in=SigningIn(sessions=sessions, auth=lobby_auth, decks=decks),
-        trusted_proxies=None,
+        signing_in=SigningIn(
+            sessions=sessions,
+            transaction=transaction,
+            issuer_calls=issuer_calls,
+            client=a_client(issuer=realm, speech_scope=speech_scope),
+            decks=decks,
+        ),
+    )
+    talk_auth = a_talk_auth(
+        clock,
+        sessions=sessions,
+        transaction=transaction,
+        issuer_calls=issuer_calls,
+        client=a_client(origin=A_TALK_ADDRESS, issuer=realm, speech_scope=speech_scope),
     )
     talk = _talk_over(
         PostgresSessions(database), decks, decks_store, talk_auth, copresenter
@@ -283,10 +259,8 @@ def two_hosts(
         router=_served_by_host(lobby, talk),
         lobby=lobby,
         talk=talk,
-        lobby_auth=lobby_auth,
-        talk_auth=talk_auth,
-        lobby_config=lobby_auth.config,
-        talk_config=talk_config,
+        lobby_config=installed_web_auth_config(lobby),
+        talk_config=talk_auth.config,
         issuer=issuer,
         database=database,
         clock=clock,
@@ -300,6 +274,7 @@ def _served_by_host(lobby: FastAPI, talk: FastAPI) -> ASGIApp:
         Instance(
             lobby=lobby,
             talk=talk,
+            trusted_proxies=TrustedProxies.parse(""),
             poller=_never(ChoreCode.SOURCE_POLL),
             session_sweep=_never(ChoreCode.SESSION_SWEEP),
         ),

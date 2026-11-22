@@ -32,11 +32,10 @@ from tests.support.lobby import (
     A_BROWSERS_HEADERS,
     A_LOBBY_ASSET,
     Lobby,
-    a_browser_at,
     a_content_security_policy,
     a_crowd,
-    a_lobby_app,
 )
+from tests.support.lobby_app import a_browser_at, a_lobby_app
 
 _JSON = {"accept": "application/json"}
 _HTML = {"accept": "text/html"}
@@ -88,7 +87,7 @@ def a_lobby_over(
     if raise_server_exceptions:
         return browser
     quiet = TestClient(
-        app,
+        browser.served,
         base_url=A_BROWSERS_ADDRESS,
         follow_redirects=False,
         headers=A_BROWSERS_HEADERS,
@@ -365,7 +364,7 @@ def test_a_dot_segment_reaching_the_route_unnormalised_is_gated(
         ],
     }
 
-    asyncio.run(lobby.app(scope, receive, send))
+    asyncio.run(lobby.served(scope, receive, send))
 
     assert sent[0]["status"] == status
 

@@ -11,13 +11,8 @@ from httpx2 import Response
 from presentator.api.hooks import hook_address
 from presentator.application.decks import hash_webhook_secret
 from presentator.contracts.decks import MANIFEST_FILE, SLIDES_FILE, DeckFolder, Source
-from tests.support.lobby import (
-    ADMIN,
-    NOW,
-    GivenDecks,
-    Lobby,
-    a_lobby,
-)
+from tests.support.lobby import ADMIN, NOW, GivenDecks, Lobby
+from tests.support.lobby_app import a_lobby
 from tests.support.lobby_reads import listed_titles
 
 _SOURCE_A = "alpha"

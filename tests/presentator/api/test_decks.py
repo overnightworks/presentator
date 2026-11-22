@@ -4,12 +4,8 @@ from datetime import timedelta
 from typing import Final
 
 from presentator.contracts.decks import MANIFEST_FILE, SLIDES_FILE, DeckFolder
-from tests.support.lobby import (
-    NOW,
-    GivenDecks,
-    a_configured_source,
-    a_signed_in_lobby,
-)
+from tests.support.lobby import NOW, GivenDecks, a_configured_source
+from tests.support.lobby_app import a_signed_in_lobby
 from tests.support.lobby_reads import deck_list
 
 _ADDRESS: Final = "git@heimserver:decks.git"

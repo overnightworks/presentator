@@ -13,7 +13,7 @@ from starlette.testclient import TestClient, WebSocketDenialResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.websockets import WebSocketDisconnect
 from webauth.config import installed_web_auth_config
-from webauth.oidc import OidcClientConfig, OidcRelyingParty
+from webauth.web_auth import IssuerCalls
 
 from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.api.auth import BACKCHANNEL_LOGOUT_PATH, DEFAULT_BODY_BYTES
@@ -243,19 +243,15 @@ def test_the_talk_hosts_sign_in_stores_no_id_token_while_the_lobbys_does(
         issuer=settings.oidc_issuer, client_id=settings.oidc_client_id, now=now
     )
 
-    def relying_party_over_the_fake_issuer(
-        config: OidcClientConfig,
-    ) -> OidcRelyingParty:
-        return OidcRelyingParty(
-            config,
-            post_token_request=issuer.post_token_request,
-            fetch_key_set=issuer.fetch_key_set,
-            wall_clock=now.timestamp,
-            monotonic_clock=lambda: 0.0,
-        )
-
     router = main.served_by_host(
-        main.build_instance(settings, relying_party_over_the_fake_issuer), settings
+        main.build_instance(
+            settings,
+            IssuerCalls(
+                post_token_request=issuer.post_token_request,
+                fetch_key_set=issuer.fetch_key_set,
+            ),
+        ),
+        settings,
     )
 
     def stored_id_tokens() -> list[str | None]:
