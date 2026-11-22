@@ -122,11 +122,11 @@ Problems follow RFC 9457 with `tag:` URI types.
 
 **Logging.** logline owns it, configured first in each process: every line is one JSON object. One
 line per HTTP request names the route template, never the path, with `sub` and the client address
-from webauth (gates and sign-in callback the person, the host's one `ClientAddressMiddleware` the
-address of every answer). Every other line is a literal `<noun>.<verb_past>` event of ids, counts and
-codes: the web writes `process.started`, `.ready` and `.stopped`, and a start the settings, the
-database or the worker's self-check refuse ends in `process.failed` with a `reason` code and exit
-status 1 (`presentator`) or 2 (`presentator-worker`). Co-presenter events: [co-presenter](co-presenter.md).
+from webauth (gates and sign-in callback the person, its front the address of every answer). webauth
+writes `sign_in.refused` and `sign_in.completed`; every other line is a literal `<noun>.<verb_past>`
+event of ids, counts and codes: the web writes `process.started`, `.ready` and `.stopped`, and a start
+the settings, the database or the worker's self-check refuse ends in `process.failed` with a `reason`
+code and exit status 1 (`presentator`) or 2 (`presentator-worker`). Co-presenter events: [co-presenter](co-presenter.md).
 
 **Words and look.** Every lobby word comes from one gettext catalog per language
 (`frontend/src/lib/catalogs`), generated into typed modules for page and server; the session answer

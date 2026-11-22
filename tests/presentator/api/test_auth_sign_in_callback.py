@@ -486,9 +486,9 @@ def test_an_audit_record_reaches_stdout_as_json_after_the_hosts_logging_setup(
     monkeypatch.setattr(main, "load_settings", a_settings)
 
     def an_instance_without_a_server(
-        settings: object, relying_party_for: object, migrations_directory: object
+        settings: object, issuer_calls: object, migrations_directory: object
     ) -> SimpleNamespace:
-        del settings, relying_party_for, migrations_directory
+        del settings, issuer_calls, migrations_directory
         return SimpleNamespace(lobby=FastAPI())
 
     monkeypatch.setattr(main, "build_instance", an_instance_without_a_server)

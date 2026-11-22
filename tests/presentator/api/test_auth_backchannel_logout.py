@@ -109,7 +109,7 @@ class World:
     ) -> TestClient:
         """A server that sends no browser headers, no cookie and no Origin."""
         return TestClient(
-            self.scene.lobby.app,
+            self.scene.lobby.served,
             base_url=base_url,
             raise_server_exceptions=raise_server_exceptions,
         )
@@ -401,7 +401,7 @@ def test_the_sessions_end_in_one_transaction_off_the_event_loop_before_the_answe
                 log.append(("response-start", None))
             await send(message)
 
-        await world.scene.lobby.app(scope, receive, logging_send)
+        await world.scene.lobby.served(scope, receive, logging_send)
 
     keycloak = TestClient(lobby_that_logs_the_answer, base_url=A_BROWSERS_ADDRESS)
     world.logout_with(keycloak, world.token())

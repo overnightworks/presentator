@@ -14,6 +14,7 @@ from agents.tools import (
 from fastapi import APIRouter, FastAPI
 from sqlalchemy import Engine
 from starlette.routing import BaseRoute, Match, Route
+from webauth.proxies import TrustedProxies
 
 from presentator.agent.mcp import marked_tools
 from tests.presentator.agent.support.mcp_world import World
@@ -58,7 +59,7 @@ def test_the_lobby_offers_exactly_the_pinned_tools(engine: Engine) -> None:
         (method, template, mark.name, mark.effect)
         for method, template, mark in marks_of(app)
     }
-    offered = marked_tools(app)
+    offered = marked_tools(app, trusted_proxies=TrustedProxies.parse(""))
 
     assert marked == {
         ("GET", "/api/decks", "list_decks", ToolEffect.READ_ONLY),

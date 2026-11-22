@@ -24,8 +24,8 @@ from tests.support.lobby import (
     A_TALK_ADDRESS,
     NEIGHBOUR,
     Lobby,
-    a_lobby,
 )
+from tests.support.lobby_app import a_lobby
 from tests.support.log_lines import request_lines
 from tests.support.sign_in_support import ADMIN, Scene, a_scene
 

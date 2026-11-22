@@ -17,14 +17,8 @@ from presentator.contracts.preferences import (
     ThemeChoice,
 )
 from presentator.contracts.words import SOURCE_LANGUAGE
-from tests.support.lobby import (
-    A_BROWSERS_ADDRESS,
-    A_BROWSERS_HEADERS,
-    Lobby,
-    a_browser_at,
-    a_crowd,
-    a_lobby_app,
-)
+from tests.support.lobby import A_BROWSERS_ADDRESS, A_BROWSERS_HEADERS, Lobby, a_crowd
+from tests.support.lobby_app import a_browser_at, a_lobby_app
 from tests.support.people import seed_user
 
 _PERSON = "id-of-felix"

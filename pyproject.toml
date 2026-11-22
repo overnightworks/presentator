@@ -17,7 +17,7 @@ dependencies = [
     "overnightworks-logline @ git+https://github.com/overnightworks/logline@v1.4.0",
     "overnightworks-speech-client @ git+https://github.com/overnightworks/speech@v0.22.0#subdirectory=packages/client",
     "overnightworks-tandem @ git+https://github.com/overnightworks/tandem@v0.13.1",
-    "overnightworks-webauth[postgres,redis] @ git+https://github.com/overnightworks/webauth@v0.42.0",
+    "overnightworks-webauth[postgres,redis] @ git+https://github.com/overnightworks/webauth@v0.43.0",
     "psycopg[binary]==3.3.9",
     "pydantic-settings==2.16.3",
     "sqlalchemy==2.1.8",
@@ -378,11 +378,10 @@ id = "webauth-library"
 name = "Only adapters and the host import webauth"
 type = "forbidden"
 # The library owns the login mechanism. Adapters fill its ports;
-# the host composes WebAuthConfig. The api is not in this list because the
-# routes must read the installed config, sign and clear cookies, answer an
-# unauthenticated request, and read client identity, and install
-# CsrfOriginMiddleware (webauth.config, webauth.cookies, webauth.dependencies,
-# webauth.proxies, webauth.middleware, webauth.ports).
+# the host composes WebAuthConfig. The api is not in this list because it
+# builds each host's whole auth through webauth.web_auth and its policy
+# records, and its routes read the installed config, sign and clear cookies,
+# answer an unauthenticated request, and read client identity.
 source_modules = [
     "presentator.application",
     "presentator.ports",

@@ -13,12 +13,11 @@ import json
 import os
 import sys
 import threading
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
-from webauth.oidc import OidcRelyingParty
+from webauth.web_auth import IssuerCalls
 
 from presentator.adapters.postgres.migrate import MIGRATIONS_DIRECTORY
 from presentator.host.main import main
@@ -82,12 +81,9 @@ def run() -> None:
     main(
         [],
         migrations_directory=_migrations_directory(),
-        relying_party_for=lambda config: OidcRelyingParty(
-            config,
+        issuer_calls=IssuerCalls(
             post_token_request=issuer.post_token_request,
             fetch_key_set=issuer.fetch_key_set,
-            wall_clock=time.time,
-            monotonic_clock=time.monotonic,
         ),
     )
 

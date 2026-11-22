@@ -22,11 +22,13 @@ from httpx2 import Request as BrowserRequest
 from httpx2 import Response as BrowserResponse
 from pydantic import SecretStr
 from speech_client import wire
-from webauth.config import WebAuthConfig, installed_web_auth_config
+from starlette.types import ASGIApp
+from webauth.admission import AdmissionConfig
+from webauth.config import WebAuthConfig
 from webauth.cookies import issue_session_cookies
 from webauth.jwt_verification import KeySetFetch
-from webauth.middleware import ClientAddressMiddleware
 from webauth.oidc import (
+    OidcClientConfig,
     OidcRelyingParty,
     TokenEndpointAnswer,
     TokenEndpointError,
@@ -40,25 +42,21 @@ from webauth.ports import (
     SignInTransaction,
     UserRecord,
 )
-from webauth.proxies import TrustedProxies
+from webauth.web_auth import IssuerCalls, WebAuth
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.builds import PackageJsonThemes
 from presentator.adapters.secrets import talk_session_secret
+from presentator.agent.mcp import MCP_ENDPOINT_PATH
 from presentator.agent.settings import AgentSettings
 from presentator.api.auth import (
-    AgentFront,
-    InstalledAuth,
-    LobbyPrivate,
     content_security_policy,
-    create_lobby,
+    lobby_web_auth,
 )
-from presentator.api.copresenter import CoPresenterSurface
 from presentator.api.lobby_shell import LobbyShell
 from presentator.api.people import AdminPeople
-from presentator.api.talk import create_talk, talk_content_security_policy
+from presentator.api.talk import talk_web_auth
 from presentator.application.decks import Decks
-from presentator.application.own_decks import OwnDecks
 from presentator.application.people import People
 from presentator.application.preferences import Preferences
 from presentator.contracts.decks import (
@@ -75,9 +73,8 @@ from presentator.contracts.decks import (
 from presentator.contracts.models import Role, User
 from presentator.contracts.words import Language
 from presentator.host.config import Settings, WhereBuildsRun
-from presentator.host.main import agent_front, web_auth_config_for
+from presentator.host.main import web_auth_config_for
 from presentator.host.oidc import admission_of, oidc_client_config
-from presentator.ports.copresenter import DeckTexts
 from presentator.ports.decks import BuildRunner
 from presentator.ports.preferences import PersonPreferencesStore
 from tests.presentator.application.support.fakes import (
@@ -102,7 +99,6 @@ from tests.presentator.application.support.fakes import (
 from tests.presentator.application.support.refresh_ownership_fake import (
     FakeRefreshOwnership,
 )
-from tests.support.deck_text_support import FakeDeckTexts
 from tests.support.postgres import NO_DATABASE_HERE
 from tests.support.redis import NOTHING_LISTENS_HERE, in_process_rate_limits
 
@@ -188,6 +184,7 @@ class Lobby:
     """A running lobby, the clock its session hangs on, and the people it knows."""
 
     app: FastAPI
+    served: ASGIApp
     client: TestClient
     clock: FrozenClock
     people: FakePeople
@@ -221,7 +218,7 @@ class Lobby:
         return replace(
             self,
             client=TestClient(
-                self.app,
+                self.served,
                 base_url=str(self.client.base_url),
                 follow_redirects=False,
                 headers=dict(self.client.headers),
@@ -329,6 +326,32 @@ def a_content_security_policy() -> str:
     return content_security_policy(LOBBY_SHELL)
 
 
+def a_client(
+    *,
+    origin: str = A_BROWSERS_ADDRESS,
+    issuer: str = AN_ISSUER,
+    speech_scope: str = A_SPEECH_SCOPE,
+) -> OidcClientConfig:
+    """The issuer's client of the instance, returning to `origin`."""
+    settings = a_settings().model_copy(
+        update={"oidc_issuer": issuer, "speech_service_scope": speech_scope}
+    )
+    return oidc_client_config(settings, SecretStr(A_CLIENT_CREDENTIAL), origin=origin)
+
+
+def an_issuer_calls(
+    *,
+    post_token_request: TokenRequestPost = _no_token_endpoint,
+    fetch_key_set: KeySetFetch = _no_key_set,
+) -> IssuerCalls:
+    """The issuer's transports, which reach nobody unless a test gives some."""
+    return IssuerCalls(
+        post_token_request=post_token_request,
+        fetch_key_set=fetch_key_set,
+        monotonic_clock=lambda: 0.0,
+    )
+
+
 def a_relying_party(  # noqa: PLR0913 - each part is the seam one test replaces
     clock: FrozenClock,
     *,
@@ -338,16 +361,16 @@ def a_relying_party(  # noqa: PLR0913 - each part is the seam one test replaces
     issuer: str = AN_ISSUER,
     speech_scope: str = A_SPEECH_SCOPE,
 ) -> OidcRelyingParty:
-    """The issuer's client, whose transports reach nobody unless a test gives some."""
-    settings = a_settings().model_copy(
-        update={"oidc_issuer": issuer, "speech_service_scope": speech_scope}
+    """A relying party on its own, for a test that proves what only it decides."""
+    calls = an_issuer_calls(
+        post_token_request=post_token_request, fetch_key_set=fetch_key_set
     )
     return OidcRelyingParty(
-        oidc_client_config(settings, SecretStr(A_CLIENT_CREDENTIAL), origin=origin),
-        post_token_request=post_token_request,
-        fetch_key_set=fetch_key_set,
+        a_client(origin=origin, issuer=issuer, speech_scope=speech_scope),
+        post_token_request=calls.post_token_request,
+        fetch_key_set=calls.fetch_key_set,
         wall_clock=lambda: clock.now().timestamp(),
-        monotonic_clock=lambda: 0.0,
+        monotonic_clock=calls.monotonic_clock,
     )
 
 
@@ -393,28 +416,58 @@ class SessionsOnly:
         )
 
 
-def an_installed_auth(
+def _admission_of(client: OidcClientConfig) -> AdmissionConfig:
+    """Admission bound to the realm the client signs in at."""
+    return admission_of(a_settings().model_copy(update={"oidc_issuer": client.issuer}))
+
+
+def a_lobby_auth(  # noqa: PLR0913 - each part is the seam one test replaces
     clock: FrozenClock,
     *,
-    relying_party: OidcRelyingParty | None = None,
+    sessions: SessionRecordStore,
+    preferences: Preferences,
     transaction: SignInTransaction | None = None,
+    issuer_calls: IssuerCalls | None = None,
+    client: OidcClientConfig | None = None,
+    config: WebAuthConfig | None = None,
     shell: LobbyShell = LOBBY_SHELL,
-    realm: str = AN_ISSUER,
-) -> InstalledAuth:
-    """The host's sign-in wiring, each part replaceable by the test that proves it.
+) -> WebAuth:
+    """The host's lobby auth, each part replaceable by the test that proves it.
 
-    `realm` is the issuer the app is configured to trust; admission is bound to it.
+    A handle installs on one app, so each lobby app gets its own.
     """
-    return InstalledAuth(
-        config=a_web_auth(clock),
-        relying_party=a_relying_party(clock)
-        if relying_party is None
-        else relying_party,
-        admission=admission_of(a_settings().model_copy(update={"oidc_issuer": realm})),
-        transaction=NoSignInTransaction() if transaction is None else transaction,
-        content_security_policy=content_security_policy(shell),
-        talk_origin=A_TALK_ADDRESS,
-        issuer=AN_ISSUER,
+    the_client = a_client() if client is None else client
+    return lobby_web_auth(
+        config=a_web_auth(clock) if config is None else config,
+        client=the_client,
+        admission=_admission_of(the_client),
+        sign_in=NoSignInTransaction() if transaction is None else transaction,
+        sessions=sessions,
+        preferences=preferences,
+        shell=shell,
+        own_body_readers=frozenset({MCP_ENDPOINT_PATH}),
+        issuer_calls=an_issuer_calls() if issuer_calls is None else issuer_calls,
+    )
+
+
+def a_talk_auth(
+    clock: FrozenClock,
+    *,
+    sessions: SessionRecordStore,
+    transaction: SignInTransaction | None = None,
+    issuer_calls: IssuerCalls | None = None,
+    client: OidcClientConfig | None = None,
+) -> WebAuth:
+    """The host's talk host auth, signing under its own derived key."""
+    the_client = a_client(origin=A_TALK_ADDRESS) if client is None else client
+    return talk_web_auth(
+        config=a_talk_web_auth(clock),
+        client=the_client,
+        admission=_admission_of(the_client),
+        sign_in=NoSignInTransaction() if transaction is None else transaction,
+        sessions=sessions,
+        lobby_origin=A_BROWSERS_ADDRESS,
+        issuer_calls=an_issuer_calls() if issuer_calls is None else issuer_calls,
     )
 
 
@@ -484,7 +537,10 @@ class SigningIn:
     """The stores and wiring of a lobby a test signs in to through a fake issuer."""
 
     sessions: SessionRecordStore
-    auth: InstalledAuth
+    transaction: SignInTransaction
+    issuer_calls: IssuerCalls | None = None
+    client: OidcClientConfig | None = None
+    config: WebAuthConfig | None = None
     decks: Decks | None = None
 
 
@@ -571,168 +627,6 @@ def a_preferences(
         instance=FakeInstanceSettingsStore(),
         people=FakePersonPreferencesStore() if people is None else people,
     )
-
-
-def an_agent_front(auth: InstalledAuth) -> AgentFront:
-    """The agent's front as the host composes it, at the test origin."""
-    return agent_front(
-        origin=A_BROWSERS_ADDRESS, issuer=AN_ISSUER, transaction=auth.transaction
-    )
-
-
-def with_the_client_address(app: FastAPI, trusted_proxies: str | None) -> FastAPI:
-    """`app` with the writer the host composition puts around its stacks.
-
-    `None` leaves the writer to `served_by_host`, for an app a host composition
-    wraps: its writer overwrites any record an inner one made, so a second writer
-    would replace the host's proxy policy with the builder's.
-    """
-    if trusted_proxies is not None:
-        app.add_middleware(
-            ClientAddressMiddleware,
-            trusted_proxies=TrustedProxies.parse(trusted_proxies),
-        )
-    return app
-
-
-def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
-    *,
-    people: FakePeople | None = None,
-    preferences: Preferences | None = None,
-    given: GivenDecks = NO_DECKS,
-    signing_in: SigningIn | None = None,
-    admin_people: AdminPeople | None = None,
-    agent: AgentFront | None = None,
-    texts: DeckTexts | None = None,
-    shell: LobbyShell = LOBBY_SHELL,
-    trusted_proxies: str | None = "",
-) -> tuple[FastAPI, FrozenClock]:
-    """The whole lobby wiring, so a test that needs two clients shares one app.
-
-    The app carries the client-address writer the host composition adds, for the
-    proxy network `trusted_proxies` names; `None` leaves it to the host that
-    serves the app.
-    """
-    crowd = a_crowd() if people is None else people
-    clock = crowd.clock
-    decks = (
-        a_decks(given, clock)
-        if signing_in is None or signing_in.decks is None
-        else signing_in.decks
-    )
-    auth = (
-        an_installed_auth(clock, transaction=SessionsOnly(crowd.sessions), shell=shell)
-        if signing_in is None
-        else signing_in.auth
-    )
-    lobby = create_lobby(
-        sessions=crowd.sessions if signing_in is None else signing_in.sessions,
-        decks=decks,
-        preferences=a_preferences() if preferences is None else preferences,
-        auth=auth,
-        private=LobbyPrivate(
-            admin_people=admin_people,
-        ),
-        agent=an_agent_front(auth) if agent is None else agent,
-        own_decks=OwnDecks(
-            decks=decks.store,
-            sources=decks.sources,
-            texts=FakeDeckTexts(text=None) if texts is None else texts,
-        ),
-        shell=shell,
-    )
-    return with_the_client_address(lobby, trusted_proxies), clock
-
-
-def a_talk_app(
-    *,
-    people: FakePeople,
-    copresenter: CoPresenterSurface | None = None,
-    trusted_proxies: str | None = "",
-) -> FastAPI:
-    """The whole talk host over the lobby's people, with the co-presenter it serves."""
-    clock = people.clock
-    return with_the_client_address(
-        create_talk(
-            sessions=people.sessions,
-            decks=a_decks(NO_DECKS, clock),
-            auth=replace(
-                an_installed_auth(clock, transaction=SessionsOnly(people.sessions)),
-                config=a_talk_web_auth(clock),
-                content_security_policy=talk_content_security_policy(),
-            ),
-            lobby_origin=A_BROWSERS_ADDRESS,
-            copresenter=copresenter,
-        ),
-        trusted_proxies,
-    )
-
-
-def a_browser_at(
-    app: FastAPI,
-    *,
-    people: FakePeople,
-    base_url: str,
-    headers: dict[str, str],
-) -> Lobby:
-    """A browser at an app built over `people`, with nobody signed in yet."""
-    return Lobby(
-        app=app,
-        client=TestClient(
-            app,
-            base_url=base_url,
-            follow_redirects=False,
-            headers=headers,
-        ),
-        clock=people.clock,
-        people=people,
-        config=installed_web_auth_config(app),
-    )
-
-
-def a_lobby(
-    *,
-    users: FakeUserStore | None = None,
-    given: GivenDecks = NO_DECKS,
-    person_preferences: PersonPreferencesStore | None = None,
-) -> Lobby:
-    """The whole lobby, with in-memory stores behind every port."""
-    people = a_crowd(users)
-    app, _ = a_lobby_app(
-        people=people,
-        preferences=a_preferences(people=person_preferences),
-        given=given,
-    )
-    return a_browser_at(
-        app,
-        people=people,
-        base_url=A_BROWSERS_ADDRESS,
-        headers=A_BROWSERS_HEADERS,
-    )
-
-
-def a_lobby_that_claims_no_origin_of_its_own() -> Lobby:
-    """A browser old enough to omit Sec-Fetch-Site, for a test that names its own.
-
-    `a_lobby`'s client already claims `Sec-Fetch-Site: same-origin` so most
-    tests never have to; a test proving what an absent or a foreign claim
-    does needs a client that makes no claim of its own to be overridden.
-    """
-    people = a_crowd()
-    app, _ = a_lobby_app(people=people)
-    return a_browser_at(
-        app,
-        people=people,
-        base_url=A_BROWSERS_ADDRESS,
-        headers={"accept": "text/html"},
-    )
-
-
-def a_signed_in_lobby(given: GivenDecks = NO_DECKS) -> TestClient:
-    """The same lobby with its admin's session open."""
-    lobby = a_lobby(given=given)
-    lobby.sign_in()
-    return lobby.client
 
 
 def put_a_built_deck(

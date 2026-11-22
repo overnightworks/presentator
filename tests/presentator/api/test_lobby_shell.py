@@ -22,13 +22,8 @@ from presentator.contracts.preferences import (
 )
 from presentator.contracts.words import SOURCE_LANGUAGE
 from tests.presentator.application.support.fakes import FakePersonPreferencesStore
-from tests.support.lobby import (
-    A_LOBBY_ASSET,
-    ADMIN,
-    LOBBY_SHELL,
-    Lobby,
-    a_lobby,
-)
+from tests.support.lobby import A_LOBBY_ASSET, ADMIN, LOBBY_SHELL, Lobby
+from tests.support.lobby_app import a_lobby
 
 _HTML = (
     f'<html lang="{LANGUAGE_MARK}" data-theme="{THEME_MARK}"><body>{{}}</body></html>'

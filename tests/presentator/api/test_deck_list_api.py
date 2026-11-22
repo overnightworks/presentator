@@ -29,9 +29,9 @@ from tests.support.lobby import (
     Lobby,
     a_configured_source,
     a_decks,
-    a_lobby,
     put_a_built_deck,
 )
+from tests.support.lobby_app import a_lobby
 from tests.support.sign_in_support import MEMBER, a_scene
 
 
@@ -236,7 +236,7 @@ def test_a_failing_store_answers_500_without_deck_data() -> None:
     lobby = a_lobby(given=GivenDecks(store=_BrokenStore()))
     lobby.sign_in()
     client = TestClient(
-        lobby.app,
+        lobby.served,
         base_url=str(lobby.client.base_url),
         headers=dict(lobby.client.headers),
         cookies=lobby.client.cookies,

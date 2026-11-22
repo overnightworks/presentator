@@ -21,11 +21,11 @@ from presentator.contracts.decks import DECK_PATH
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_TALK_ADDRESS,
+    NoSignInTransaction,
     SigningIn,
     a_crowd,
-    a_lobby_app,
-    an_installed_auth,
 )
+from tests.support.lobby_app import a_lobby_app, behind_the_front
 from tests.support.talk_support import Hosts, two_hosts
 
 _AN_OTHER_PATH = "/somewhere-else"
@@ -99,14 +99,14 @@ def test_a_path_that_only_starts_like_the_deck_directory_spends_the_default_budg
 
 def test_behind_a_trusted_proxy_each_forwarded_address_has_its_own_budget() -> None:
     people = a_crowd()
-    auth = an_installed_auth(people.clock)
     app, _ = a_lobby_app(
         people=people,
-        signing_in=SigningIn(sessions=people.sessions, auth=auth),
-        trusted_proxies=_PROXY_NETWORK,
+        signing_in=SigningIn(
+            sessions=people.sessions, transaction=NoSignInTransaction()
+        ),
     )
     through_the_proxy = TestClient(
-        app,
+        behind_the_front(app, trusted_proxies=_PROXY_NETWORK),
         base_url=A_BROWSERS_ADDRESS,
         client=(_A_PROXY, 1),
         follow_redirects=False,

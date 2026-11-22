@@ -22,9 +22,8 @@ from tests.support.lobby import (
     GivenDecks,
     Lobby,
     a_configured_source,
-    a_lobby,
-    a_signed_in_lobby,
 )
+from tests.support.lobby_app import a_lobby, a_signed_in_lobby
 
 SOURCES_PAGE = "/settings/sources"
 _ADDRESS = "git@heimserver:decks.git"

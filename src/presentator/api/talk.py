@@ -13,9 +13,11 @@ from http import HTTPStatus
 from typing import Final
 
 from fastapi import FastAPI, Request, Response
-from webauth.config import install_web_auth_config
+from starlette.middleware import Middleware
+from webauth.admission import AdmissionConfig
+from webauth.config import WebAuthConfig
 from webauth.middleware.session_gate import SessionGate
-from webauth.middleware.stack import install_web_auth_middleware
+from webauth.oidc import OidcClientConfig
 from webauth.policies import (
     BodySizePolicy,
     CacheControlRule,
@@ -26,15 +28,22 @@ from webauth.policies import (
     SecurityHeadersPolicy,
     default_content_security_policy,
 )
-from webauth.ports import SessionRecordStore
-from webauth.sign_in_routes import SignInRefusal, install_sign_in_routes
+from webauth.ports import SessionRecordStore, SignInTransaction
+from webauth.sign_in_routes import SignInRefusal
+from webauth.web_auth import (
+    IssuerCalls,
+    ServedBehind,
+    SignInPages,
+    WebAuth,
+    WebAuthSettings,
+    WebAuthStores,
+)
 
 from presentator.api.admission import signed_in_connection
 from presentator.api.auth import (
     DEFAULT_BODY_BYTES,
     TALK_RATE_LIMIT,
     TALK_SIGN_IN,
-    InstalledAuth,
     talk_sign_in_refusal_path,
 )
 from presentator.api.copresenter import CoPresenterSurface, add_copresenter_routes
@@ -67,45 +76,32 @@ def talk_content_security_policy() -> str:
     )
 
 
-def _install_talk_middleware(
-    talk: FastAPI, auth: InstalledAuth, sessions: SessionRecordStore
-) -> None:
-    # Added before the library stack, these run inside the session gate.
-    talk.add_middleware(StorableJsonBodies)
-    install_web_auth_middleware(
-        talk,
-        sign_in_paths=TALK_SIGN_IN,
-        security_headers=SecurityHeadersPolicy(
-            content_security_policy=auth.content_security_policy,
-            permissions_policy=TALK_PERMISSIONS_POLICY,
-            cache_control_rules=(
-                CacheControlRule(PathRules(prefixes=(_ROOT,)), "no-store"),
-            ),
-        ),
-        body_size=BodySizePolicy(default_max_bytes=DEFAULT_BODY_BYTES),
-        rate_limit=TALK_RATE_LIMIT,
-        csrf_origin=CsrfPolicy(),
-        session_gate=SessionGate(
-            session_transaction=lambda: nullcontext(sessions),
-            login_redirect=TALK_SIGN_IN.login_redirect,
-            public=(
-                PublicRule(PathRules(exact=frozenset({_ROOT}))),
-                HEALTH_IS_PUBLIC,
-            ),
+def _talk_security_headers() -> SecurityHeadersPolicy:
+    """The headers every answer of the talk host carries."""
+    return SecurityHeadersPolicy(
+        content_security_policy=talk_content_security_policy(),
+        permissions_policy=TALK_PERMISSIONS_POLICY,
+        cache_control_rules=(
+            CacheControlRule(PathRules(prefixes=(_ROOT,)), "no-store"),
         ),
     )
 
 
-def create_talk(  # noqa: PLR0913 - the composition root's one call names each owner
+def talk_web_auth(  # noqa: PLR0913 - the host's one call names each input of the talk host's auth
     *,
+    config: WebAuthConfig,
+    client: OidcClientConfig,
+    admission: AdmissionConfig,
+    sign_in: SignInTransaction,
     sessions: SessionRecordStore,
-    decks: Decks,
-    auth: InstalledAuth,
     lobby_origin: str,
-    copresenter: CoPresenterSurface | None = None,
-    readiness: Readiness = always_ready,
-) -> FastAPI:
-    """Build the talk host around the same stores and use cases as the lobby."""
+    issuer_calls: IssuerCalls | None = None,
+) -> WebAuth:
+    """The talk host's auth, built before its routes and installed after the last one.
+
+    The talk host has no page of its own, so a refused sign-in is answered by a
+    redirect to the lobby's refusal route.
+    """
 
     def refused(_request: Request, refusal: SignInRefusal) -> Response:
         answer = Response(status_code=HTTPStatus.SEE_OTHER)
@@ -114,6 +110,50 @@ def create_talk(  # noqa: PLR0913 - the composition root's one call names each o
         )
         return answer
 
+    return WebAuth.build(
+        WebAuthSettings(
+            config=config,
+            client=client,
+            sign_in_paths=TALK_SIGN_IN,
+            keeps_id_token=False,
+            max_sessions=None,
+            security_headers=_talk_security_headers(),
+            csrf_origin=CsrfPolicy(),
+            body_size=BodySizePolicy(default_max_bytes=DEFAULT_BODY_BYTES),
+            rate_limit=TALK_RATE_LIMIT,
+        ),
+        stores=WebAuthStores(sign_in=sign_in, sessions=lambda: nullcontext(sessions)),
+        groups=admission,
+        pages=SignInPages(
+            refused=refused,
+            logout_page_text=None,
+            ui_language=lambda request: language_of(request, sessions),
+        ),
+        front=ServedBehind.SHARED_FRONT,
+        gate=SessionGate(
+            login_redirect=TALK_SIGN_IN.login_redirect,
+            public=(
+                PublicRule(PathRules(exact=frozenset({_ROOT}))),
+                HEALTH_IS_PUBLIC,
+            ),
+        ),
+        # Added inside the gate, so a body is read once the person is known.
+        inside=(Middleware(StorableJsonBodies),),
+        issuer_calls=issuer_calls,
+    )
+
+
+def create_talk(  # noqa: PLR0913 - the composition root's one call names each owner
+    *,
+    sessions: SessionRecordStore,
+    decks: Decks,
+    web_auth: WebAuth,
+    lobby_origin: str,
+    copresenter: CoPresenterSurface | None = None,
+    readiness: Readiness = always_ready,
+) -> FastAPI:
+    """Build the talk host around the same stores and use cases as the lobby."""
+
     def to_the_lobby() -> Response:
         answer = Response(status_code=HTTPStatus.SEE_OTHER)
         answer.headers["location"] = lobby_origin
@@ -121,22 +161,8 @@ def create_talk(  # noqa: PLR0913 - the composition root's one call names each o
 
     talk = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     install_error_answers(talk)
-    install_web_auth_config(talk, auth.config)
-    _install_talk_middleware(talk, auth, sessions)
     add_health_route(talk, readiness)
     talk.add_api_route(_ROOT, to_the_lobby, methods=["GET"])
-    install_sign_in_routes(
-        talk,
-        paths=TALK_SIGN_IN,
-        relying_party=lambda _request: auth.relying_party,
-        admission=auth.admission,
-        transaction=auth.transaction,
-        refused=refused,
-        keeps_id_token=False,
-        max_sessions=None,
-        ui_language=lambda request: language_of(request, sessions),
-        logout_page_text=None,
-    )
     add_talk_mount(talk, decks=decks)
     if copresenter is not None:
         add_copresenter_routes(
@@ -145,4 +171,5 @@ def create_talk(  # noqa: PLR0913 - the composition root's one call names each o
             admission=lambda connection: signed_in_connection(connection, sessions),
             sessions=sessions,
         )
+    web_auth.install(talk, bearer=None)
     return talk

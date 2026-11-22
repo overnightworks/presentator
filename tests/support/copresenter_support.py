@@ -59,11 +59,10 @@ from tests.support.lobby import (
     AN_API_GROUP,
     SOURCE_ID,
     Lobby,
-    a_browser_at,
     a_crowd,
-    a_talk_app,
     an_agent_config,
 )
+from tests.support.lobby_app import a_browser_at, a_talk_app
 from tests.support.talk_support import A_DECK as A_TALKED_DECK
 from tests.support.talk_support import A, Hosts, two_hosts
 
@@ -79,9 +78,9 @@ if TYPE_CHECKING:
     from fastapi.testclient import TestClient
     from httpx2 import Response
     from sqlalchemy import Engine
+    from webauth.web_auth import WebAuth
 
     from presentator.adapters.postgres.sessions import PostgresSessions
-    from presentator.api.auth import InstalledAuth
     from presentator.ports.copresenter import (
         AgentAnswers,
         DeckTexts,
@@ -621,7 +620,7 @@ class Scenario:
     headers: Mapping[str, str] = field(default_factory=dict[str, str])
 
 
-def _access_over(auth: InstalledAuth, sessions: PostgresSessions) -> SessionAccess:
+def _access_over(auth: WebAuth, sessions: PostgresSessions) -> SessionAccess:
     return SessionAccess(
         auth.relying_party,
         sessions,
@@ -659,7 +658,7 @@ def drive(engine: Engine, scenario: Scenario = Scenario()) -> Run:
             await scenario.delay(gateway, hosts_made[0], seconds)
 
     def surface(
-        store: FakeDeckStore, sessions: PostgresSessions, auth: InstalledAuth
+        store: FakeDeckStore, sessions: PostgresSessions, auth: WebAuth
     ) -> CoPresenterSurface:
         return CoPresenterSurface(
             use=CoPresenterUse(

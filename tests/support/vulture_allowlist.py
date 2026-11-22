@@ -80,6 +80,7 @@ LoggingAuditSink.account_event
 # Pydantic writes these fields into `GET /api/session`; the lobby pages read them.
 SessionAddresses.logout
 SessionAddresses.talk_start
+SessionAddresses.account_console_url
 SessionView.sign_in
 
 # `dataclasses.asdict` writes every field of a person's data export.

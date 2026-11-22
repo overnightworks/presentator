@@ -12,10 +12,9 @@ from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
     A_TALK_ADDRESS,
-    a_browser_at,
     a_crowd,
-    a_lobby_app,
 )
+from tests.support.lobby_app import a_browser_at, a_lobby_app
 from tests.support.talk_support import two_hosts
 
 _HOSTS = [A_BROWSERS_ADDRESS, A_TALK_ADDRESS]

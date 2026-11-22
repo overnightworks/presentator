@@ -169,7 +169,7 @@ def _a_world_over(
         texts=FakeDeckTexts() if texts is None else texts,
     )
     program = TestClient(
-        scene.lobby.app, base_url=A_BROWSERS_ADDRESS, follow_redirects=False
+        scene.lobby.served, base_url=A_BROWSERS_ADDRESS, follow_redirects=False
     )
     if entering_the_lifespan:
         stack.enter_context(program)

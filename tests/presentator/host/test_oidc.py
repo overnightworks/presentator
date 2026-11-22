@@ -7,16 +7,13 @@ from pydantic import SecretStr
 from sqlalchemy import Engine
 
 from presentator.adapters.audit import LoggingAuditSink
+from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.adapters.shared_redis import SharedRedis
 from presentator.host import main
 from presentator.host.config import load_settings, read_secret_file
 from presentator.host.environment import ConfigurationError
-from presentator.host.oidc import (
-    client_configs_of,
-    oidc_client_config,
-    relying_party,
-)
+from presentator.host.oidc import client_configs_of, oidc_client_config
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_CLIENT_CREDENTIAL,
@@ -25,6 +22,7 @@ from tests.support.lobby import (
     A_TALK_ADDRESS,
     AN_ISSUER,
     LOBBY_SHELL,
+    a_preferences,
     a_settings,
 )
 
@@ -104,18 +102,6 @@ def test_the_secret_file_is_read_with_one_trailing_newline_stripped(
         ).get_secret_value()
         == secret
     )
-
-
-def test_the_relying_party_begins_a_login_at_the_issuer_the_settings_name(
-    environment: pytest.MonkeyPatch,
-) -> None:
-    del environment
-
-    started = relying_party(client_configs_of(load_settings())[0]).begin_login(
-        ui_locales=None
-    )
-
-    assert started.url.startswith(f"{AN_ISSUER}/protocol/openid-connect/auth?")
 
 
 @pytest.mark.parametrize(
@@ -287,24 +273,25 @@ def test_the_talk_origin_must_be_another_canonical_https_hostname(
 
 
 # T15.
-def test_both_hosts_share_the_one_identity_writes_owner(
+def test_each_host_signs_its_cookies_under_its_own_key_and_begins_a_login_at_the_issuer(
     environment: pytest.MonkeyPatch, engine: Engine
 ) -> None:
     del environment
 
     settings = load_settings()
-    writes = PostgresIdentityWrites(engine, LoggingAuditSink())
 
-    lobby, talk = main.installed_auths(
+    lobby, talk = main.built_auths(
         settings,
-        LOBBY_SHELL,
-        writes,
-        SharedRedis(settings.redis_url.get_secret_value()),
+        sign_in=PostgresIdentityWrites(engine, LoggingAuditSink()),
+        sessions=PostgresSessions(engine),
+        preferences=a_preferences(),
+        shell=LOBBY_SHELL,
+        redis=SharedRedis(settings.redis_url.get_secret_value()),
     )
 
-    assert talk.transaction is lobby.transaction is writes
     assert talk.config.session_secret != lobby.config.session_secret
-    assert talk.relying_party is not lobby.relying_party
+    started = lobby.relying_party.begin_login(ui_locales=None)
+    assert started.url.startswith(f"{AN_ISSUER}/protocol/openid-connect/auth?")
 
 
 @pytest.mark.parametrize(
