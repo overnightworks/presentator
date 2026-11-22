@@ -10,6 +10,7 @@ CLIENT = "agents"
 SETTINGS_MODULE = SOURCE / "agent" / "settings.py"
 CONNECTOR = SOURCE / "agent" / "backend.py"
 MCP_FRONT = SOURCE / "agent" / "mcp.py"
+VOICE_LOOP = SOURCE / "agent" / "voice_loop.py"
 # The routes declare their tool decision with the one module import-linter cannot
 # separate from the rest of the client.
 API = SOURCE / "api"
@@ -43,8 +44,9 @@ def names(module: str, library: str) -> bool:
 def test_the_agent_package_names_the_client_and_api_only_its_tools_module(
     path: Path,
 ) -> None:
-    """C14: the connector and the MCP front name the client; settings, its config.
+    """C14: the connector, the MCP front and the voice loop name the client.
 
+    Settings name its config only.
     The routes of `api` name its tools module and no other.
     """
     client = {module for module in imported_modules(path) if names(module, CLIENT)}
@@ -60,5 +62,5 @@ def test_the_agent_package_names_the_client_and_api_only_its_tools_module(
         assert client == {f"{CLIENT}.config", f"{CLIENT}.config.AgentConfig"}
     elif path.is_relative_to(API):
         assert all(names(module, ROUTE_DECISIONS) for module in client)
-    elif path not in {CONNECTOR, MCP_FRONT}:
+    elif path not in {CONNECTOR, MCP_FRONT, VOICE_LOOP}:
         assert client == set()

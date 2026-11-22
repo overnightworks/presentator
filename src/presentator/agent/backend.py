@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Final, NoReturn, assert_never
 from agents.agent_file import load_agent
 from agents.backend import (
     AgentBackend,
+    GroupSource,
     TurnEvent,
     TurnPerson,
     TurnStopKind,
@@ -139,27 +140,32 @@ def _count_of(event: TurnEvent) -> _EventCount:
             assert_never(event)
 
 
-class _RunSummary:
+class RunSummary:
     """What a run showed, without a word of its content."""
 
     def __init__(self, clock: Callable[[], float]) -> None:
+        """Start timing the run on this clock."""
         self._clock = clock
         self._started = clock()
         self._counts = dict.fromkeys(_EventCount, 0)
         self._first_move_ms: int | None = None
 
     def note_move(self) -> None:
+        """Mark the first finished slide move."""
         if self._first_move_ms is None:
             self._first_move_ms = self._elapsed_ms()
 
     def note(self, event: TurnEvent) -> None:
+        """Count one event of the turn."""
         self._counts[_count_of(event)] += 1
 
     @property
     def has_events(self) -> bool:
+        """Whether the turn showed any event."""
         return any(self._counts.values())
 
     def log(self) -> None:
+        """Write the `gateway_run.ended` line."""
         _LOGGER.info(
             _RUN_EVENT,
             extra={
@@ -210,7 +216,7 @@ class GatewayAnswerer:
                 stop_outcome=StopOutcome.UNAVAILABLE,
             )
             _unavailable()
-        summary = _RunSummary(self._monotonic)
+        summary = RunSummary(self._monotonic)
         async with aclosing(
             self._backend.run(request, self._turn_person(person))
         ) as events:
@@ -223,43 +229,70 @@ class GatewayAnswerer:
                     summary.log()
 
     def _turn_person(self, person: AskingPerson) -> TurnPerson:
-        # webauth binds the store to one issuer and an account's id is that issuer's
-        # `sub`. Two spellings of the issuer would split one person's budget, so it
-        # goes out exactly as the relying party holds it.
-        principal = Principal(iss=self._relying_party.issuer, sub=person.subject)
-        role: AgentRole = "admin" if person.role is Role.ADMIN else "user"
-
         async def groups() -> frozenset[str]:  # NOSONAR(S7503) the client awaits it
             return person.groups
 
-        return TurnPerson(principal, role, groups)
+        return turn_person(
+            self._relying_party, subject=person.subject, role=person.role, groups=groups
+        )
+
+
+def turn_person(
+    relying_party: OidcRelyingParty,
+    *,
+    subject: str,
+    role: Role,
+    groups: GroupSource,
+) -> TurnPerson:
+    """The person a turn is for, as the gateway knows them."""
+    # webauth binds the store to one issuer and an account's id is that issuer's
+    # `sub`. Two spellings of the issuer would split one person's budget, so it
+    # goes out exactly as the relying party holds it.
+    principal = Principal(iss=relying_party.issuer, sub=subject)
+    agent_role: AgentRole = "admin" if role is Role.ADMIN else "user"
+    return TurnPerson(principal, agent_role, groups)
+
+
+class SlideMoves:
+    """Pairs each `show_slide` call with its result: the slides really moved to."""
+
+    def __init__(self) -> None:
+        """Start with no call seen."""
+        self._asked: dict[str, int] = {}
+
+    def moved(self, event: TurnEvent) -> int | None:
+        """The slide a finished move shows when `event` is its result, else nothing."""
+        match event:
+            case ToolCallEvent(
+                tool_use_id=call_id, name=SHOW_SLIDE.declaration.name
+            ) if (number := _slide_number(event.input)) is not None:
+                self._asked[call_id] = number
+                return None
+            case ToolResultEvent(tool_use_id=call_id, is_error=False) if (
+                call_id in self._asked
+            ):
+                return self._asked[call_id]
+            case _:
+                return None
 
 
 async def _answered(
-    events: AsyncIterator[TurnEvent], summary: _RunSummary
+    events: AsyncIterator[TurnEvent], summary: RunSummary
 ) -> AsyncGenerator[str | ShowSlide]:
-    asked_slides: dict[str, int] = {}
+    moves = SlideMoves()
     try:
         async for event in events:
             summary.note(event)
+            if (number := moves.moved(event)) is not None:
+                summary.note_move()
+                yield ShowSlide(number=number)
             match event:
                 case AssistantTextEvent(text=text):
                     yield text
-                case ToolCallEvent(
-                    tool_use_id=call_id, name=SHOW_SLIDE.declaration.name
-                ) if (number := _slide_number(event.input)) is not None:
-                    asked_slides[call_id] = number
-                case ToolCallEvent():
-                    continue
-                case ToolResultEvent(tool_use_id=call_id, is_error=False) if (
-                    call_id in asked_slides
-                ):
-                    summary.note_move()
-                    yield ShowSlide(number=asked_slides[call_id])
-                case ToolResultEvent():
-                    continue
                 case FinalEvent():
                     return
+                case ToolCallEvent() | ToolResultEvent():
+                    continue
                 case _:
                     assert_never(event)
     except TurnStopped as stopped:
@@ -288,7 +321,8 @@ def _log_stop(
     )
 
 
-def _refuse(stopped: TurnStopped) -> NoReturn:
+def log_stopped(stopped: TurnStopped) -> None:
+    """Write the `gateway_turn.stopped` line of a turn the gateway stopped."""
     _log_stop(
         stopped.kind,
         reason=stopped.code,
@@ -296,6 +330,10 @@ def _refuse(stopped: TurnStopped) -> NoReturn:
         detail=stopped.detail,
         retry_after_s=stopped.retry_after_s,
     )
+
+
+def _refuse(stopped: TurnStopped) -> NoReturn:
+    log_stopped(stopped)
     match stopped.outcome:
         case StopOutcome.NOT_ENABLED:
             raise_without_chain(NotEnabledError())

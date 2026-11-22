@@ -47,6 +47,7 @@ from presentator.api.auth import (
     talk_sign_in_refusal_path,
 )
 from presentator.api.copresenter import CoPresenterSurface, add_copresenter_routes
+from presentator.api.copresenter_talk import add_copresenter_talk_route
 from presentator.api.decks import add_talk_mount
 from presentator.api.health import (
     HEALTH_IS_PUBLIC,
@@ -166,6 +167,12 @@ def create_talk(  # noqa: PLR0913 - the composition root's one call names each o
     add_talk_mount(talk, decks=decks)
     if copresenter is not None:
         add_copresenter_routes(
+            talk,
+            surface=copresenter,
+            admission=lambda connection: signed_in_connection(connection, sessions),
+            sessions=sessions,
+        )
+        add_copresenter_talk_route(
             talk,
             surface=copresenter,
             admission=lambda connection: signed_in_connection(connection, sessions),

@@ -14,6 +14,7 @@ from presentator.adapters.session_access import SessionAccess
 from presentator.adapters.shared_redis import SharedRedis
 from presentator.adapters.speech import SpeechHearing, SpeechSpeaking
 from presentator.agent.backend import gateway_answerer
+from presentator.agent.voice_loop import voice_loop_talks
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.api.health import Stopping
 from presentator.application.copresenter import CoPresenterUse
@@ -50,6 +51,7 @@ def copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands 
             speaking=SpeechSpeaking(
                 settings.speech_service, voices=settings.speech_voices
             ),
+            talks=voice_loop_talks(settings.agent, web_auth.relying_party),
             person_access=SessionAccess(
                 web_auth.relying_party,
                 sessions,

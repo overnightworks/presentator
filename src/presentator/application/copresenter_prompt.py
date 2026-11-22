@@ -26,6 +26,12 @@ def user_message(question: Question, deck_text: DeckText) -> str:
     )
 
 
+def deck_context(deck_text: DeckText) -> str:
+    """The deck's words, pinned for a talk; the lines tell which slide is shown."""
+    pages = "\n\n".join(_page(slide) for slide in deck_text.slides)
+    return f"Deck: {deck_text.title}\n\n--- DECK ---\n{pages}\n--- END DECK ---"
+
+
 def _page(slide: SlideText, *, current_mark: bool = False) -> str:
     mark = " (current)" if current_mark else ""
     notes = f"\nSpeaker notes: {slide.notes}" if slide.notes else ""

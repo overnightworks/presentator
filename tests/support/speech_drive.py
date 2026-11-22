@@ -27,6 +27,7 @@ from presentator.adapters.speech import (
     SpeechSpeaking,
 )
 from presentator.agent.backend import gateway_answerer
+from presentator.agent.voice_loop import voice_loop_talks
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.application.copresenter import CoPresenterUse
 from presentator.contracts.copresenter import (
@@ -221,7 +222,7 @@ class WitnessedSpeech:
             self._errors.append(error)
             raise
 
-    async def relay(
+    async def relay(  # noqa: PLR0913 - the port's signature
         self,
         browser: HearingSocket,
         language: str,
@@ -229,10 +230,11 @@ class WitnessedSpeech:
         *,
         ended: asyncio.Event,
         heard: Callable[[HearingTranscript], Awaitable[None]],
+        text: Callable[[str], None] | None = None,
     ) -> None:
         try:
             await self._speech.relay(
-                browser, language, tokens, ended=ended, heard=heard
+                browser, language, tokens, ended=ended, heard=heard, text=text
             )
         except BaseException as error:
             self._errors.append(error)
@@ -306,6 +308,9 @@ def a_surface_over(  # noqa: PLR0913 - each part is one thing the instance varie
                 texts=FakeDeckTexts(),
                 boundaries=split_sentences,
                 speaking=WitnessedSpeaking(speaking, errors),
+                talks=voice_loop_talks(
+                    an_agent_config(), auth.relying_party, transport=gateway
+                ),
                 person_access=WitnessedAccess(
                     SessionAccess(
                         auth.relying_party,

@@ -66,10 +66,10 @@ if TYPE_CHECKING:
     from presentator.contracts.models import Role, User
 
 _CHECK_INTERVAL_SECONDS: Final = 0.5
-_POLICY_VIOLATION: Final = 1008
-_INTERNAL_ERROR: Final = 1011
-_SERVICE_RESTART: Final = 1012
-_GENERIC_ANSWER_FAILURE: Final = "the answer could not be spoken"
+POLICY_VIOLATION: Final = 1008
+INTERNAL_ERROR: Final = 1011
+SERVICE_RESTART: Final = 1012
+GENERIC_ANSWER_FAILURE: Final = "the answer could not be spoken"
 MAX_SAID_LENGTH: Final = 2_000
 
 _log = logging.getLogger(__name__)
@@ -130,15 +130,19 @@ class CoPresenterSurface:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class _SessionGuard:
+class SessionGuard:
+    """Whether a connection still belongs to its session, checked on a delay."""
+
     admission: Admission
     delay: Delay
 
     def same_session(self, connection: HTTPConnection, session_id: str) -> bool:
+        """Whether the connection is still admitted as this session."""
         admitted = self.admission(connection)
         return admitted is not None and admitted.session_id == session_id
 
     async def wait(self) -> None:
+        """Wait until the next check."""
         await self.delay(_CHECK_INTERVAL_SECONDS)
 
 
@@ -166,7 +170,7 @@ def add_copresenter_routes(
 ) -> None:
     """Add the exact signed-in co-presenter allowlist to the talk host."""
     router = APIRouter(prefix="/copresenter")
-    guard = _SessionGuard(admission=admission, delay=surface.delay)
+    guard = SessionGuard(admission=admission, delay=surface.delay)
 
     router.add_api_route(
         "/who",
@@ -192,7 +196,7 @@ def add_copresenter_routes(
 
 
 def _hear_route(
-    surface: CoPresenterSurface, admission: Admission, guard: _SessionGuard
+    surface: CoPresenterSurface, admission: Admission, guard: SessionGuard
 ) -> Callable[[WebSocket, str], Awaitable[None]]:
     async def _hear(socket: WebSocket, language: str = SOURCE_LANGUAGE) -> None:
         if (
@@ -200,15 +204,15 @@ def _hear_route(
             or any(key != "language" for key in socket.query_params)
             or len(socket.query_params.getlist("language")) > 1
         ):
-            await socket.close(code=_POLICY_VIOLATION)
+            await socket.close(code=POLICY_VIOLATION)
             return
         connection = admission(socket)
         if connection is None:
-            await socket.close(code=_POLICY_VIOLATION)
+            await socket.close(code=POLICY_VIOLATION)
             return
         await socket.accept()
         if surface.stopping():
-            await socket.close(code=_SERVICE_RESTART)
+            await socket.close(code=SERVICE_RESTART)
             return
         await _hearing_lease(
             socket,
@@ -318,7 +322,7 @@ def _ask_route(
     surface: CoPresenterSurface,
     *,
     admission: Admission,
-    guard: _SessionGuard,
+    guard: SessionGuard,
     interface_language: Callable[[Request], Language],
 ) -> Callable[[Request, AskRequest], Awaitable[Response]]:
     ask_admission = _AskAdmission(
@@ -490,12 +494,12 @@ async def _answer_events(
     ask: _Ask,
     prepared: PreparedAsk,
     use: CoPresenterUse,
-    guard: _SessionGuard,
+    guard: SessionGuard,
 ) -> AsyncIterator[bytes]:
     step = ask.step
     loop = asyncio.get_running_loop()
     session_watch = asyncio.create_task(
-        _watch_session(request, session_id=ask.ticket.session_id, guard=guard)
+        watch_session(request, session_id=ask.ticket.session_id, guard=guard)
     )
     try:
         async with step:
@@ -514,7 +518,7 @@ async def _answer_events(
                                 return_when=asyncio.FIRST_COMPLETED,
                             )
                             if session_watch in done:
-                                _observe_session_end(session_watch)
+                                observe_session_end(session_watch)
                                 step.refuse(AnswerRefusal.SESSION_ENDED)
                                 yield _error_sse(AnswerStopReason.SESSION_ENDED)
                                 return
@@ -532,12 +536,12 @@ async def _answer_events(
                                 raise TimeoutError
                             next_event = asyncio.create_task(_next_answer_event(events))
                     finally:
-                        await _finish_tasks((next_event,))
+                        await finish_tasks((next_event,))
             except (CoPresenterUnavailableError, TimeoutError) as stop:
                 yield _stopped(step, stop)
     finally:
         await _released(ask.ticket)
-        await _finish_tasks((session_watch,))
+        await finish_tasks((session_watch,))
 
 
 async def _hearing_lease(
@@ -546,13 +550,13 @@ async def _hearing_lease(
     language: str,
     session_id: str,
     use: CoPresenterUse,
-    guard: _SessionGuard,
+    guard: SessionGuard,
 ) -> None:
     session_watch = asyncio.create_task(
-        _watch_session(socket, session_id=session_id, guard=guard)
+        watch_session(socket, session_id=session_id, guard=guard)
     )
     try:
-        tokens = await _read_tokens(
+        tokens = await read_tokens(
             socket, session_id=session_id, use=use, session_watch=session_watch
         )
         if tokens is not None:
@@ -567,12 +571,12 @@ async def _hearing_lease(
         return
     except RuntimeError:
         with suppress(RuntimeError):
-            await socket.close(code=_INTERNAL_ERROR)
+            await socket.close(code=INTERNAL_ERROR)
     finally:
-        await _finish_tasks((session_watch,))
+        await finish_tasks((session_watch,))
 
 
-async def _read_tokens(
+async def read_tokens(
     socket: WebSocket,
     *,
     session_id: str,
@@ -584,8 +588,8 @@ async def _read_tokens(
     try:
         await asyncio.wait({read, session_watch}, return_when=asyncio.FIRST_COMPLETED)
         if not read.done():
-            _observe_session_end(session_watch)
-            await socket.close(code=_POLICY_VIOLATION)
+            observe_session_end(session_watch)
+            await socket.close(code=POLICY_VIOLATION)
             return None
         try:
             return read.result()
@@ -593,7 +597,7 @@ async def _read_tokens(
             await use.refuse_hearing(socket, unavailable)
             return None
     finally:
-        await _finish_tasks((read,))
+        await finish_tasks((read,))
 
 
 async def _relay(
@@ -625,26 +629,28 @@ async def _relay(
             {hearing, session_watch}, return_when=asyncio.FIRST_COMPLETED
         )
         if not hearing.done():
-            _observe_session_end(session_watch)
+            observe_session_end(session_watch)
             ended.set()
         await hearing
     finally:
-        await _finish_tasks((hearing,))
+        await finish_tasks((hearing,))
 
 
-async def _watch_session(
+async def watch_session(
     connection: HTTPConnection,
     *,
     session_id: str,
-    guard: _SessionGuard,
+    guard: SessionGuard,
 ) -> None:
+    """Return once the connection is no longer this session's."""
     while True:
         await guard.wait()
         if not guard.same_session(connection, session_id):
             return
 
 
-def _observe_session_end(session_watch: asyncio.Task[None]) -> None:
+def observe_session_end(session_watch: asyncio.Task[None]) -> None:
+    """Retrieve the ended watch's result, so nothing is left unretrieved."""
     session_watch.exception()
 
 
@@ -652,7 +658,8 @@ async def _next_answer_event(events: AsyncIterator[AnswerEvent]) -> AnswerEvent:
     return await anext(events)
 
 
-async def _finish_tasks(tasks: Iterable[asyncio.Task[object]]) -> None:
+async def finish_tasks(tasks: Iterable[asyncio.Task[object]]) -> None:
+    """Cancel what still runs, wait for every task and retrieve its failure."""
     owned = tuple(tasks)
     for task in owned:
         if not task.done():
@@ -705,7 +712,7 @@ def _stopped(step: StepTimer, stop: Exception) -> bytes:
 def _error_sse(
     reason: AnswerStopReason | None = None, *, retry_after_s: int | None = None
 ) -> bytes:
-    payload: dict[str, object] = {"message": _GENERIC_ANSWER_FAILURE}
+    payload: dict[str, object] = {"message": GENERIC_ANSWER_FAILURE}
     if reason is not None:
         payload["reason"] = reason.value
     if retry_after_s is not None:

@@ -11,6 +11,7 @@ from typing import Final
 from agents.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
+from starlette.requests import HTTPConnection
 from webauth.config import web_auth_config
 from webauth.dependencies import account_language_of_session
 from webauth.languages import AppLanguages, resolve_language
@@ -54,7 +55,7 @@ class SessionView(BaseModel):
     sign_in: SessionAddresses
 
 
-def language_of(request: Request, sessions: SessionRecordStore) -> Language:
+def language_of(request: HTTPConnection, sessions: SessionRecordStore) -> Language:
     """The offered language the person behind this request reads in.
 
     The account's language where a catalog speaks it, else the browser's, else the

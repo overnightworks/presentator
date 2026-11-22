@@ -39,6 +39,14 @@ class SessionEndedError(CoPresenterUnavailableError):
     """The person's session ended while the co-presenter read its tokens; no outage."""
 
 
+class SoundRefusedError(Exception):
+    """The browser could not play a sound; the answer ends and the talk goes on."""
+
+
+class UnreadableTalkMessageError(ValueError):
+    """A text frame of the talk socket is none the route reads; the talk ends."""
+
+
 class AnswerStopReason(StrEnum):
     """The reason an answer stream's `error` event names, as the overlay reads it."""
 
@@ -172,6 +180,44 @@ class HearingTranscript:
         if self.final and self.language is None:
             message = "a final transcript names its language"
             raise ValueError(message)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ShownSlide:
+    """The browser shows this 1-based slide of the deck."""
+
+    number: int
+
+
+type HeardInTalk = HearingTranscript | ShownSlide
+"""What a talk hears: a person's finished line, or the slide the deck shows now."""
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionBegan:
+    """A heard line woke the model."""
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DecisionStopped:
+    """The decision's turn ended short; `reason` is none when no reason is named."""
+
+    reason: AnswerStopReason | None
+    retry_after_s: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionEnded:
+    """The decision is over: its sound ended and its turn ended."""
+
+
+@dataclass(frozen=True, slots=True)
+class EchoDropped:
+    """A heard line repeated the answer just played; it woke nothing and is not kept."""
+
+
+type TalkEvent = DecisionBegan | DecisionStopped | DecisionEnded | EchoDropped
+"""What a talk tells its route about the model's decisions, for the log."""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
