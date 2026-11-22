@@ -1,10 +1,11 @@
-"""A hearing socket's ended line names its person and the forwarded client."""
+"""A hearing socket's ended line names its person, client and trace."""
 
 from collections.abc import Iterator
 from contextlib import closing
 from pathlib import Path
 
 import pytest
+from logline import WEBSOCKET_EVENT
 
 from tests.presentator.host.support.app_processes import (
     TALK_HOST,
@@ -27,8 +28,20 @@ _A_NETWORK_NOT_THE_PEERS = "10.0.0.0/8"
 _BEHIND_THE_PROXY = {"x-forwarded-for": _THE_CLIENT}
 
 
-def _the_ended_socket(line: LogLine) -> bool:
-    return line["event"] == "websocket.ended"
+_THE_SESSION_EVENT = "hearing_session.ended"
+
+
+def _ended_lines_of_both(app: App) -> tuple[LogLine, LogLine]:
+    """The socket's ended line and the hearing session's, in either order."""
+    seen: dict[str, LogLine] = {}
+
+    def both_seen(line: LogLine) -> bool:
+        if line["event"] in {WEBSOCKET_EVENT, _THE_SESSION_EVENT}:
+            seen[line["event"]] = line
+        return seen.keys() == {WEBSOCKET_EVENT, _THE_SESSION_EVENT}
+
+    app.log_line_where(both_seen)
+    return seen[WEBSOCKET_EVENT], seen[_THE_SESSION_EVENT]
 
 
 @pytest.fixture
@@ -47,15 +60,7 @@ def app(
         yield first
 
 
-@pytest.mark.parametrize(
-    ("app", "ip"),
-    [(_THE_PROXY, _THE_CLIENT), (_A_NETWORK_NOT_THE_PEERS, _THE_PROXY)],
-    indirect=["app"],
-    ids=["a trusted peer", "an untrusted peer"],
-)
-def test_a_hearing_sockets_ended_line_names_its_person_and_the_resolved_client(
-    app: App, ip: str
-) -> None:
+def _hear_once(app: App) -> None:
     person = Browser(host=TALK_HOST)
     person.sign_in(app, "alice", groups=[*ADMIN, AN_API_GROUP])
 
@@ -68,7 +73,27 @@ def test_a_hearing_sockets_ended_line_names_its_person_and_the_resolved_client(
     )
     with closing(hearing):
         assert hearing.hear_after_saying() != ""
-    line = app.log_line_where(_the_ended_socket)
+
+
+@pytest.mark.parametrize(
+    ("app", "ip"),
+    [(_THE_PROXY, _THE_CLIENT), (_A_NETWORK_NOT_THE_PEERS, _THE_PROXY)],
+    indirect=["app"],
+    ids=["a trusted peer", "an untrusted peer"],
+)
+def test_a_hearing_sockets_ended_line_names_its_person_and_the_resolved_client(
+    app: App, ip: str
+) -> None:
+    _hear_once(app)
+    line, _session = _ended_lines_of_both(app)
 
     assert line["sub"] == "alice"
     assert line["ip"] == ip
+
+
+@pytest.mark.parametrize("app", [_THE_PROXY], indirect=True)
+def test_a_hearing_sockets_ended_line_shares_the_hearings_trace(app: App) -> None:
+    _hear_once(app)
+    line, session = _ended_lines_of_both(app)
+
+    assert line["trace_id"] == session["trace_id"]
