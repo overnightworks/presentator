@@ -2,8 +2,8 @@
 
 Audience: the operator whose deployment supplies the settings, and an
 engineer looking one up. Settings are environment variables with the prefix
-`PRESENTATOR_`, except the realm's names, which carry `REALM_`; both are read from the process environment and, in development, from a
-gitignored `.env` at the repository root. A refused setting ends the start
+`PRESENTATOR_`, except the realm's names, which carry `REALM_`; both are read from the process environment and, in
+development, from a gitignored `.env` at the repository root. A refused setting ends the start
 of either console script in one `process.failed` line with `reason`
 `configuration_refused` and the refused variables in `setting`, never a value
 or a path, so a mistyped secret does not land in the startup output; the exit
