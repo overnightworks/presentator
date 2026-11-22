@@ -71,7 +71,7 @@ def run() -> None:
         )
     issuer = FakeIssuer(
         issuer=os.environ["PRESENTATOR_OIDC_ISSUER"],
-        client_id=os.environ["PRESENTATOR_OIDC_CLIENT_ID"],
+        client_id=os.environ["REALM_CLIENT_ID"],
         now=datetime.now(UTC),
     )
     refresh_token = os.environ.pop(REFRESH_TOKEN_VARIABLE, None)

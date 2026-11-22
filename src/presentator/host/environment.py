@@ -3,6 +3,8 @@
 from typing import Final
 
 ENVIRONMENT_PREFIX: Final = "PRESENTATOR_"
+# The realm's names are the platform's, handed to every app under these keys.
+REALM_PREFIX: Final = "REALM_"
 _REFUSED: Final = "this environment cannot start an instance"
 
 
@@ -19,9 +21,9 @@ class ConfigurationError(ValueError):
         self.variables = variables
 
 
-def variable_of(field_name: str) -> str:
+def variable_of(field_name: str, *, prefix: str = ENVIRONMENT_PREFIX) -> str:
     """The environment variable that carries a settings field."""
-    return f"{ENVIRONMENT_PREFIX}{field_name}".upper()
+    return f"{prefix}{field_name}".upper()
 
 
 def cannot_start(reason: str, *, variables: tuple[str, ...] = ()) -> ConfigurationError:

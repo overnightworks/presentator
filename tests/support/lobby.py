@@ -23,7 +23,7 @@ from httpx2 import Response as BrowserResponse
 from pydantic import SecretStr
 from speech_client import wire
 from starlette.types import ASGIApp
-from webauth.admission import AdmissionConfig
+from webauth.admission import AdmissionConfig, GroupPath
 from webauth.config import WebAuthConfig
 from webauth.cookies import issue_session_cookies
 from webauth.jwt_verification import KeySetFetch
@@ -72,7 +72,8 @@ from presentator.contracts.decks import (
 )
 from presentator.contracts.models import Role, User
 from presentator.contracts.words import Language
-from presentator.host.config import Settings, WhereBuildsRun
+from presentator.host.config import RealmSettings, Settings, WhereBuildsRun
+from presentator.host.environment import REALM_PREFIX, variable_of
 from presentator.host.main import web_auth_config_for
 from presentator.host.oidc import admission_of, oidc_client_config
 from presentator.ports.decks import BuildRunner
@@ -160,6 +161,18 @@ AN_API_GROUP: Final = "/services/agent-service/api"
 AN_ISSUER: Final = "https://auth.example.test/realms/test"
 A_CLIENT_ID: Final = "presentator-test"
 A_CLIENT_CREDENTIAL: Final = "the-secret-only-this-test-has"
+# The login and admin groups are the live realm's, which the tokens of the tests
+# carry; the MCP scope, the two MCP groups and the MCP client differ from the
+# live ones, so a name still fixed in the code fails a test.
+A_REALM: Final = RealmSettings(
+    client_id=A_CLIENT_ID,
+    login_group=GroupPath("/apps/presentator"),
+    admin_group=GroupPath("/apps/presentator/admin"),
+    mcp_group=GroupPath("/apps/presentator/mcp-test"),
+    mcp_scope="mcp-presentator-test",
+    agent_group=GroupPath("/agents-test"),
+    mcp_client_id="agents-test",
+)
 
 
 def hand_over_session_cookies(
@@ -263,7 +276,9 @@ def configure_oidc(monkeypatch: pytest.MonkeyPatch, directory: Path) -> Path:
     secret_file.write_text(f"{A_CLIENT_CREDENTIAL}\n", encoding="utf-8")
     monkeypatch.setenv("PRESENTATOR_TALK_ORIGIN", A_TALK_ADDRESS)
     monkeypatch.setenv("PRESENTATOR_OIDC_ISSUER", AN_ISSUER)
-    monkeypatch.setenv("PRESENTATOR_OIDC_CLIENT_ID", A_CLIENT_ID)
+    for field_name in RealmSettings.model_fields:
+        value = str(getattr(A_REALM, field_name))
+        monkeypatch.setenv(variable_of(field_name, prefix=REALM_PREFIX), value)
     monkeypatch.setenv("PRESENTATOR_OIDC_CLIENT_SECRET_FILE", str(secret_file))
     return secret_file
 
@@ -307,7 +322,7 @@ def a_settings() -> Settings:
         talk_origin=A_TALK_ADDRESS,
         agent=an_agent_config(),
         oidc_issuer=AN_ISSUER,
-        oidc_client_id=A_CLIENT_ID,
+        realm=A_REALM,
         oidc_client_secret_file=Path("/run/oidc-client-secret"),
         speech_service=A_SPEECH_SERVICE,
         speech_service_scope=A_SPEECH_SCOPE,
