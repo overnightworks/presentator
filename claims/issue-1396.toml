@@ -1,8 +1,0 @@
-claim_id = "38f468c530c347f19ba70ca7312fa071"
-agent = "Claude bb4f7650-3c70-40b7-b8a1-07d899d94181"
-role = "builder"
-base = "941e71053b1a9e5c18b69d0b9a84fda2305d3408"
-branch = "claude/issue-1396-take-webauth-0-43-0"
-scope = ["docs/ARCHITECTURE.md", "pyproject.toml", "src/presentator/agent/mcp.py", "src/presentator/api", "src/presentator/host", "tests/presentator/adapters/test_postgres_preferences.py", "tests/presentator/agent", "tests/presentator/api", "tests/presentator/host", "tests/support", "uv.lock"]
-opened_commit = "2443e1b8c70dc7d372af95991649d68c9b1ee684"
-whole_reason = "One Breaking release re-wires both hosts' auth at once; a split leaves a host on removed names and a red build between the slices."
