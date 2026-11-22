@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Final, Protocol, assert_never
 import anyio
 from fastapi import APIRouter, FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
-from logline import StepTimer, unit_trace
+from logline import StepTimer
 from pydantic import BaseModel, Field, field_validator
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
@@ -210,16 +210,13 @@ def _hear_route(
         if surface.stopping():
             await socket.close(code=_SERVICE_RESTART)
             return
-        # A hearing is one unit of its own trace: its lines and the service's
-        # session lines share it. Each turn's trace comes back with its transcript.
-        with unit_trace(None):
-            await _hearing_lease(
-                socket,
-                language=language,
-                session_id=connection.session_id,
-                use=surface.use,
-                guard=guard,
-            )
+        await _hearing_lease(
+            socket,
+            language=language,
+            session_id=connection.session_id,
+            use=surface.use,
+            guard=guard,
+        )
 
     return _hear
 
