@@ -594,22 +594,15 @@ async def serve_hearing(
         return
     except (RuntimeError, ExceptionGroup) as error:
         # A voice loop raises its unexpected failures inside an ExceptionGroup.
-        _log_hearing_failure(error)
+        # A traceback renders every message of the chain, which can hold an address.
+        _log.error(  # NOSONAR(S8572) types and frames only, never the messages
+            "hearing.failed",
+            extra={"error_type": type(error).__name__, "frames": failure_frames(error)},
+        )
         with suppress(RuntimeError):
             await socket.close(code=INTERNAL_ERROR)
     finally:
         await finish_tasks((session_watch,))
-
-
-def _log_hearing_failure(error: BaseException) -> None:
-    """One line with the types and frames of the failure, never its messages.
-
-    A traceback renders every message of the chain, which can hold an address.
-    """
-    _log.error(
-        "hearing.failed",
-        extra={"error_type": type(error).__name__, "frames": failure_frames(error)},
-    )
 
 
 async def read_tokens(
