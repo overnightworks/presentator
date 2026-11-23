@@ -76,7 +76,7 @@ sequenceDiagram
 flowchart LR
     traefik[Traefik] --> web
     subgraph namespace[presentator Namespace]
-        web[web<br/>Deployment]
+        web[web x2<br/>Deployment, rolling]
         worker[build workers x2<br/>StatefulSet, TCP behind kernel filters]
         web <-- keyed hello over TCP --> worker
     end
@@ -86,10 +86,10 @@ flowchart LR
 ```
 
 One image runs as two workloads in presentator's Namespace on the platform's k3s cluster: the web, a
-Deployment that recreates instead of rolling, and the build workers, a StatefulSet of two pods that
-share nothing and each serve one life at a time. The platform's manifest (`apps/presentator` in
-overnightworks/platform) owns the pod specs, network policy, edge, secrets, backup and release; the
-[configuration](configuration.md) owns each setting's meaning.
+Deployment of two interchangeable pods that roll out one pod at a time, and the build workers, a
+StatefulSet of two pods that share nothing and each serve one life at a time. The platform's
+manifest (`apps/presentator` in overnightworks/platform) owns the pod specs, network policy, edge,
+secrets, backup and release; the [configuration](configuration.md) owns each setting's meaning.
 
 One process serves the lobby and the talk host and tells them apart by the `Host` header; any other
 host gets a 404, except the lobby's back-channel logout path ([sign-in](sign-in.md)). `GET /health`,

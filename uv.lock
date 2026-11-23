@@ -622,8 +622,8 @@ voice = [
 
 [[package]]
 name = "overnightworks-design"
-version = "0.37.0"
-source = { git = "https://github.com/overnightworks/design?rev=v0.37.0#5014da6e824ee2cec440862fd8c4bcdf278bdfba" }
+version = "0.41.0"
+source = { git = "https://github.com/overnightworks/design?rev=v0.41.0#e3feccf0cfff4bd558335d42c7441f4659a3f5b2" }
 
 [package.optional-dependencies]
 catalogs = [
@@ -689,7 +689,7 @@ requires-dist = [
     { name = "overnightworks-logline", git = "https://github.com/overnightworks/logline?rev=v1.9.0" },
     { name = "overnightworks-speech-client", git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.23.0" },
     { name = "overnightworks-tandem", git = "https://github.com/overnightworks/tandem?rev=v0.15.0" },
-    { name = "overnightworks-webauth", extras = ["postgres", "redis"], git = "https://github.com/overnightworks/webauth?rev=v0.45.0" },
+    { name = "overnightworks-webauth", extras = ["postgres", "redis"], git = "https://github.com/overnightworks/webauth?rev=v0.46.0" },
     { name = "psycopg", extras = ["binary"], specifier = "==3.3.9" },
     { name = "pydantic-settings", specifier = "==2.16.3" },
     { name = "sqlalchemy", specifier = "==2.1.8" },
@@ -701,7 +701,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "coverage", specifier = "==7.17.3" },
-    { name = "overnightworks-design", extras = ["catalogs"], git = "https://github.com/overnightworks/design?rev=v0.37.0" },
+    { name = "overnightworks-design", extras = ["catalogs"], git = "https://github.com/overnightworks/design?rev=v0.41.0" },
     { name = "pypdf", specifier = "==7.1.0" },
     { name = "pyright", specifier = "==1.1.414" },
     { name = "pytest", specifier = "==9.2.0" },
@@ -735,8 +735,8 @@ dependencies = [
 
 [[package]]
 name = "overnightworks-webauth"
-version = "0.45.0"
-source = { git = "https://github.com/overnightworks/webauth?rev=v0.45.0#f30388aab1742b58c9718ae8bfa34bf0c0f94949" }
+version = "0.46.0"
+source = { git = "https://github.com/overnightworks/webauth?rev=v0.46.0#b70f583c27a7f01b1f471d9dd84dd19d6992ab1d" }
 dependencies = [
     { name = "anyio" },
     { name = "cryptography" },
