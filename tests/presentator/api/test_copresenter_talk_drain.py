@@ -43,12 +43,13 @@ def test_a_stop_that_begins_while_a_sound_plays_lets_the_decision_end(
 
 
 def test_a_line_heard_after_the_stop_wakes_no_decision_and_sends_no_error(
-    engine: Engine,
+    engine: Engine, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    with a_talk(engine) as talk:
+    with json_logged(capsys) as logged, a_talk(engine) as talk:
         talk.say(A_LINE)
         first = talk.next_sound()
         talk.stop()
+        talk.instance.deadline.waiting(talk.instance.drain_seconds)
         talk.say("Noch eine Zeile.")
         talk.played(first["id"])
         talk.play_through()
@@ -59,6 +60,7 @@ def test_a_line_heard_after_the_stop_wakes_no_decision_and_sends_no_error(
     assert "error" not in _kinds(frames)
     assert "audio" not in _kinds(frames)
     assert len(requests_of(talk)) == 1
+    assert len(events_of(logged, "answer.ended")) == 1
 
 
 def test_the_talk_closes_1012_as_soon_as_the_drained_decision_ends(
