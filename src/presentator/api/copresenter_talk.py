@@ -421,6 +421,24 @@ async def _talk_lease(
         await finish_tasks((session_watch,))
 
 
+def _heard_by(
+    down: _DownFrames, hearing: _TalkHearing
+) -> Callable[[HearingTranscript], Awaitable[None]]:
+    async def heard(transcript: HearingTranscript) -> None:  # NOSONAR(S7503)
+        down.send(
+            {
+                "kind": "heard",
+                "text": transcript.text,
+                "final": transcript.final,
+                "language": transcript.language,
+            }
+        )
+        if transcript.final:
+            hearing.hear(transcript)
+
+    return heard
+
+
 async def _talking(
     socket: WebSocket,
     talk: _Talk,
@@ -435,19 +453,6 @@ async def _talking(
     decisions = _Decisions(down)
     browser = TalkSounds(down.send, decisions.first_output)
     ended = asyncio.Event()
-
-    async def heard(transcript: HearingTranscript) -> None:  # NOSONAR(S7503)
-        down.send(
-            {
-                "kind": "heard",
-                "text": transcript.text,
-                "final": transcript.final,
-                "language": transcript.language,
-            }
-        )
-        if transcript.final:
-            hearing.hear(transcript)
-
     use = surface.use
     sender = asyncio.create_task(down.send_all())
     relay = asyncio.create_task(
@@ -456,7 +461,7 @@ async def _talking(
             talk.language,
             tokens,
             ended=ended,
-            heard=heard,
+            heard=_heard_by(down, hearing),
             text=_handler_of(browser, hearing),
         )
     )
@@ -478,18 +483,33 @@ async def _talking(
             {relay, talking, session_watch}, return_when=asyncio.FIRST_COMPLETED
         )
         if session_watch.done():
-            observe_session_end(session_watch)
-            await _cut_talk(talking, decisions, _Cut.SESSION_ENDED)
-            down.send(_error_frame(AnswerStopReason.SESSION_ENDED))
-            await down.drained()
-            ended.set()
-            await relay
+            await _session_ended(
+                session_watch, talking, relay, decisions, down=down, ended=ended
+            )
         elif relay.done():
             await _relay_ended(socket, relay, talking, hearing, decisions)
         else:
             await _loop_ended(talking, relay, decisions)
     finally:
         await finish_tasks((talking, relay, sender))
+
+
+async def _session_ended(  # noqa: PLR0913 - the parts of one talk
+    session_watch: asyncio.Task[None],
+    talking: asyncio.Task[None],
+    relay: asyncio.Task[None],
+    decisions: _Decisions,
+    *,
+    down: _DownFrames,
+    ended: asyncio.Event,
+) -> None:
+    """The session ended: stop the model, tell the browser, let the hop close."""
+    observe_session_end(session_watch)
+    await _cut_talk(talking, decisions, _Cut.SESSION_ENDED)
+    down.send(_error_frame(AnswerStopReason.SESSION_ENDED))
+    await down.drained()
+    ended.set()
+    await relay
 
 
 async def _cut_talk(
