@@ -10,10 +10,10 @@ from presentator.host.lifecycle import (
     ServerEvent,
     ServerReason,
 )
-from tests.presentator.application.support.fakes import PATIENCE
 from tests.support.log_lines import json_lines
 from tests.support.two_processes import (
     CONSOLE_ENTRY_POINT,
+    HOST_PROCESS_SECONDS,
     WORKER_CONSOLE_ENTRY_POINT,
     measured,
 )
@@ -30,7 +30,7 @@ def _run(
         env=measured({"PATH": "/usr/bin:/bin"}),
         capture_output=True,
         text=True,
-        timeout=PATIENCE.total_seconds(),
+        timeout=HOST_PROCESS_SECONDS,
         check=False,
     )
 
