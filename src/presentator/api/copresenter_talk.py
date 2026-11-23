@@ -257,14 +257,15 @@ class _Decisions:
         match event.how:
             case DecisionEnd.SILENT:
                 step.reason(SILENT_ANSWER)
+                step.end()
             case DecisionEnd.UNSPOKEN:
                 step.fail(AnswerFailure.UNSPOKEN)
                 step.handled()
+                step.end()
             case DecisionEnd.SPOKE | DecisionEnd.NOTHING:
-                pass
+                step.end()
             case _:
                 assert_never(event.how)
-        step.end()
         self._open = None
         self._idle.set()
 
@@ -475,6 +476,29 @@ def _heard_by(
     return heard
 
 
+def _talk_task(
+    talk: _Talk,
+    surface: CoPresenterSurface,
+    browser: TalkSounds,
+    hearing: _TalkHearing,
+    decisions: _Decisions,
+) -> asyncio.Task[None]:
+    """Start the loop that decides each answer of `talk`."""
+    return asyncio.create_task(
+        surface.use.talk(
+            talk.asked,
+            session_id=talk.connection.session_id,
+            subject=talk.connection.user_id,
+            role=talk.connection.person.role,
+            controls_language=talk.controls_language,
+            limiter=surface.limiter,
+            browser=browser,
+            hearing=hearing,
+            report=decisions,
+        )
+    )
+
+
 async def _talking(  # noqa: PLR0913 - the parts of one talk
     socket: WebSocket,
     talk: _Talk,
@@ -505,19 +529,7 @@ async def _talking(  # noqa: PLR0913 - the parts of one talk
             text=_handler_of(browser, hearing),
         )
     )
-    talking = asyncio.create_task(
-        use.talk(
-            talk.asked,
-            session_id=talk.connection.session_id,
-            subject=talk.connection.user_id,
-            role=talk.connection.person.role,
-            controls_language=talk.controls_language,
-            limiter=surface.limiter,
-            browser=browser,
-            hearing=hearing,
-            report=decisions,
-        )
-    )
+    talking = _talk_task(talk, surface, browser, hearing, decisions)
     drain = asyncio.create_task(_drained(surface, guard, hearing, decisions))
     with surface.open_talks.open():
         try:
