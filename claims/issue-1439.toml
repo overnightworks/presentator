@@ -1,0 +1,7 @@
+claim_id = "d069f92ad5ee42b28779b5dc58ca8b46"
+agent = "Claude c1bdc492-301e-41eb-b0a2-b29b0b318ca2"
+role = "builder"
+base = "e0378529ca39503adeaff19f2c5a44df3413ff85"
+branch = "claude/issue-1439-take-speech-client-v0-24-0"
+scope = ["pyproject.toml", "uv.lock"]
+opened_commit = "dd3c2f36dc4aa1cd9558b2755859ced260fd7f27"
