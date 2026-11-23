@@ -357,7 +357,7 @@ def test_a_logout_enters_the_transaction_once_on_a_worker_thread(
     assert double.log[0] == ("entered", False)
 
 
-def test_a_store_failure_in_the_logout_answers_500_clears_no_cookie_and_keeps_the_row(
+def test_a_store_failure_in_the_logout_answers_503_clears_no_cookie_and_keeps_the_row(
     engine: Engine,
 ) -> None:
     breakdown = Breakdown()
@@ -373,7 +373,7 @@ def test_a_store_failure_in_the_logout_answers_500_clears_no_cookie_and_keeps_th
 
     failed = browser.post(LOGOUT_PATH, headers=_A_FORM)
 
-    assert failed.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert failed.status_code == HTTPStatus.SERVICE_UNAVAILABLE
     assert failed.headers.get_list("set-cookie") == []
     assert scene.count("sessions") == 1
     breakdown.now = False

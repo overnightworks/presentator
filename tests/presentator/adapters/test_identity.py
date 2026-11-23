@@ -6,10 +6,10 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import Connection, Engine, text
+from sqlalchemy import Connection, Engine, create_engine, text
 from webauth.config import WebAuthConfig
 from webauth.dependencies import ConnectionRefusal, admit_session
-from webauth.ports import AccountKind, SessionRecord
+from webauth.ports import AccountKind, SessionRecord, StoreUnavailableError
 from webauth.postgres import SessionStoreError, stored_key
 
 from presentator.adapters.audit import LoggingAuditSink
@@ -157,6 +157,18 @@ def test_a_touched_session_keeps_its_creation_and_takes_the_given_expiry(
     assert renewed is True
     assert stored is not None
     assert (stored.created_at, stored.expires_at) == (_NOW, later)
+
+
+def test_an_unreachable_database_in_the_account_read_is_a_store_outage(
+    database: Engine,
+) -> None:
+    unreachable = create_engine(database.url.set(port=1))
+    writes = PostgresIdentityWrites(unreachable, LoggingAuditSink())
+
+    with pytest.raises(StoreUnavailableError):
+        writes.get("user-1")
+
+    unreachable.dispose()
 
 
 def test_a_session_deleted_after_its_load_is_not_brought_back_by_touch(

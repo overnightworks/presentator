@@ -117,7 +117,7 @@ not know reads as its generic case, logged once. An unknown role or account kind
 session cache: rate limits live in the Redis every pod shares (webauth's `RedisRateLimitBackend`,
 one budget per host), sessions live in webauth's Postgres store, and identity writes run in one
 transaction under one advisory lock. JSON lives under `/api/` as typed models. The one signed-out path is `GET
-/api/session`, and a store failure while resolving a reader is a 500, never a signed-out answer.
+/api/session`, and an unreachable store while resolving a reader answers 503 with `Retry-After`, any other store failure 500, never a signed-out answer.
 Problems follow RFC 9457 with `tag:` URI types.
 
 **Logging.** logline owns it, configured first in each process: every line is one JSON object. One
