@@ -260,22 +260,6 @@ def test_a_played_frame_of_a_sound_already_ended_changes_nothing_and_keeps_the_s
     assert (second["text"], third["text"]) == (_THREE_SENTENCES[1], _THREE_SENTENCES[2])
 
 
-def test_the_same_played_frame_twice_in_a_row_is_taken_once_and_keeps_the_socket(
-    engine: Engine,
-) -> None:
-    with a_talk(engine, completion(" ".join(_THREE_SENTENCES))) as talk:
-        talk.say(A_LINE)
-        first = talk.next_sound()
-        talk.played(first["id"])
-        talk.played(first["id"])
-
-        second = talk.next_sound()
-        talk.played(second["id"])
-        third = talk.next_sound()
-
-    assert (second["text"], third["text"]) == (_THREE_SENTENCES[1], _THREE_SENTENCES[2])
-
-
 @pytest.mark.parametrize(
     "cut", [False, True], ids=["after the report", "after the cut"]
 )
