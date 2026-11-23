@@ -3,6 +3,6 @@ agent = "Claude c1bdc492-301e-41eb-b0a2-b29b0b318ca2"
 role = "builder"
 base = "83f69234b232f938c377091306b34d9fdd50ee7f"
 branch = "claude/issue-1418-a-console-script-test-waits-5-s-for-a-co"
-scope = ["tests/presentator/application/support/fakes.py", "tests/presentator/host/test_console_arguments.py", "tests/presentator/host/test_console_interrupt.py", "tests/presentator/host/test_worker_stop.py", "tests/support"]
+scope = ["tests/presentator/adapters/test_shared_redis_two_processes.py", "tests/presentator/application/support/fakes.py", "tests/presentator/host/support/app_processes.py", "tests/presentator/host/test_config_redis.py", "tests/presentator/host/test_console_arguments.py", "tests/presentator/host/test_console_interrupt.py", "tests/presentator/host/test_main_stop.py", "tests/presentator/host/test_worker_stop.py", "tests/support"]
 opened_commit = "f38bdfd5d7344fd125ca384afa87dd570cc20db5"
 whole_reason = "One shared cold-start budget for every test that starts a console script; a split leaves the budget in two owners."
