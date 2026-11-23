@@ -1,0 +1,8 @@
+claim_id = "921fb7f23aa84e6a9bfe1cc8abc79214"
+agent = "Claude c1bdc492-301e-41eb-b0a2-b29b0b318ca2"
+role = "builder"
+base = "0392203ee469495bf61704866177f22224b12bea"
+branch = "claude/issue-1410-presentator-pins-quality-v0-24-0"
+scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml", ".github/workflows/release.yml", "pyproject.toml", "uv.lock"]
+opened_commit = "0a913037f26d585bbcdcb5dad5899a20396b28b2"
+whole_reason = "One release adoption: the five quality pins across three workflow files, pytest-randomly in the dev group and its lock move together, because quality v0.24.0 judges the seed and the lock on the same pull request."
