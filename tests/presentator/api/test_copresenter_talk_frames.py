@@ -281,6 +281,20 @@ def test_a_played_report_before_the_play_resumed_is_ignored(*, cut: bool) -> Non
     asyncio.run(report_twice())
 
 
+def test_a_played_report_while_no_sound_plays_leaves_the_next_sound_waiting() -> None:
+    async def report_then_play() -> bool:
+        browser = TalkSounds(lambda _frame: None, lambda: None)
+        browser.played(1, SoundEnd.ENDED)
+        playing = asyncio.create_task(browser.play(Audio(text="Satz.", wav=b"")))
+        await asyncio.sleep(0)
+        waiting = not playing.done()
+        browser.played(1, SoundEnd.ENDED)
+        await playing
+        return waiting
+
+    assert asyncio.run(report_then_play())
+
+
 def test_an_audio_frame_carries_the_sentence_and_its_sound(engine: Engine) -> None:
     with a_talk(engine) as talk:
         talk.say(A_LINE)
