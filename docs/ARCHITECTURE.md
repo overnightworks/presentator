@@ -76,7 +76,7 @@ sequenceDiagram
 flowchart LR
     traefik[Traefik] --> web
     subgraph namespace[presentator Namespace]
-        web[web<br/>Deployment]
+        web[web x2<br/>Deployment, rolling]
         worker[build workers x2<br/>StatefulSet, TCP behind kernel filters]
         web <-- keyed hello over TCP --> worker
     end
@@ -86,8 +86,9 @@ flowchart LR
 ```
 
 One image runs as two workloads in presentator's Namespace on the platform's k3s cluster: the web, a
-Deployment that recreates instead of rolling, and the build workers, a StatefulSet of two pods that
-share nothing and each serve one life at a time. The platform's manifest (`apps/presentator` in
+Deployment of two interchangeable pods that roll out one pod at a time (the rows and the drain on
+stop below keep a rollout from losing state or a running answer), and the build workers, a
+StatefulSet of two pods that share nothing and each serve one life at a time. The platform's manifest (`apps/presentator` in
 overnightworks/platform) owns the pod specs, network policy, edge, secrets, backup and release; the
 [configuration](configuration.md) owns each setting's meaning.
 
