@@ -14,10 +14,10 @@ from starlette.websockets import WebSocketDisconnect
 from presentator.api.copresenter import GENERIC_ANSWER_FAILURE
 from presentator.api.health import Stopping
 from presentator.contracts.models import Role
-from tests.presentator.api.test_copresenter_answer import a_gateway_error
 from tests.support.copresenter_support import (
     TALK_ORIGIN,
     a_copresenter_talk_host,
+    a_gateway_error,
     delete_the_sessions,
 )
 from tests.support.deck_text_support import A_DECK_TEXT

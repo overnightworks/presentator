@@ -569,6 +569,11 @@ class Run:
         return json.loads(payload)
 
 
+def a_gateway_error(error_type: str) -> bytes:
+    """A gateway reply body that names its error type."""
+    return json.dumps({"error": {"type": error_type, "code": "422"}}).encode()
+
+
 def delete_the_sessions(hosts: Hosts) -> None:
     with hosts.database.begin() as connection:
         connection.execute(text("DELETE FROM sessions"))
