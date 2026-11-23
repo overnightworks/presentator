@@ -1,7 +1,0 @@
-claim_id = "3590f0671ed347daaf21037501175759"
-agent = "Claude c1bdc492-301e-41eb-b0a2-b29b0b318ca2"
-role = "builder"
-base = "4662c19e37f23d7968f797524fa7f5fa0bcd0df6"
-branch = "claude/issue-1427-architecture-overview-web-two-pods"
-scope = ["docs/ARCHITECTURE.md"]
-opened_commit = "51767054c2a5e36c332b757f6e6bf3804a193847"
