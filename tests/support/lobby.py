@@ -116,7 +116,7 @@ def _write_throwaway_file(content: str) -> Path:
 
 NOW: Final = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _FIXTURES: Final = Path(__file__).parents[1] / "presentator" / "api" / "fixtures"
-# What `slidev build` of `examples/hello-deck` writes, `--base /deck/hello-deck/`.
+# The few files of a built `examples/hello-deck` the tests read, under `--base /deck/hello-deck/`.
 BUILT_TALK: Final = _FIXTURES / "built_talk"
 AN_ASSET: Final = "assets/index-mRcVgIkQ.js"
 EXPORTED_PDF: Final = _FIXTURES / "exported_deck.pdf"
