@@ -3,7 +3,7 @@
 import logging
 import os
 import socket
-from collections.abc import Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from contextlib import closing
 from functools import partial
 from pathlib import Path
@@ -78,9 +78,13 @@ def logged(json_logging: None, capsys: pytest.CaptureFixture[str]) -> LoggedText
 
 class _ServerThatOnlyReturns:
     def __init__(
-        self, config: uvicorn.Config, stopping: Stopping, stop_line: StopLine
+        self,
+        config: uvicorn.Config,
+        stopping: Stopping,
+        stop_line: StopLine,
+        talks_closed: Callable[[], Awaitable[None]],
     ) -> None:
-        del config, stopping, stop_line
+        del config, stopping, stop_line, talks_closed
 
     async def serve(self) -> None:
         return None

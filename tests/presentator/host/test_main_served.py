@@ -1,5 +1,6 @@
 """What the composition root hands the server it serves through."""
 
+from collections.abc import Awaitable, Callable
 from http import HTTPStatus
 from typing import cast
 
@@ -29,9 +30,13 @@ def served_by_main(environment: pytest.MonkeyPatch, json_logging: None) -> Serve
 
     class ServerThatOnlyRecordsWhatItGot:
         def __init__(
-            self, config: uvicorn.Config, stopping: Stopping, stop_line: StopLine
+            self,
+            config: uvicorn.Config,
+            stopping: Stopping,
+            stop_line: StopLine,
+            talks_closed: Callable[[], Awaitable[None]],
         ) -> None:
-            del stop_line
+            del stop_line, talks_closed
             configs.append(config)
             stoppings.append(stopping)
             self.app = cast("ASGIApp", config.app)
