@@ -1,7 +1,0 @@
-claim_id = "255ad1bec0db4c2c8278d2082be7179b"
-agent = "Claude c1bdc492-301e-41eb-b0a2-b29b0b318ca2"
-role = "builder"
-base = "06e94a6437f061a75acc9682d6f215afd74899f6"
-branch = "claude/issue-1408-take-agents-v0-70-0"
-scope = ["pyproject.toml", "uv.lock"]
-opened_commit = "06f72b2ccf74c9dd948c77428a53e136c0d67fd6"
