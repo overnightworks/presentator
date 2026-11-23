@@ -1,0 +1,8 @@
+claim_id = "9e7340edfe6d4cd6aac738c9c2ed69cf"
+agent = "Claude c1bdc492-301e-41eb-b0a2-b29b0b318ca2"
+role = "builder"
+base = "e0378529ca39503adeaff19f2c5a44df3413ff85"
+branch = "claude/issue-1434-loop-route-drain-and-silent-decision"
+scope = ["docs/co-presenter.md", "docs/configuration.md", "scripts/answer_start.py", "src/presentator/agent/voice_loop.py", "src/presentator/api/copresenter.py", "src/presentator/api/copresenter_talk.py", "src/presentator/contracts/copresenter.py", "src/presentator/host/config.py", "src/presentator/host/copresenter_surface.py", "src/presentator/host/main.py", "src/presentator/host/stopping_server.py", "tests/presentator/agent", "tests/presentator/api", "tests/presentator/host", "tests/scripts/test_answer_start.py", "tests/support"]
+opened_commit = "ef9f3180abba7460a11e10d94f33e8f9e3f475f3"
+whole_reason = "The drain is one path from the stop signal through the server, the composition, the surface and the route to the talk's close, and the silent and unspoken line runs from the loop adapter through the contract and the route to the script; tests share the talk driver and the speech fakes."
