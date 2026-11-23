@@ -23,8 +23,8 @@ from tests.support.copresenter_support import (
     the_token_thread_fails,
 )
 from tests.support.deck_text_support import A_DECK_TEXT, FakeDeckTexts
+from tests.support.failing_hearing import HearingFaultError
 from tests.support.log_lines import events_of, json_logged
-from tests.support.speech_drive import HearingFaultError
 from tests.support.speech_service import a_refusal
 from tests.support.talk_drive import (
     A_LINE,

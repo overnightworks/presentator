@@ -63,6 +63,7 @@ from tests.support.copresenter_support import (
     the_token_thread_fails,
 )
 from tests.support.deck_text_support import FakeDeckTexts
+from tests.support.failing_hearing import hearing_failing_on
 from tests.support.hearing_endings import HEARING_ENDS
 from tests.support.leak_support import everything_shown
 from tests.support.lobby import (
@@ -254,60 +255,7 @@ class WitnessedSpeech:
             raise
 
 
-class HearingFaultError(Exception):
-    """The unexpected failure a hearing that breaks mid-talk lets out."""
-
-
-class FailingHearing:
-    """A hearing that hands on its lines until one breaks it."""
-
-    def __init__(self, speech: SpeechHearingPort, *, on_line: int) -> None:
-        """Wrap this hearing; the line numbered `on_line` breaks it."""
-        self._speech = speech
-        self._on_line = on_line
-
-    async def readiness(self) -> CoPresenterReadiness:
-        return await self._speech.readiness()
-
-    async def relay(  # noqa: PLR0913 - the port's signature
-        self,
-        browser: HearingSocket,
-        language: str,
-        tokens: SpeechTokenSource,
-        *,
-        ended: asyncio.Event,
-        heard: Callable[[HearingTranscript], Awaitable[None]],
-        text: Callable[[str], None] | None = None,
-    ) -> None:
-        lines = 0
-
-        async def heard_then_break(transcript: HearingTranscript) -> None:
-            nonlocal lines
-            lines += transcript.final
-            if lines == self._on_line:
-                raise HearingFaultError
-            await heard(transcript)
-
-        await self._speech.relay(
-            browser, language, tokens, ended=ended, heard=heard_then_break, text=text
-        )
-
-    async def refuse(
-        self, browser: HearingSocket, unavailable: CoPresenterUnavailableError
-    ) -> None:
-        await self._speech.refuse(browser, unavailable)
-
-
 def _real_speech_adapters(
-    origin: str, scenario: SpeechScenario
-) -> tuple[SpeechHearingPort, SpeechSpeaking]:
-    hearing, speaking = _speech_adapters(origin, scenario)
-    if scenario.hearing_fails_on_line is None:
-        return hearing, speaking
-    return FailingHearing(hearing, on_line=scenario.hearing_fails_on_line), speaking
-
-
-def _speech_adapters(
     origin: str, scenario: SpeechScenario
 ) -> tuple[SpeechHearing, SpeechSpeaking]:
     if scenario.bounded_calls_stall:
@@ -401,10 +349,14 @@ def a_speech_instance(
     errors: list[BaseException] = []
     serving = scenario.peer or (lambda: a_loopback_server(scenario.service.app()))
     with a_served_origin(serving) as origin:
+        hearing, speaking = _real_speech_adapters(origin, scenario)
         hosts = two_hosts(
             engine,
             copresenter=a_surface_over(
-                _real_speech_adapters(origin, scenario),
+                (
+                    hearing_failing_on(hearing, scenario.hearing_fails_on_line),
+                    speaking,
+                ),
                 gateway=gateway,
                 limiter=limiter,
                 deadline=deadline,
