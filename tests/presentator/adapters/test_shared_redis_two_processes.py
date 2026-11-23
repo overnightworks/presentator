@@ -20,12 +20,11 @@ from tests.presentator.host.support.app_processes import two_free_ports
 from tests.support.copresenter_support import ASK, QUESTION
 from tests.support.log_lines import LogLine, json_lines_among
 from tests.support.redis import relay_in_front_of
-from tests.support.two_processes import TwoProcesses, two_modules
+from tests.support.two_processes import HOST_PROCESS_SECONDS, TwoProcesses, two_modules
 
 _MODULE = "tests.presentator.adapters.support.ask_lease_process"
 _LEASE_MILLISECONDS = 2000
 _REQUEST_SECONDS = 30
-_START_SECONDS = 60
 _POLL_SECONDS = 0.1
 
 
@@ -58,7 +57,7 @@ class _Process:
 
 
 def _wait_until_serving(port: int, process: object) -> None:
-    deadline = time.monotonic() + _START_SECONDS
+    deadline = time.monotonic() + HOST_PROCESS_SECONDS
     while time.monotonic() < deadline:
         try:
             if httpx2.get(f"http://127.0.0.1:{port}{HEALTH_PATH}").is_success:

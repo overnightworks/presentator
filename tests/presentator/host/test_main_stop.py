@@ -37,7 +37,7 @@ from tests.support.log_lines import (
     json_logged,
 )
 from tests.support.postgres import engine_on
-from tests.support.two_processes import COLD_START_SECONDS, CONSOLE_ENTRY_POINT
+from tests.support.two_processes import CONSOLE_ENTRY_POINT, HOST_PROCESS_SECONDS
 
 _STATEMENT_TIMEOUT_SECONDS = 1
 _STOP_SIGNALS = (signal.SIGINT, signal.SIGTERM)
@@ -94,7 +94,7 @@ def test_leaving_the_lifespan_stops_the_chores_before_it_closes_the_instance() -
 
 
 def _wait_until_a_statement_waits(engine: Engine, waiting: TextClause) -> None:
-    deadline = time.monotonic() + COLD_START_SECONDS
+    deadline = time.monotonic() + HOST_PROCESS_SECONDS
     while time.monotonic() < deadline:
         with engine.connect() as connection:
             if connection.execute(waiting).scalar_one():

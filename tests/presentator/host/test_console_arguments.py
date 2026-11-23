@@ -12,8 +12,8 @@ from presentator.host.lifecycle import (
 )
 from tests.support.log_lines import json_lines
 from tests.support.two_processes import (
-    COLD_START_SECONDS,
     CONSOLE_ENTRY_POINT,
+    HOST_PROCESS_SECONDS,
     WORKER_CONSOLE_ENTRY_POINT,
     measured,
 )
@@ -30,7 +30,7 @@ def _run(
         env=measured({"PATH": "/usr/bin:/bin"}),
         capture_output=True,
         text=True,
-        timeout=COLD_START_SECONDS,
+        timeout=HOST_PROCESS_SECONDS,
         check=False,
     )
 

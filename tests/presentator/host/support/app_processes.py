@@ -31,8 +31,8 @@ from tests.support.postgres import database_environment
 from tests.support.redis import emptied_database_url
 from tests.support.sign_in_support import ADMIN, MEMBER
 from tests.support.two_processes import (
-    COLD_START_SECONDS,
     CONSOLE_ENTRY_POINT,
+    HOST_PROCESS_SECONDS,
     TwoProcesses,
     two_modules,
 )
@@ -279,7 +279,7 @@ def _environment(
 
 
 def _wait_until_ready(app: App) -> None:
-    deadline = time.monotonic() + COLD_START_SECONDS
+    deadline = time.monotonic() + HOST_PROCESS_SECONDS
     while time.monotonic() < deadline:
         assert app.process.poll() is None, "the app process ended while starting"
         try:

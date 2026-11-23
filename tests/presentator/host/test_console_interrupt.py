@@ -20,8 +20,8 @@ from tests.presentator.host.support.held_start.sitecustomize import (
 )
 from tests.support.log_lines import json_lines
 from tests.support.two_processes import (
-    COLD_START_SECONDS,
     CONSOLE_ENTRY_POINT,
+    HOST_PROCESS_SECONDS,
     WORKER_CONSOLE_ENTRY_POINT,
 )
 
@@ -59,7 +59,7 @@ def _interrupted_while_held(console_script: Path, held_at: str) -> _Interrupted:
             with os.fdopen(read_end, "rb") as held:
                 assert held.read(len(HELD)) == HELD
             process.send_signal(signal.SIGINT)
-            output, errors = process.communicate(timeout=COLD_START_SECONDS)
+            output, errors = process.communicate(timeout=HOST_PROCESS_SECONDS)
         finally:
             process.kill()
     return _Interrupted(process.returncode, output, errors)

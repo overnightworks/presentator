@@ -12,7 +12,7 @@ import pytest
 from presentator.host.lifecycle import ServerEvent
 from tests.presentator.host.support.worker_process import Phase
 from tests.support.log_lines import json_lines
-from tests.support.two_processes import COLD_START_SECONDS
+from tests.support.two_processes import HOST_PROCESS_SECONDS
 
 _CHILD = "tests.presentator.host.support.worker_process"
 # A module started with `-m` imports `tests` from here.
@@ -51,7 +51,7 @@ def test_a_stop_signal_ends_the_worker_in_its_stop_line_alone(
         try:
             before = _read_until(process, reached)
             process.send_signal(stop_signal)
-            after, errors = process.communicate(timeout=COLD_START_SECONDS)
+            after, errors = process.communicate(timeout=HOST_PROCESS_SECONDS)
         finally:
             process.kill()
 
