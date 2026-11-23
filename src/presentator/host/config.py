@@ -30,6 +30,7 @@ from presentator.adapters.build_wire import (
 from presentator.adapters.postgres.engine import LONGEST_TIMEOUT
 from presentator.adapters.speech import VoiceId, voice_speaks
 from presentator.agent.settings import AgentSettings
+from presentator.contracts.copresenter import TALK_DRAIN_SECONDS
 from presentator.contracts.words import LANGUAGES, Language
 from presentator.host.environment import (
     ENVIRONMENT_PREFIX,
@@ -293,6 +294,8 @@ type StatementTimeoutSeconds = Annotated[
 ]
 _STATEMENT_TIMEOUT_SECONDS: Final = 10.0
 
+type DrainSeconds = Annotated[float, Field(gt=0, allow_inf_nan=False)]
+
 
 @dataclass(frozen=True, slots=True)
 class BuildWorkerLink:
@@ -445,6 +448,9 @@ class Settings(
     speech_voices: Annotated[
         Mapping[Language, VoiceId], BeforeValidator(_over_the_shipped_voices)
     ] = _SHIPPED_VOICES
+    # A stopping pod cuts a decision still running on the talk socket past this
+    # bound; the pod's grace period ends the process, so it stays below it.
+    talk_drain_seconds: DrainSeconds = TALK_DRAIN_SECONDS
     # Empty: the client address is the ASGI peer. A list is the peers whose
     # X-Forwarded-For this instance believes.
     trusted_proxies: Annotated[str, AfterValidator(_a_proxy_list)] = ""

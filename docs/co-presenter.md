@@ -97,7 +97,10 @@ the cluster, and that hop's trust sentence is in
   lets a running answer finish and closes each hearing with 1012 (service
   restart); the half-heard sentence is lost and the speaker repeats it. The
   overlay opens the hearing again at the same address, which any ready pod
-  answers, with no fault word; any other close shows "No hearing".
+  answers, with no fault word; any other close shows "No hearing". On the loop
+  route a running decision ends, no new one starts, and the talk closes 1012 as
+  soon as no decision runs on it, or at the drain's limit
+  (`PRESENTATOR_TALK_DRAIN_SECONDS`), which cuts a decision still running.
 - **CP17** A final transcript heard while an answer is spoken or streamed stops
   that answer at once, its queued and playing audio included, and is asked as
   the next question. This holds until the talk-over rule decides what an
@@ -113,7 +116,8 @@ a browser that leaves ends `outcome` ok with `ending` `browser_left`, also when
 the service closed in the same moment, and a session that ends (CP14) ends ok
 with `ending` `app_ended`, mid-hearing and at a reopening's token read alike. A
 `cancelled` outcome is a hearing whose task was cancelled from outside, never a
-browser that left. Each opening of the service's socket writes one
+browser that left; a talk the stop closes ends `cancelled` too. Each opening of
+the service's socket writes one
 `hearing_opening.ended` with its `attempt`; a reopening that opened names its
 `cause` and how long the hearing went unheard (`unheard_ms`), one that ended
 before it opened names neither, and a reopening attempt that did not open ends
@@ -144,8 +148,13 @@ gateway's code, or `request_invalid` for an ask whose message never became a
 request), `stop_outcome` (the wording it ends in), `detail` and `retry_after_s`
 (null where none exists). The loop route writes one `answer.ended` for each
 decision, in the trace of the heard line that woke it, and one `echo.dropped`
-for each heard line that repeats the answer just played, without its text. No
-line holds the question, the answer or a transcript.
+for each heard line that repeats the answer just played, without its text. A
+decision the model kept silent (it answered `[silent]` and played no sentence)
+ends `ok` with `reason` `silent` and no `first_output_ms`; an answer the model
+gave that the pod did not speak whole (speech failed, or the browser refused a
+sound) ends `failed` with `reason` `unspoken`; it carries a `first_output_ms`
+when a sound was sent before the cut. No line holds the question, the answer
+or a transcript.
 
 **How soon an answer begins.** The answer start is one turn's time from the end
 of speech to the first audio its answer sends, the figure behind the vision's
@@ -158,8 +167,10 @@ scripts/answer_start.py <files>` (or the lines on standard input) reads both
 services' JSON lines of a release, joins them by `trace_id` and prints `turns`,
 `p50_ms` and `p95_ms` (nearest rank), then one `unjoined <trace_id> <reason>`
 per trace it leaves out: `no_end_of_speech` (an ask under a fresh trace),
-`no_answer` (a turn nobody asked), `no_first_audio`
-(an answer that sent no audio), `repeated` or `malformed`. It exits 1 when no
-turn joins. The two instants come from two processes' wall clocks, so the
-figure carries their offset, and it ends where the server sends the first audio,
-before the network and the browser's playback.
+`no_answer` (a turn nobody asked), `silent` (a decision the model kept silent,
+which is no fault), `no_first_audio` (an answer that sent no audio, such as an
+unspoken one whose speech failed before any sound; one whose sound the browser
+refused did send audio and joins as a figure), `repeated` or `malformed`. It
+exits 1 when no turn joins. The two instants come from two processes' wall
+clocks, so the figure carries their offset, and it ends where the server sends
+the first audio, before the network and the browser's playback.

@@ -132,6 +132,7 @@ some of them.
 | `PRESENTATOR_SOURCE_POLL_SECONDS` | `300` | Interval of the source poll; a source taken in within it waits for the next tick. |
 | `PRESENTATOR_SOURCE_TIMEOUT_SECONDS` | `180` | Bound of one pull and of one Check connection. |
 | `PRESENTATOR_DATABASE_STATEMENT_TIMEOUT_SECONDS` | `10` | Bound of every Postgres statement served; Postgres cancels one past it, so a chore held by a lock ends and shutdown does not wait for it. A wait for the refresh lock gets `PRESENTATOR_BUILD_TIMEOUT_SECONDS` on top, and the two together stay within the 2147483.647 seconds Postgres holds. `presentator unpin-host` runs under it too; `presentator migrate` runs unbounded. |
+| `PRESENTATOR_TALK_DRAIN_SECONDS` | `20` | Above 0 and finite. How long a stopping pod lets a decision running on `/copresenter/talk` end before it cuts it and closes the talk with 1012. Keep it below the pod's termination grace period, which the platform's manifest sets, so the drain ends before the process is killed. |
 | `PRESENTATOR_TOOLCHAIN` | `slidev` | The project carrying Slidev. Read once at start under either runner; a project that cannot be read refuses to start. |
 | `PRESENTATOR_LOBBY_BUILD` | `frontend/build` | The lobby app's `pnpm build` output; an instance without a build it can serve refuses to start. |
 | `PRESENTATOR_BUILDS` | `builds` | Where talks are built, and where this process keeps its copies of the stored builds it serves. |

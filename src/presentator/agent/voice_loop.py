@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import time
 from contextlib import aclosing
+from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, Final, assert_never
 
@@ -29,6 +31,7 @@ from presentator.contracts.copresenter import (
     Audio,
     CoPresenterUnavailableError,
     DecisionBegan,
+    DecisionEnd,
     DecisionEnded,
     DecisionStopped,
     EchoDropped,
@@ -82,6 +85,7 @@ class TalkLease:
         self._limiter = limiter
         self._session_id = session_id
         self._ticket: AskTicket | None = None
+        self._taken_in = contextvars.copy_context()
         self._releasing: asyncio.Task[None] | None = None
 
     async def take(self) -> None:
@@ -106,12 +110,17 @@ class TalkLease:
                 detail=_LEASE_DETAIL,
             )
         self._ticket = admitted
+        self._taken_in = contextvars.copy_context()
 
     def end_span(self) -> None:
         """Free the lease a decision held; one it was refused holds nothing."""
         ticket, self._ticket = self._ticket, None
         if ticket is not None:
-            self._releasing = asyncio.create_task(ticket.release())
+            # The release logs in the trace the lease was taken in, not the one
+            # of whatever reported the decision's end.
+            self._releasing = asyncio.create_task(
+                ticket.release(), context=self._taken_in
+            )
 
     async def close(self) -> None:
         """Free the lease whatever ended the talk; a cancelled caller still frees it."""
@@ -244,16 +253,48 @@ def _every_line(line: PlaceEntry, *, first_after_answer: bool) -> bool:
     return True
 
 
-def _told(
+@dataclass(slots=True)
+class _Tally:
+    """What one decision told of its sound, from the loop's events."""
+
+    silent: bool = False
+    spoke: bool = False
+    refused: bool = False
+    failed: bool = False
+
+    def end(self) -> DecisionEnd:
+        """How the decision ended, and the tally cleared for the next one."""
+        # A decision that spoke and then answered `[silent]` is no silent one.
+        if self.refused:
+            how = DecisionEnd.UNSPOKEN
+        elif self.silent and not self.spoke and not self.failed:
+            how = DecisionEnd.SILENT
+        elif self.spoke:
+            how = DecisionEnd.SPOKE
+        else:
+            how = DecisionEnd.NOTHING
+        self.silent = self.spoke = self.refused = self.failed = False
+        return how
+
+
+def told(
     report: Callable[[TalkEvent], None],
 ) -> Callable[[agents_voice.VoiceEvent], None]:
     """The loop's events as the route's records; the others tell it nothing."""
+    tally = _Tally()
 
     def tell(event: agents_voice.VoiceEvent) -> None:
         match event:
             case agents_voice.Woke():
                 report(DecisionBegan())
+            case agents_voice.StayedSilent():
+                tally.silent = True
+            case agents_voice.SentenceStarted():
+                tally.spoke = True
+            case agents_voice.SentenceRefused():
+                tally.refused = True
             case agents_voice.DecisionFailed():
+                tally.failed = True
                 report(
                     DecisionStopped(
                         reason=_REASONS[event.outcome],
@@ -261,7 +302,7 @@ def _told(
                     )
                 )
             case agents_voice.DecisionEnded():
-                report(DecisionEnded())
+                report(DecisionEnded(tally.end()))
             case agents_voice.EchoDropped():
                 report(EchoDropped())
             case _:
@@ -282,7 +323,7 @@ class VoiceLoopTalks:
     async def run(self, talk: Talk) -> None:
         """Hear and answer until the hearing ends; the lease is free when it returns."""
         lease = TalkLease(talk.limiter, talk.session_id)
-        report = _told(talk.report)
+        report = told(talk.report)
 
         def reported(event: agents_voice.VoiceEvent) -> None:
             if isinstance(event, agents_voice.DecisionEnded):

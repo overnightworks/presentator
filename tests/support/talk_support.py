@@ -19,7 +19,7 @@ from webauth.web_auth import WebAuth
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
-from presentator.api.copresenter import CoPresenterSurface
+from presentator.api.copresenter import CoPresenterSurface, OpenTalks
 from presentator.api.talk import create_talk
 from presentator.application.decks import Decks
 from presentator.application.identity import SESSION_LIFETIME
@@ -184,19 +184,22 @@ def _talk_over(
     decks_store: FakeDeckStore,
     web_auth: WebAuth,
     copresenter: SurfaceFactory | None,
-) -> FastAPI:
-    """The talk host, its co-presenter surface made over this instance's store."""
-    return create_talk(
+) -> tuple[FastAPI, OpenTalks]:
+    """The talk host, its co-presenter surface made over this instance's store.
+
+    The registry is the one the surface's talks register in.
+    """
+    surface = (
+        None if copresenter is None else copresenter(decks_store, sessions, web_auth)
+    )
+    talk = create_talk(
         sessions=sessions,
         decks=decks,
         web_auth=web_auth,
         lobby_origin=A_BROWSERS_ADDRESS,
-        copresenter=(
-            None
-            if copresenter is None
-            else copresenter(decks_store, sessions, web_auth)
-        ),
+        copresenter=surface,
     )
+    return talk, OpenTalks() if surface is None else surface.open_talks
 
 
 def _decks_over_a_store(
@@ -252,11 +255,11 @@ def two_hosts(
         issuer_calls=issuer_calls,
         client=a_client(origin=A_TALK_ADDRESS, issuer=realm, speech_scope=speech_scope),
     )
-    talk = _talk_over(
+    talk, open_talks = _talk_over(
         PostgresSessions(database), decks, decks_store, talk_auth, copresenter
     )
     return Hosts(
-        router=_served_by_host(lobby, talk),
+        router=_served_by_host(lobby, talk, open_talks),
         lobby=lobby,
         talk=talk,
         lobby_config=installed_web_auth_config(lobby),
@@ -268,7 +271,7 @@ def two_hosts(
     )
 
 
-def _served_by_host(lobby: FastAPI, talk: FastAPI) -> ASGIApp:
+def _served_by_host(lobby: FastAPI, talk: FastAPI, open_talks: OpenTalks) -> ASGIApp:
     """The host's router over both apps, with chores that never run."""
     return served_by_host(
         Instance(
@@ -277,6 +280,7 @@ def _served_by_host(lobby: FastAPI, talk: FastAPI) -> ASGIApp:
             trusted_proxies=TrustedProxies.parse(""),
             poller=_never(ChoreCode.SOURCE_POLL),
             session_sweep=_never(ChoreCode.SESSION_SWEEP),
+            open_talks=open_talks,
         ),
         a_settings(),
     )

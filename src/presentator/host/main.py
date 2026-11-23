@@ -82,6 +82,7 @@ from presentator.api.auth import (
     create_lobby,
     lobby_web_auth,
 )
+from presentator.api.copresenter import CoPresenterSurface, OpenTalks
 from presentator.api.health import Readiness, Stopping
 from presentator.api.lobby_shell import LobbyBuildError, LobbyShell
 from presentator.api.people import AdminPeople
@@ -168,6 +169,7 @@ class Instance:
     close: Callable[[], None] = _nothing_to_close
     aclose: Callable[[], Awaitable[None]] = _nothing_to_aclose
     stopping: Stopping = field(default_factory=Stopping)
+    open_talks: OpenTalks
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -249,6 +251,9 @@ def _instance_over(  # noqa: PLR0913 - the composition root hands the instance e
         issuer_calls=issuer_calls,
     )
     trusted_proxies = TrustedProxies.parse(settings.trusted_proxies)
+    copresenter = copresenter_surface(
+        settings, stores.sessions, decks, talk_auth, texts, redis, stopping
+    )
     return Instance(
         lobby=_lobby(
             settings,
@@ -260,21 +265,14 @@ def _instance_over(  # noqa: PLR0913 - the composition root hands the instance e
             shell=shell,
             trusted_proxies=trusted_proxies,
         ),
-        talk=_talk(
-            settings,
-            stores,
-            decks,
-            talk_auth,
-            texts,
-            redis=redis,
-            stopping=stopping,
-        ),
+        talk=_talk(settings, stores, decks, talk_auth, copresenter=copresenter),
         trusted_proxies=trusted_proxies,
         poller=_poller(settings, decks),
         session_sweep=_session_sweep(stores.sessions, SystemClock()),
         close=stores.close,
         aclose=redis.aclose,
         stopping=stopping,
+        open_talks=copresenter.open_talks,
     )
 
 
@@ -503,15 +501,13 @@ def _decks(
     )
 
 
-def _talk(  # noqa: PLR0913 - the composition root hands the talk host each owner
+def _talk(
     settings: Settings,
     stores: Stores,
     decks: Decks,
     web_auth: WebAuth,
-    texts: DeckTexts,
     *,
-    redis: SharedRedis,
-    stopping: Stopping,
+    copresenter: CoPresenterSurface,
 ) -> FastAPI:
     """The talk host, with the co-presenter it speaks to."""
     return create_talk(
@@ -519,9 +515,7 @@ def _talk(  # noqa: PLR0913 - the composition root hands the talk host each owne
         decks=decks,
         web_auth=web_auth,
         lobby_origin=settings.public_origin,
-        copresenter=copresenter_surface(
-            settings, stores.sessions, decks, web_auth, texts, redis, stopping
-        ),
+        copresenter=copresenter,
         readiness=stores.readiness,
     )
 
@@ -743,4 +737,6 @@ async def _serve(instance: Instance, settings: Settings, stop_line: StopLine) ->
     served = served_config(
         served_by_host(instance, settings), host=settings.host, port=settings.port
     )
-    await StoppingServer(served, instance.stopping, stop_line).serve()
+    await StoppingServer(
+        served, instance.stopping, stop_line, instance.open_talks.closed
+    ).serve()
