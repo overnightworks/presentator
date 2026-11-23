@@ -294,8 +294,11 @@ class _TalkBrowser:
 
     def played(self, sound: int, end: SoundEnd) -> None:
         """The browser reports a sound; one no play waits on is ignored."""
-        if self._playing is not None and self._playing[0] == sound:
-            self._playing[1].set_result(end)
+        if self._playing is None:
+            return
+        waiting, ended = self._playing
+        if waiting == sound and not ended.done():
+            ended.set_result(end)
 
 
 def _handler_of(browser: _TalkBrowser, hearing: _TalkHearing) -> Callable[[str], None]:

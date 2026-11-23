@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
+from contextlib import suppress
 from typing import TYPE_CHECKING, Any, Final, cast
 
 import pytest
@@ -13,9 +15,11 @@ from presentator.api.copresenter_talk import (
     PlayedFrame,
     ShownFrame,
     SoundEnd,
+    _DownFrames,
+    _TalkBrowser,
     read_up_frame,
 )
-from presentator.contracts.copresenter import UnreadableTalkMessageError
+from presentator.contracts.copresenter import Audio, UnreadableTalkMessageError
 from tests.support.log_lines import events_of, json_logged
 from tests.support.speech_service import a_delta
 from tests.support.talk_drive import (
@@ -29,6 +33,7 @@ from tests.support.talk_drive import (
 
 if TYPE_CHECKING:
     from sqlalchemy import Engine
+    from starlette.websockets import WebSocket
 
 _POLICY_VIOLATION: Final = 1008
 _THREE_SENTENCES: Final = ("Eins.", "Zwei.", "Drei.")
@@ -242,6 +247,43 @@ def test_a_played_frame_of_a_sound_already_ended_changes_nothing_and_keeps_the_s
         third = talk.until("audio")[-1]
 
     assert (second["text"], third["text"]) == (_THREE_SENTENCES[1], _THREE_SENTENCES[2])
+
+
+def test_the_same_played_frame_twice_in_a_row_is_taken_once_and_keeps_the_socket(
+    engine: Engine,
+) -> None:
+    with a_talk(engine, completion(" ".join(_THREE_SENTENCES))) as talk:
+        talk.say(A_LINE)
+        first = talk.next_sound()
+        talk.played(first["id"])
+        talk.played(first["id"])
+
+        second = talk.next_sound()
+        talk.played(second["id"])
+        third = talk.next_sound()
+
+    assert (second["text"], third["text"]) == (_THREE_SENTENCES[1], _THREE_SENTENCES[2])
+
+
+@pytest.mark.parametrize(
+    "cut", [False, True], ids=["after the report", "after the cut"]
+)
+def test_a_played_report_before_the_play_resumed_is_ignored(*, cut: bool) -> None:
+    """Buffered reports reach the route before the play they end has resumed."""
+
+    async def report_twice() -> None:
+        browser = _TalkBrowser(_DownFrames(cast("WebSocket", None)), lambda: None)
+        playing = asyncio.create_task(browser.play(Audio(text="Satz.", wav=b"")))
+        await asyncio.sleep(0)
+        if cut:
+            playing.cancel()
+        else:
+            browser.played(1, SoundEnd.ENDED)
+        browser.played(1, SoundEnd.ENDED)
+        with suppress(asyncio.CancelledError):
+            await playing
+
+    asyncio.run(report_twice())
 
 
 def test_an_audio_frame_carries_the_sentence_and_its_sound(engine: Engine) -> None:
