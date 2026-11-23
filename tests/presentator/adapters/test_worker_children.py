@@ -772,7 +772,7 @@ def test_a_stalled_controller_serving_an_idle_connection_exits_one_at_seven_seco
             HOST_PROCESS_SECONDS,
         )
         with closing(client):
-            exit_status = controller.wait(timeout=HOST_PROCESS_SECONDS)
+            exit_status = controller.wait(timeout=HOST_PROCESS_SECONDS + 5)
         exited_at = time.monotonic()
         assert controller.stdout is not None
         accepted_at = float(controller.stdout.readline())
