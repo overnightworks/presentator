@@ -18,10 +18,6 @@ from tests.support.two_processes import (
     measured,
 )
 
-# A console script imports the whole host before it parses an argument, under
-# coverage and on a busy runner: far longer than a call within one process.
-_COLD_START_PATIENCE = PATIENCE * 6
-
 # A word that stands where a secret could: the refusal never repeats it.
 _A_MISPLACED_WORD = "a-word-that-must-not-leak"
 
@@ -34,7 +30,7 @@ def _run(
         env=measured({"PATH": "/usr/bin:/bin"}),
         capture_output=True,
         text=True,
-        timeout=_COLD_START_PATIENCE.total_seconds(),
+        timeout=PATIENCE.total_seconds(),
         check=False,
     )
 
