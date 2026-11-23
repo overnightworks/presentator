@@ -36,7 +36,8 @@ def test_a_stop_that_begins_while_a_sound_plays_lets_the_decision_end(
         talk.until_closed()
 
     (answer,) = events_of(logged, "answer.ended")
-    assert [first["text"], second["text"]] == list(SENTENCES)
+    spoken = [first["text"], second["text"]]
+    assert spoken == list(SENTENCES)
     assert talk.instance.limiter.freed == [talk.session_id]
     assert (answer["outcome"], answer["trace_id"]) == ("ok", _A_TRACE)
     assert isinstance(answer["first_output_ms"], float | int)
