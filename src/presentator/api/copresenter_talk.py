@@ -255,22 +255,28 @@ def _end_cut(step: StepTimer, how: _Cut) -> None:
             assert_never(how)
 
 
-class _TalkBrowser:
+class TalkSounds:
     """The sounds sent down and the slide moves; the browser's reports end a play."""
 
-    def __init__(self, down: _DownFrames, first_output: Callable[[], None]) -> None:
-        self._down = down
+    def __init__(
+        self,
+        send: Callable[[dict[str, object]], None],
+        first_output: Callable[[], None],
+    ) -> None:
+        """Send frames down with this function; report each sound's start."""
+        self._send = send
         self._first_output = first_output
         self._last_id = 0
         self._playing: tuple[int, asyncio.Future[SoundEnd]] | None = None
 
     async def play(self, audio: Audio) -> None:
+        """Send the sound down and return when the browser says it ended."""
         self._last_id += 1
         sound = self._last_id
         ended = asyncio.get_running_loop().create_future()
         self._playing = (sound, ended)
         self._first_output()
-        self._down.send(
+        self._send(
             {
                 "kind": "audio",
                 "id": sound,
@@ -282,7 +288,7 @@ class _TalkBrowser:
         try:
             end = await ended
         except asyncio.CancelledError:
-            self._down.send({"kind": "stop", "id": sound})
+            self._send({"kind": "stop", "id": sound})
             raise
         finally:
             self._playing = None
@@ -290,7 +296,8 @@ class _TalkBrowser:
             raise SoundRefusedError
 
     def show_slide(self, number: int) -> None:
-        self._down.send({"kind": "slide", "number": number})
+        """Send the slide the model moved the deck to."""
+        self._send({"kind": "slide", "number": number})
 
     def played(self, sound: int, end: SoundEnd) -> None:
         """The browser reports a sound; one no play waits on is ignored."""
@@ -301,7 +308,7 @@ class _TalkBrowser:
             ended.set_result(end)
 
 
-def _handler_of(browser: _TalkBrowser, hearing: _TalkHearing) -> Callable[[str], None]:
+def _handler_of(browser: TalkSounds, hearing: _TalkHearing) -> Callable[[str], None]:
     def handle(text: str) -> None:
         frame = read_up_frame(text)
         match frame:
@@ -426,7 +433,7 @@ async def _talking(
     down = _DownFrames(socket)
     hearing = _TalkHearing()
     decisions = _Decisions(down)
-    browser = _TalkBrowser(down, decisions.first_output)
+    browser = TalkSounds(down.send, decisions.first_output)
     ended = asyncio.Event()
 
     async def heard(transcript: HearingTranscript) -> None:  # NOSONAR(S7503)

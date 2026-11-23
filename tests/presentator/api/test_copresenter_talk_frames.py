@@ -15,8 +15,7 @@ from presentator.api.copresenter_talk import (
     PlayedFrame,
     ShownFrame,
     SoundEnd,
-    _DownFrames,
-    _TalkBrowser,
+    TalkSounds,
     read_up_frame,
 )
 from presentator.contracts.copresenter import Audio, UnreadableTalkMessageError
@@ -33,7 +32,6 @@ from tests.support.talk_drive import (
 
 if TYPE_CHECKING:
     from sqlalchemy import Engine
-    from starlette.websockets import WebSocket
 
 _POLICY_VIOLATION: Final = 1008
 _THREE_SENTENCES: Final = ("Eins.", "Zwei.", "Drei.")
@@ -272,7 +270,7 @@ def test_a_played_report_before_the_play_resumed_is_ignored(*, cut: bool) -> Non
     """Buffered reports reach the route before the play they end has resumed."""
 
     async def report_twice() -> None:
-        browser = _TalkBrowser(_DownFrames(cast("WebSocket", None)), lambda: None)
+        browser = TalkSounds(lambda _frame: None, lambda: None)
         playing = asyncio.create_task(browser.play(Audio(text="Satz.", wav=b"")))
         await asyncio.sleep(0)
         if cut:
