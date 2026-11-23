@@ -4,6 +4,7 @@ from typing import cast
 
 from agents.config import AgentConfig, ChatGateway
 from pydantic import BaseModel, ConfigDict, model_validator
+from webauth.admission import GroupPath
 
 
 class AgentSettings(BaseModel):
@@ -24,7 +25,7 @@ class AgentSettings(BaseModel):
             return {key: value for key, value in section.items() if key != "api_group"}
         return given
 
-    def configured(self, api_group: object) -> AgentConfig:
+    def configured(self, api_group: GroupPath) -> AgentConfig:
         """The client's whole configuration, its group the realm's."""
         return AgentConfig(gateway=self.gateway, api_group=str(api_group))
 

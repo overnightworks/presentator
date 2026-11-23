@@ -106,7 +106,11 @@ def test_a_malformed_realm_group_refuses_naming_only_its_key_and_never_the_value
 @pytest.mark.parametrize("key", ["REALM_MCP_SCOPE", "REALM_SPEECH_SCOPE"])
 @pytest.mark.parametrize(
     "malformed",
-    [pytest.param("two scopes", id="a space"), pytest.param('"quoted"', id="a quote")],
+    [
+        pytest.param("two scopes", id="a space"),
+        pytest.param('"quoted"', id="a quote"),
+        pytest.param("a\\backslash", id="a backslash"),
+    ],
 )
 def test_a_malformed_realm_scope_refuses_naming_only_its_key_and_never_the_value(
     environment: pytest.MonkeyPatch, key: str, malformed: str
