@@ -155,8 +155,6 @@ class _TalkHearing:
         self._moved.set()
 
     def show(self, number: int) -> None:
-        if self._draining:
-            return
         self._slide = number
         self._moved.set()
 
@@ -164,7 +162,6 @@ class _TalkHearing:
         """Yield no line from now on: the unread ones are dropped, new ones ignored."""
         self._draining = True
         self._finals.clear()
-        self._slide = None
 
     def end(self) -> None:
         self._ended = True

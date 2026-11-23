@@ -52,6 +52,7 @@ def test_a_line_heard_after_the_stop_wakes_no_decision_and_sends_no_error(
         talk.stop()
         talk.instance.deadline.waiting(talk.instance.drain_seconds)
         talk.say("Noch eine Zeile.")
+        talk.until("heard")
         talk.played(first["id"])
         talk.play_through()
 
