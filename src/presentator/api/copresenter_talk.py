@@ -49,7 +49,7 @@ from presentator.contracts.copresenter import (
     TalkEvent,
     UnreadableTalkMessageError,
 )
-from presentator.contracts.words import SOURCE_LANGUAGE, Language
+from presentator.contracts.words import Language
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -335,9 +335,7 @@ def _talk_route(
     guard: SessionGuard,
     sessions: SessionRecordStore,
 ) -> Callable[[WebSocket, str, str], Awaitable[None]]:
-    async def _talk(
-        socket: WebSocket, deck: str = "", language: str = SOURCE_LANGUAGE
-    ) -> None:
+    async def _talk(socket: WebSocket, deck: str, language: str) -> None:
         if (
             socket.headers.get("origin") != surface.browser_origin
             or not _QUERY_KEYS.issuperset(socket.query_params)

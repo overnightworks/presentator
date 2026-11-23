@@ -108,12 +108,15 @@ def test_a_deck_the_person_does_not_own_closes_1008_and_asks_nothing(
 @pytest.mark.parametrize(
     "query",
     [
-        pytest.param("deck=a-deck&language=de&other=1", id="a key of no one's"),
-        pytest.param("deck=a-deck&deck=a-deck", id="a key twice"),
+        pytest.param(f"deck={A_DECK}&language=de&other=1", id="a key of no one's"),
+        pytest.param(f"deck={A_DECK}&deck={A_DECK}", id="a key twice"),
         pytest.param("language=de&language=en", id="the language twice"),
+        pytest.param(f"deck={A_DECK}", id="the language missing"),
+        pytest.param("language=de", id="the deck missing"),
+        pytest.param("", id="neither"),
     ],
 )
-def test_a_query_with_more_than_the_deck_and_the_language_once_closes_1008(
+def test_a_query_without_the_deck_and_the_language_once_each_closes_1008(
     engine: Engine, query: str
 ) -> None:
     code, _requests = closed_at_open(engine, f"{TALK}?{query}")
