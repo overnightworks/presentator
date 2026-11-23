@@ -1,0 +1,8 @@
+claim_id = "5f441848001e4c2dae02776158630490"
+agent = "Claude c1bdc492-301e-41eb-b0a2-b29b0b318ca2"
+role = "builder"
+base = "82ede91a01aeea7a5c48317456e9cd480a9e566b"
+branch = "claude/issue-1413-presentator-takes-webauth-0-45-0-a-store"
+scope = ["docs/ARCHITECTURE.md", "pyproject.toml", "src/presentator/adapters/postgres/sessions.py", "src/presentator/adapters/postgres/sign_in.py", "tests/presentator/adapters/test_identity.py", "tests/presentator/api/test_auth_backchannel_logout.py", "tests/presentator/api/test_auth_logout.py", "tests/presentator/api/test_auth_sign_in_callback.py", "uv.lock"]
+opened_commit = "a4874490550a04bea38992f377bbd00b5aeaffe6"
+whole_reason = "The pin, its lock, the one account read that must classify an outage, the two tests that drive an outage through the transaction and the doc sentence and docstring that state the old 500 move together, because the webauth bump changes what an unreachable store answers."
