@@ -87,7 +87,7 @@ def _output_of(processes: TwoProcesses) -> str:
     written: list[str] = []
     for each in (processes.first, processes.second):
         each.kill()
-        written.append(each.communicate(timeout=_REQUEST_SECONDS)[0])
+        written.append(each.communicate(timeout=HOST_PROCESS_SECONDS)[0])
     return "".join(written)
 
 
