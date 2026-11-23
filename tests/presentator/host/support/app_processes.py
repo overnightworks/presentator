@@ -260,7 +260,8 @@ def _environment(
     app_settings = {
         name: value
         for name, value in os.environ.items()
-        if name.startswith("PRESENTATOR_") and not name.startswith("PRESENTATOR_TEST_")
+        if name.startswith(("PRESENTATOR_", "REALM_"))
+        and not name.startswith("PRESENTATOR_TEST_")
     }
     return {
         **app_settings,

@@ -26,6 +26,7 @@ from tests.support.deck_text_support import FakeDeckTexts
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
+    A_REALM,
     A_TALK_ADDRESS,
     AN_ISSUER,
     LOBBY_SHELL,
@@ -48,6 +49,7 @@ def an_agent_front() -> AgentFront:
         origin=A_BROWSERS_ADDRESS,
         issuer=AN_ISSUER,
         trusted_proxies=TrustedProxies.parse(""),
+        realm=A_REALM,
     )
 
 

@@ -21,7 +21,6 @@ from sqlalchemy import Engine
 from webauth.ports import AccountKind
 from webauth.proxies import TrustedProxies
 
-from presentator.agent.mcp import AGENT_GROUP, MCP_GROUP, MCP_SCOPE
 from presentator.api.deck_list_api import DECK_LIST_PATH
 from presentator.api.people import ADMIN_PREFIX
 from presentator.api.preference_api import ACCOUNT_PATH, SETTINGS_PATH
@@ -42,6 +41,7 @@ from tests.presentator.agent.support.mcp_world import (
 )
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
+    A_REALM,
     A_TALK_ADDRESS,
     AN_ISSUER,
     a_crowd,
@@ -130,7 +130,9 @@ def test_an_own_account_agent_in_presentators_groups_is_admitted_with_no_decks(
     world: World,
 ) -> None:
     """Its account is created on that first admission, as an agent."""
-    headers = world.own_agent(groups=[*MEMBER, MCP_GROUP, AGENT_GROUP])
+    headers = world.own_agent(
+        groups=[*MEMBER, str(A_REALM.mcp_group), str(A_REALM.agent_group)]
+    )
 
     listed = listed_through_mcp(world.program(), headers)
 
@@ -145,8 +147,8 @@ def test_an_own_account_agent_in_presentators_groups_is_admitted_with_no_decks(
 @pytest.mark.parametrize(
     "groups",
     [
-        pytest.param([*MEMBER, AGENT_GROUP], id="no presentator group"),
-        pytest.param([AGENT_GROUP], id="the agent group alone"),
+        pytest.param([*MEMBER, str(A_REALM.agent_group)], id="no presentator group"),
+        pytest.param([str(A_REALM.agent_group)], id="the agent group alone"),
     ],
 )
 def test_an_own_account_agent_outside_presentators_groups_is_refused_and_makes_nothing(
@@ -336,7 +338,7 @@ def test_an_admin_persons_agents_client_bearer_never_reads_as_admin(
     assert world.scene.sign_in(
         admin_browser, subject=World.ADMIN, username="root", groups=ADMIN
     )
-    headers = world.bearer(subject=World.ADMIN, groups=[*ADMIN, MCP_GROUP])
+    headers = world.bearer(subject=World.ADMIN, groups=[*ADMIN, str(A_REALM.mcp_group)])
 
     session = called_through_mcp(world.program(), headers, "get_session")
 
@@ -370,7 +372,9 @@ def test_set_account_theme_changes_only_the_theme_of_the_person_whose_token_it_i
 
 def test_an_own_account_agent_sets_only_its_own_theme(world: World) -> None:
     """No person's preference changes."""
-    headers = world.own_agent(groups=[*MEMBER, MCP_GROUP, AGENT_GROUP])
+    headers = world.own_agent(
+        groups=[*MEMBER, str(A_REALM.mcp_group), str(A_REALM.agent_group)]
+    )
     before = [
         browser.get(ACCOUNT_PATH, headers=World.JSON).json()
         for browser in (world.felix, world.anna)
@@ -405,7 +409,7 @@ def test_an_admin_persons_agents_client_bearer_opens_no_admin_route(
 ) -> None:
     """An agent's token never carries admin rights."""
     with a_world(engine, token_clients=frozenset({World.HAL})) as world:
-        headers = world.bearer(groups=[*ADMIN, MCP_GROUP])
+        headers = world.bearer(groups=[*ADMIN, str(A_REALM.mcp_group)])
 
         answer = world.program().request(
             method, path, headers={**headers, **World.JSON}, json={}
@@ -424,7 +428,9 @@ def test_an_admin_persons_bearer_beside_a_members_cookie_never_opens_an_admin_ro
         assert world.scene.sign_in(
             admin_browser, subject=World.ADMIN, username="root", groups=ADMIN
         )
-        bearer = world.bearer(subject=World.ADMIN, groups=[*ADMIN, MCP_GROUP])
+        bearer = world.bearer(
+            subject=World.ADMIN, groups=[*ADMIN, str(A_REALM.mcp_group)]
+        )
 
         answer = world.felix.get(SETTINGS_PATH, headers={**bearer, **World.JSON})
 
@@ -463,14 +469,14 @@ def test_unauthenticated_discovery_is_public_and_the_front_challenges_for_a_bear
 
     assert metadata.status_code == HTTPStatus.OK
     assert metadata.json()["resource"] == World.MCP_URL
-    assert metadata.json()["scopes_supported"] == [MCP_SCOPE]
+    assert metadata.json()["scopes_supported"] == [A_REALM.mcp_scope]
     assert metadata.json()["authorization_servers"] == [AN_ISSUER]
     assert challenge.status_code == HTTPStatus.UNAUTHORIZED
     assert (
         f'resource_metadata="{A_BROWSERS_ADDRESS}{World.METADATA_PATH}"'
         in (challenge.headers["www-authenticate"])
     )
-    assert f'scope="{MCP_SCOPE}"' in challenge.headers["www-authenticate"]
+    assert f'scope="{A_REALM.mcp_scope}"' in challenge.headers["www-authenticate"]
 
 
 def test_a_lobby_with_no_mcp_setting_serves_the_front_and_a_cookie_does_not_open_it(

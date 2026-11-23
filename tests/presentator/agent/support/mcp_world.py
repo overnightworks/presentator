@@ -24,7 +24,6 @@ from mcp.shared.inbound import MCP_METHOD_HEADER, MCP_NAME_HEADER
 from mcp_types import CLIENT_CAPABILITIES_META_KEY, PROTOCOL_VERSION_META_KEY
 from sqlalchemy import Engine
 
-from presentator.agent.mcp import MCP_CLIENT_ID, MCP_GROUP, MCP_SCOPE
 from presentator.api.deck_api import DECK_VIEW_PATH
 from presentator.api.deck_list_api import DECK_LIST_PATH
 from presentator.api.deck_text_api import DECK_TEXT_PATH
@@ -35,6 +34,7 @@ from tests.presentator.application.support.fakes import FakeDeckStore, FrozenClo
 from tests.support.deck_text_support import FakeDeckTexts
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
+    A_REALM,
     NOW,
     GivenDecks,
     a_configured_source,
@@ -101,13 +101,13 @@ class World:
         *,
         subject: str = FELIX,
         groups: list[str] | None = None,
-        authorized_party: str = MCP_CLIENT_ID,
+        authorized_party: str = A_REALM.mcp_client_id,
         audience: str | None = MCP_URL,
-        scope: str | None = MCP_SCOPE,
+        scope: str | None = A_REALM.mcp_scope,
     ) -> dict[str, str]:
         minted = self.scene.issuer.mint_access_token(
             subject=subject,
-            groups=[*MEMBER, MCP_GROUP] if groups is None else groups,
+            groups=[*MEMBER, str(A_REALM.mcp_group)] if groups is None else groups,
             authorized_party=authorized_party,
             audience=audience,
             scope=scope,
@@ -121,7 +121,7 @@ class World:
             groups=groups,
             authorized_party="a-service-account-client",
             audience=self.MCP_URL,
-            scope=MCP_SCOPE,
+            scope=A_REALM.mcp_scope,
             agent=(self.FELIX, "notes-bot"),
         )
         return {"authorization": f"Bearer {minted}"}

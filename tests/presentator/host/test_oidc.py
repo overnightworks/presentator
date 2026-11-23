@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 from sqlalchemy import Engine
+from webauth.admission import AppRole, GroupPath, app_role
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.postgres.sessions import PostgresSessions
@@ -13,11 +14,12 @@ from presentator.adapters.shared_redis import SharedRedis
 from presentator.host import main
 from presentator.host.config import load_settings, read_secret_file
 from presentator.host.environment import ConfigurationError
-from presentator.host.oidc import client_configs_of, oidc_client_config
+from presentator.host.oidc import admission_of, client_configs_of, oidc_client_config
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_CLIENT_CREDENTIAL,
     A_CLIENT_ID,
+    A_REALM,
     A_SPEECH_SCOPE,
     A_TALK_ADDRESS,
     AN_ISSUER,
@@ -44,6 +46,20 @@ def test_the_client_is_derived_from_the_issuer_and_the_public_origin() -> None:
     assert config.redirect_uri == "https://testserver/auth/callback"
     assert config.post_logout_redirect_uri == "https://testserver/login"
     assert "groups" in config.scopes
+
+
+def test_admission_takes_the_login_and_admin_groups_of_the_realm_it_is_given() -> None:
+    realm = A_REALM.model_copy(
+        update={
+            "login_group": GroupPath("/apps/other"),
+            "admin_group": GroupPath("/apps/other/admin"),
+        }
+    )
+    admission = admission_of(a_settings().model_copy(update={"realm": realm}))
+
+    assert app_role(["/apps/other"], admission) is AppRole.USER
+    assert app_role(["/apps/other", "/apps/other/admin"], admission) is AppRole.ADMIN
+    assert app_role([str(A_REALM.login_group)], admission) is None
 
 
 @pytest.mark.parametrize("scope", [A_SPEECH_SCOPE, "another-speech-scope"])
@@ -188,7 +204,7 @@ def test_an_instance_whose_secret_file_is_gone_refuses_to_start(
             "https://AUTH.example.test/realms/t",
             "oidc_issuer",
         ),
-        ("PRESENTATOR_OIDC_CLIENT_ID", "", "oidc_client_id"),
+        ("REALM_CLIENT_ID", "", "client_id"),
         (
             "PRESENTATOR_OIDC_CLIENT_SECRET_FILE",
             "relative/secret",
@@ -235,7 +251,9 @@ def test_an_explicit_port_stays_part_of_the_issuer_exactly_as_given(
 
 
 def test_a_client_the_library_refuses_refuses_to_start_naming_no_value() -> None:
-    settings = a_settings().model_copy(update={"oidc_client_id": ""})
+    settings = a_settings().model_copy(
+        update={"realm": A_REALM.model_copy(update={"client_id": ""})}
+    )
     secret = SecretStr(A_CLIENT_CREDENTIAL)
 
     with pytest.raises(ConfigurationError, match="client_id") as refused:
@@ -298,7 +316,7 @@ def test_each_host_signs_its_cookies_under_its_own_key_and_begins_a_login_at_the
     "variable",
     [
         "PRESENTATOR_OIDC_ISSUER",
-        "PRESENTATOR_OIDC_CLIENT_ID",
+        "REALM_CLIENT_ID",
         "PRESENTATOR_OIDC_CLIENT_SECRET_FILE",
     ],
 )
@@ -309,6 +327,7 @@ def test_an_instance_without_a_sign_in_setting_refuses_to_start(
     environment.delenv(variable)
 
     with pytest.raises(
-        ConfigurationError, match=variable.removeprefix("PRESENTATOR_").lower()
+        ConfigurationError,
+        match=variable.removeprefix("PRESENTATOR_").removeprefix("REALM_").lower(),
     ):
         load_settings()
