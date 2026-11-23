@@ -114,7 +114,7 @@ jobs:
           PRESENTATOR_TEST_S3_BUCKET: ${{ steps.garage.outputs.bucket }}
           # The coverage job combines this data with the lobby drive's.
           COVERAGE_FILE: reports/python-coverage/python.pytest
-        run: uv run --locked pytest -q -n auto --cov=src
+        run: uv run --locked pytest -n auto --cov=src
 
       - name: Upload the coverage data
         if: ${{ !cancelled() }}
@@ -623,7 +623,7 @@ jobs:
       - image
       - build-worker-k3d
     if: always()
-    uses: overnightworks/quality/.github/workflows/gate.yml@34c82adba7820c036634b18ed01486da78e00c73 # v0.23.0
+    uses: overnightworks/quality/.github/workflows/gate.yml@0cff5e74b3a9b106490723264468271a23d5579d # v0.24.0
     permissions:
       contents: read
       actions: read
