@@ -347,6 +347,13 @@ def _refuse(stopped: TurnStopped) -> NoReturn:
             assert_never(stopped.outcome)
 
 
+def copresenter_gateway(
+    config: AgentSettings, *, transport: httpx2.AsyncBaseTransport | None = None
+) -> GatewayBackend:
+    """The backend over the gateway the configuration names, with the slide tool."""
+    return GatewayBackend(config, tools=[SHOW_SLIDE], transport=transport)
+
+
 def gateway_answerer(
     config: AgentSettings,
     relying_party: OidcRelyingParty,
@@ -355,5 +362,5 @@ def gateway_answerer(
 ) -> GatewayAnswerer:
     """The answerer over the gateway the configuration names."""
     return GatewayAnswerer(
-        GatewayBackend(config, tools=[SHOW_SLIDE], transport=transport), relying_party
+        copresenter_gateway(config, transport=transport), relying_party
     )

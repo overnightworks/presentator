@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Final, assert_never
 import agents.voice as agents_voice
 from agents.agent_file import load_agent
 from agents.backend import TurnStopKind, TurnStopped
-from agents.backend.gateway import GatewayBackend
 from agents.member import PlaceEntry
 from agents.turn import FailureCode, RejectionCode, StopOutcome
 from agents.voice.loop import run_voice_loop
@@ -43,13 +42,11 @@ from presentator.contracts.copresenter import (
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 
-    import httpx2
     from agents.agent_file import TurnRequest
     from agents.backend import AgentBackend, TurnEvent, TurnPerson
     from agents.member import SpokenLanguage
     from webauth.oidc import OidcRelyingParty
 
-    from presentator.agent.settings import AgentSettings
     from presentator.contracts.copresenter import TalkEvent
     from presentator.contracts.words import Language
     from presentator.ports.copresenter import (
@@ -327,17 +324,4 @@ async def _groups_of(talk: Talk) -> frozenset[str]:
 def _person_access_failed() -> TurnStopped:
     return TurnStopped(
         TurnStopKind.FAILED, FailureCode.PROVIDER_UNAVAILABLE, detail=_ACCESS_DETAIL
-    )
-
-
-def voice_loop_talks(
-    config: AgentSettings,
-    relying_party: OidcRelyingParty,
-    *,
-    transport: httpx2.AsyncBaseTransport | None = None,
-) -> VoiceLoopTalks:
-    """The talks over the gateway the configuration names."""
-    return VoiceLoopTalks(
-        GatewayBackend(config, tools=[SHOW_SLIDE], transport=transport),
-        relying_party,
     )

@@ -26,8 +26,8 @@ from presentator.adapters.speech import (
     SpeechHearing,
     SpeechSpeaking,
 )
-from presentator.agent.backend import gateway_answerer
-from presentator.agent.voice_loop import voice_loop_talks
+from presentator.agent.backend import copresenter_gateway, gateway_answerer
+from presentator.agent.voice_loop import VoiceLoopTalks
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.application.copresenter import CoPresenterUse
 from presentator.contracts.copresenter import (
@@ -309,8 +309,9 @@ def a_surface_over(  # noqa: PLR0913 - each part is one thing the instance varie
                 texts=FakeDeckTexts(),
                 boundaries=split_sentences,
                 speaking=WitnessedSpeaking(speaking, errors),
-                talks=voice_loop_talks(
-                    an_agent_config(), auth.relying_party, transport=gateway
+                talks=VoiceLoopTalks(
+                    copresenter_gateway(an_agent_config(), transport=gateway),
+                    auth.relying_party,
                 ),
                 person_access=WitnessedAccess(
                     SessionAccess(
