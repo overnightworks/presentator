@@ -29,6 +29,7 @@ from presentator.adapters.speech import (
 from presentator.agent.backend import copresenter_gateway, gateway_answerer
 from presentator.agent.voice_loop import VoiceLoopTalks
 from presentator.api.copresenter import CoPresenterSurface
+from presentator.api.health import Stopping
 from presentator.application.copresenter import CoPresenterUse
 from presentator.contracts.copresenter import (
     HearingTranscript,
@@ -134,6 +135,7 @@ _WIDE_OPEN_LOGGERS = (
 )
 WORKLOAD = "workload-token-MARKER"
 THREAD_WAIT_SECONDS: Final = 10
+DRAIN_SECONDS: Final = 7.0
 ORIGIN: Final = {"origin": A_TALK_ADDRESS}
 ANSWER_SENTENCES: Final = ("Antwort-MARKER eins.", "Antwort-MARKER zwei.")
 HEARD_WORDS: Final = ("gehoert-MARKER-eins", "gehoert-MARKER-zwei")
@@ -163,6 +165,8 @@ class SpeechScenario:
     """The hearing's deadline and opening bound, when a scenario shortens them."""
     hearing_fails_on_line: int | None = None
     """The hearing raises an unexpected error instead of handing on this line."""
+    drain_seconds: float = DRAIN_SECONDS
+    """How long a stopping pod lets a decision run, on the instance's clock."""
 
 
 @dataclass(kw_only=True)
@@ -175,6 +179,8 @@ class SpeechInstance:
     gateway: Gateway
     limiter: RecordingLimiter
     deadline: ManualDeadline
+    stopping: Stopping
+    drain_seconds: float
     grants_before: list[str]
     errors: list[BaseException] = field(default_factory=list[BaseException])
 
@@ -293,6 +299,8 @@ def a_surface_over(  # noqa: PLR0913 - each part is one thing the instance varie
     errors: list[BaseException],
     speech_scope: str,
     texts: FakeDeckTexts,
+    stopping: Stopping,
+    drain_seconds: float,
 ) -> Callable[[FakeDeckStore, PostgresSessions, WebAuth], CoPresenterSurface]:
     """The talk host's surface over the real speech adapters and session access."""
     hearing, speaking = adapters
@@ -332,6 +340,8 @@ def a_surface_over(  # noqa: PLR0913 - each part is one thing the instance varie
             browser_origin=A_TALK_ADDRESS,
             deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
             delay=deadline.wait,
+            stopping=stopping,
+            drain_seconds=drain_seconds,
         )
 
     return surface
@@ -345,6 +355,7 @@ def a_speech_instance(
     scenario = scenario or SpeechScenario()
     limiter = scenario.limiter()
     deadline = ManualDeadline()
+    stopping = Stopping()
     gateway = scenario.gateway()
     errors: list[BaseException] = []
     serving = scenario.peer or (lambda: a_loopback_server(scenario.service.app()))
@@ -363,6 +374,8 @@ def a_speech_instance(
                 errors=errors,
                 speech_scope=scenario.speech_scope,
                 texts=scenario.texts,
+                stopping=stopping,
+                drain_seconds=scenario.drain_seconds,
             ),
             speech_scope=scenario.speech_scope,
         )
@@ -381,6 +394,8 @@ def a_speech_instance(
             gateway=gateway,
             limiter=limiter,
             deadline=deadline,
+            stopping=stopping,
+            drain_seconds=scenario.drain_seconds,
             grants_before=list(hosts.issuer.grant_types),
             errors=errors,
         )

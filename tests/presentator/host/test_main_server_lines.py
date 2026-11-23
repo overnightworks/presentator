@@ -15,6 +15,7 @@ import pytest
 from starlette.types import Receive, Scope, Send
 from uvicorn.config import STARTUP_FAILURE
 
+from presentator.api.copresenter import OpenTalks
 from presentator.api.health import Stopping
 from presentator.host import main
 from presentator.host.lifecycle import StopLine
@@ -104,7 +105,10 @@ def _serving_in_a_thread(app: _App) -> Generator[StoppingServer]:
     listening.listen()
     port = listening.getsockname()[1]
     server = StoppingServer(
-        served_config(app, host=_LOOPBACK, port=port), Stopping(), StopLine()
+        served_config(app, host=_LOOPBACK, port=port),
+        Stopping(),
+        StopLine(),
+        OpenTalks().closed,
     )
     thread = threading.Thread(
         target=asyncio.run, args=(server.serve(sockets=[listening]),)

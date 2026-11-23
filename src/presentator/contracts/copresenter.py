@@ -106,6 +106,10 @@ class Question:
 
 
 BUSY_RETRY_SECONDS: Final = 1
+# How long a stopping pod lets a decision on the talk socket run before it cuts
+# it, when no setting names another. The pod's grace period ends the process, so
+# the limit stays below it.
+TALK_DRAIN_SECONDS: Final = 20.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,9 +210,25 @@ class DecisionStopped:
     retry_after_s: int | None
 
 
+class DecisionEnd(StrEnum):
+    """How a decision ended, as far as sound goes."""
+
+    SPOKE = "spoke"
+    SILENT = "silent"
+    UNSPOKEN = "unspoken"
+    NOTHING = "nothing"
+
+
 @dataclass(frozen=True, slots=True)
 class DecisionEnded:
-    """The decision is over: its sound ended and its turn ended."""
+    """The decision is over: its sound ended and its turn ended.
+
+    `SILENT` is a decision the model kept silent; `UNSPOKEN` one whose answer
+    the speech service or the browser refused; `NOTHING` neither of these and
+    no sound either.
+    """
+
+    how: DecisionEnd
 
 
 @dataclass(frozen=True, slots=True)

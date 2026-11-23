@@ -18,7 +18,7 @@ from sqlalchemy import text
 from presentator.adapters.sentences import split_sentences
 from presentator.adapters.session_access import SessionAccess
 from presentator.agent.backend import gateway_answerer
-from presentator.api.copresenter import CoPresenterSurface
+from presentator.api.copresenter import CHECK_INTERVAL_SECONDS, CoPresenterSurface
 from presentator.api.health import never_stopping
 from presentator.application.copresenter import CoPresenterUse
 from presentator.contracts.copresenter import (
@@ -424,14 +424,45 @@ class ManualDeadline:
         default_factory=list[tuple[asyncio.AbstractEventLoop, asyncio.Future[None]]]
     )
     _lock: threading.Lock = field(default_factory=threading.Lock)
+    _waiting: threading.Condition = field(default_factory=threading.Condition)
+    _pending: list[tuple[asyncio.AbstractEventLoop, asyncio.Future[None], float]] = (
+        field(
+            default_factory=list[
+                tuple[asyncio.AbstractEventLoop, asyncio.Future[None], float]
+            ]
+        )
+    )
 
-    async def wait(self, _seconds: float) -> None:
+    async def wait(self, seconds: float) -> None:
         loop = asyncio.get_running_loop()
         check = loop.create_future()
         with self._lock:
             self._checks.append((loop, check))
             self.started.set()
+        with self._waiting:
+            self._pending.append((loop, check, seconds))
+            self._waiting.notify_all()
         await asyncio.shield(check)
+
+    def waiting(self, seconds: float, *, timeout: float = 10) -> None:
+        """Return once a wait of this length is waiting."""
+        with self._waiting:
+            assert self._waiting.wait_for(
+                lambda: any(wait[2] == seconds for wait in self._pending), timeout
+            )
+
+    def release(self, seconds: float) -> None:
+        """Release every wait of this length, once one is waiting."""
+        self.waiting(seconds)
+        with self._waiting:
+            released = [wait for wait in self._pending if wait[2] == seconds]
+            self._pending = [wait for wait in self._pending if wait[2] != seconds]
+        for loop, check, _seconds in released:
+            loop.call_soon_threadsafe(_complete, check)
+
+    def release_check(self) -> None:
+        """Release every session check that waits."""
+        self.release(CHECK_INTERVAL_SECONDS)
 
     def release_first(self) -> None:
         with self._lock:

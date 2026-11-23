@@ -5,20 +5,40 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from presentator.agent.voice_loop import TalkLease, lines_of
+import pytest
+from agents.backend import TurnStopKind
+from agents.turn import FailureCode
+from agents.voice import (
+    DecisionEnded,
+    DecisionFailed,
+    ReplyUnreadable,
+    SentenceRefused,
+    SentenceStarted,
+    StayedSilent,
+)
+
+from presentator.agent.voice_loop import TalkLease, lines_of, told
 from presentator.contracts.copresenter import (
+    DecisionEnd,
     HeardInTalk,
     HearingTranscript,
     ShownSlide,
 )
+from presentator.contracts.copresenter import DecisionEnded as ContractDecisionEnded
 from tests.presentator.agent.support.driving import on_an_event_loop
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from agents.member import PlaceEntry
+    from agents.voice import VoiceEvent
 
-    from presentator.contracts.copresenter import RetryAfter
+    from presentator.contracts.copresenter import RetryAfter, TalkEvent
+
+
+_FAILED = DecisionFailed(
+    TurnStopKind.FAILED, FailureCode.PROVIDER_UNAVAILABLE, detail=None
+)
 
 
 def _final(text: str) -> HearingTranscript:
@@ -120,3 +140,55 @@ async def test_a_cancelled_take_leaves_the_release_before_it_running() -> None:
     await closing
 
     assert ticket.released
+
+
+@pytest.mark.parametrize(
+    ("events", "how"),
+    [
+        pytest.param((StayedSilent(),), DecisionEnd.SILENT, id="silent"),
+        pytest.param(
+            (SentenceStarted("Eins."), StayedSilent()),
+            DecisionEnd.SPOKE,
+            id="spoke-then-silent",
+        ),
+        pytest.param((SentenceStarted("Eins."),), DecisionEnd.SPOKE, id="spoke"),
+        pytest.param(
+            (SentenceStarted("Eins."), SentenceRefused("Zwei.")),
+            DecisionEnd.UNSPOKEN,
+            id="a-later-sentence-refused",
+        ),
+        pytest.param(
+            (SentenceRefused("Eins."),), DecisionEnd.UNSPOKEN, id="first-refused"
+        ),
+        pytest.param((ReplyUnreadable(),), DecisionEnd.NOTHING, id="unreadable"),
+        pytest.param(
+            (StayedSilent(), _FAILED), DecisionEnd.NOTHING, id="silent-but-failed"
+        ),
+    ],
+)
+def test_a_decision_ends_as_what_it_told_of_its_sound(
+    events: tuple[VoiceEvent, ...], how: DecisionEnd
+) -> None:
+    reported: list[TalkEvent] = []
+    tell = told(reported.append)
+
+    for event in (*events, DecisionEnded()):
+        tell(event)
+
+    assert reported[-1] == ContractDecisionEnded(how)
+
+
+def test_each_decision_is_told_apart_from_the_one_before() -> None:
+    reported: list[TalkEvent] = []
+    tell = told(reported.append)
+
+    for event in (SentenceStarted("Eins."), DecisionEnded(), StayedSilent()):
+        tell(event)
+    tell(DecisionEnded())
+
+    assert [
+        event.how for event in reported if isinstance(event, ContractDecisionEnded)
+    ] == [
+        DecisionEnd.SPOKE,
+        DecisionEnd.SILENT,
+    ]

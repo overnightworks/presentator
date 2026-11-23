@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Final, NoReturn, cast
 
 import pytest
 from agents.backend.fake_gateway import FakeGateway, Reply, completion
+from logline import StepTimer
 from speech_client import wire
 from starlette.websockets import WebSocketDisconnect
 
@@ -100,6 +102,34 @@ class HeldByAnotherPod(RecordingLimiter):
         return RetryAfter(BUSY_RETRY_SECONDS)
 
 
+_LEASE_LOG: Final = logging.getLogger("tandem.test")
+
+
+class _TracedTicket:
+    """A ticket whose release writes a line, as the shared lease's does."""
+
+    def __init__(self, inner: FakeAskTicket) -> None:
+        self._inner = inner
+
+    async def release(self) -> None:
+        """Write the release line, then free the session."""
+        StepTimer("slot_release.ended", _LEASE_LOG).end()
+        await self._inner.release()
+
+
+class TracedLimiter(SignalledLimiter):
+    """The ask lease that writes a line at each take and each release."""
+
+    async def admit(self, session_id: str) -> FakeAskTicket | RetryAfter:
+        """Write the take line, then take the session."""
+        StepTimer("slot_take.ended", _LEASE_LOG).end()
+        admitted = await super().admit(session_id)
+        if isinstance(admitted, RetryAfter):
+            return admitted
+        # The lease asks its ticket only to release.
+        return cast("FakeAskTicket", _TracedTicket(admitted))
+
+
 @dataclass(kw_only=True)
 class Talking:
     """One open talk socket and the service's cues."""
@@ -154,13 +184,27 @@ class Talking:
 
     def until_closed(self) -> int:
         """Take the frames down until the socket closes; the code it closed with."""
-        with pytest.raises(WebSocketDisconnect) as closed:
-            self._frames_forever()
-        return closed.value.code
+        return self.frames_until_closed()[1]
 
-    def _frames_forever(self) -> NoReturn:
+    def frames_until_closed(self) -> tuple[list[dict[str, object]], int]:
+        """The frames down until the socket closes, and the code it closed with."""
+        frames: list[dict[str, object]] = []
+        with pytest.raises(WebSocketDisconnect) as closed:
+            self._frames_forever(frames)
+        return frames, closed.value.code
+
+    def _frames_forever(self, frames: list[dict[str, object]]) -> NoReturn:
         while True:
-            self.frame()
+            frames.append(self.frame())
+
+    def stop(self) -> None:
+        """The pod begins to stop; the talk notices at its next poll."""
+        self.instance.stopping.begin()
+        self.instance.deadline.release_check()
+
+    def past_the_drain_limit(self) -> None:
+        """The drain's limit passes on the instance's clock."""
+        self.instance.deadline.release(self.instance.drain_seconds)
 
     def until_freed(self) -> None:
         """Return once the talk freed the session's lease.

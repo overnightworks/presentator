@@ -26,6 +26,7 @@ from presentator.api.copresenter import (
     GENERIC_ANSWER_FAILURE,
     POLICY_VIOLATION,
     SERVICE_RESTART,
+    SILENT_ANSWER,
     AnswerFailure,
     AnswerRefusal,
     SessionGuard,
@@ -37,6 +38,7 @@ from presentator.api.session_api import language_of
 from presentator.contracts.copresenter import (
     AnswerStopReason,
     DecisionBegan,
+    DecisionEnd,
     DecisionEnded,
     DecisionStopped,
     EchoDropped,
@@ -143,15 +145,26 @@ class _TalkHearing:
         self._finals = deque[HearingTranscript]()
         self._slide: int | None = None
         self._ended = False
+        self._draining = False
         self._moved = asyncio.Event()
 
     def hear(self, transcript: HearingTranscript) -> None:
+        if self._draining:
+            return
         self._finals.append(transcript)
         self._moved.set()
 
     def show(self, number: int) -> None:
+        if self._draining:
+            return
         self._slide = number
         self._moved.set()
+
+    def drain(self) -> None:
+        """Yield no line from now on: the unread ones are dropped, new ones ignored."""
+        self._draining = True
+        self._finals.clear()
+        self._slide = None
 
     def end(self) -> None:
         self._ended = True
@@ -192,6 +205,12 @@ class _Decisions:
     def __init__(self, down: _DownFrames) -> None:
         self._down = down
         self._open: _OpenDecision | None = None
+        self._idle = asyncio.Event()
+        self._idle.set()
+
+    async def idle(self) -> None:
+        """Return once no decision is open."""
+        await self._idle.wait()
 
     def __call__(self, event: TalkEvent) -> None:
         match event:
@@ -199,11 +218,11 @@ class _Decisions:
                 self._open = _OpenDecision(
                     StepTimer("answer.ended", _log), contextvars.copy_context()
                 )
+                self._idle.clear()
             case DecisionStopped():
                 self._stopped(event)
             case DecisionEnded():
-                self._decision().step.end()
-                self._open = None
+                self._ended(event)
             case EchoDropped():
                 _log.info("echo.dropped")
             case _:
@@ -218,6 +237,7 @@ class _Decisions:
         if self._open is None:
             return
         decision, self._open = self._open, None
+        self._idle.set()
         decision.trace.run(_end_cut, decision.step, how)
 
     def failed(self, error: BaseException) -> None:
@@ -225,11 +245,28 @@ class _Decisions:
         if self._open is None:
             return
         decision, self._open = self._open, None
+        self._idle.set()
         decision.trace.run(_end_failed, decision.step, error)
 
     def _decision(self) -> _OpenDecision:
         # The loop reports a decision's start before anything else of it.
         return cast("_OpenDecision", self._open)
+
+    def _ended(self, event: DecisionEnded) -> None:
+        step = self._decision().step
+        match event.how:
+            case DecisionEnd.SILENT:
+                step.reason(SILENT_ANSWER)
+            case DecisionEnd.UNSPOKEN:
+                step.fail(AnswerFailure.UNSPOKEN)
+                step.handled()
+            case DecisionEnd.SPOKE | DecisionEnd.NOTHING:
+                pass
+            case _:
+                assert_never(event.how)
+        step.end()
+        self._open = None
+        self._idle.set()
 
     def _stopped(self, event: DecisionStopped) -> None:
         step = self._decision().step
@@ -403,7 +440,12 @@ async def _talk_lease(
         tokens: SpeechTokenSource, session_watch: asyncio.Task[None]
     ) -> None:
         await _talking(
-            socket, talk, tokens, surface=surface, session_watch=session_watch
+            socket,
+            talk,
+            tokens,
+            surface=surface,
+            guard=guard,
+            session_watch=session_watch,
         )
 
     await serve_hearing(
@@ -433,15 +475,19 @@ def _heard_by(
     return heard
 
 
-async def _talking(
+async def _talking(  # noqa: PLR0913 - the parts of one talk
     socket: WebSocket,
     talk: _Talk,
     tokens: SpeechTokenSource,
     *,
     surface: CoPresenterSurface,
+    guard: SessionGuard,
     session_watch: asyncio.Task[None],
 ) -> None:
-    """Hear and answer until the talk ends; a session end ends it in order."""
+    """Hear and answer until the talk ends; a session end ends it in order.
+
+    A stopping pod lets the running decision end, then closes the talk 1012.
+    """
     down = _DownFrames(socket)
     hearing = _TalkHearing()
     decisions = _Decisions(down)
@@ -472,23 +518,46 @@ async def _talking(
             report=decisions,
         )
     )
-    try:
-        await asyncio.wait(
-            {relay, talking, session_watch}, return_when=asyncio.FIRST_COMPLETED
-        )
-        if session_watch.done():
-            await _session_ended(
-                session_watch, talking, relay, decisions, down=down, ended=ended
+    drain = asyncio.create_task(_drained(surface, guard, hearing, decisions))
+    with surface.open_talks.open():
+        try:
+            await asyncio.wait(
+                {relay, talking, session_watch, drain},
+                return_when=asyncio.FIRST_COMPLETED,
             )
-        elif relay.done():
-            await _relay_ended(socket, relay, talking, hearing, decisions)
-        else:
-            await _loop_ended(talking, relay, decisions)
+            if session_watch.done():
+                await _session_ended(
+                    session_watch, talking, relay, decisions, down=down, ended=ended
+                )
+            elif relay.done():
+                await _relay_ended(socket, relay, talking, hearing, decisions)
+            elif talking.done():
+                await _loop_ended(talking, relay, decisions)
+            else:
+                await _drain_ended(socket, talking, relay, decisions, down=down)
+        finally:
+            await finish_tasks((talking, relay, sender, drain))
+            # Whatever ended the talk, end the decision still open, cancelled; a
+            # path that already cut it leaves nothing open.
+            decisions.cut(_Cut.CANCELLED)
+
+
+async def _drained(
+    surface: CoPresenterSurface,
+    guard: SessionGuard,
+    hearing: _TalkHearing,
+    decisions: _Decisions,
+) -> None:
+    """Return once the stop has begun and no decision runs, or at the drain's limit."""
+    while not surface.stopping():
+        await guard.wait()
+    hearing.drain()
+    limit = asyncio.create_task(_limit_passed(surface))
+    idle = asyncio.create_task(decisions.idle())
+    try:
+        await asyncio.wait({limit, idle}, return_when=asyncio.FIRST_COMPLETED)
     finally:
-        await finish_tasks((talking, relay, sender))
-        # Whatever ended the talk, end the decision still open, cancelled; a path
-        # that already cut it leaves nothing open.
-        decisions.cut(_Cut.CANCELLED)
+        await finish_tasks((limit, idle))
 
 
 async def _session_ended(  # noqa: PLR0913 - the parts of one talk
@@ -507,6 +576,26 @@ async def _session_ended(  # noqa: PLR0913 - the parts of one talk
     await down.drained()
     ended.set()
     await relay
+
+
+async def _limit_passed(surface: CoPresenterSurface) -> None:
+    await surface.delay(surface.drain_seconds)
+
+
+async def _drain_ended(
+    socket: WebSocket,
+    talking: asyncio.Task[None],
+    relay: asyncio.Task[None],
+    decisions: _Decisions,
+    *,
+    down: _DownFrames,
+) -> None:
+    """The pod's stop has drained: cut a decision past its limit, then close 1012."""
+    await _cut_talk(talking, decisions, _Cut.CANCELLED)
+    # The hearing ends cancelled, not as a browser that left, before the close.
+    await finish_tasks((relay,))
+    await down.drained()
+    await socket.close(code=SERVICE_RESTART)
 
 
 async def _cut_talk(

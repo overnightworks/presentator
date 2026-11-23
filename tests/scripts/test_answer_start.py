@@ -37,7 +37,11 @@ def _speech_end(trace: str, *, at_ms: float, waited_ms: float = 500.0) -> str:
 
 
 def _answer(
-    trace: str, *, asked_at_ms: float, first_audio_ms: float | None = 900.0
+    trace: str,
+    *,
+    asked_at_ms: float,
+    first_audio_ms: float | None = 900.0,
+    reason: str | None = None,
 ) -> str:
     """The app's answer line of an ask made `asked_at_ms` after noon."""
     lasted_ms = 3000.0
@@ -50,6 +54,8 @@ def _answer(
     }
     if first_audio_ms is not None:
         line["first_output_ms"] = first_audio_ms
+    if reason is not None:
+        line["reason"] = reason
     return json.dumps(line)
 
 
@@ -98,6 +104,24 @@ def test_the_report_prints_the_turn_count_and_the_nearest_rank_percentiles(
             ],
             "no_first_audio",
             id="no-audio",
+        ),
+        pytest.param(
+            [
+                _speech_end("t", at_ms=0),
+                _answer("t", asked_at_ms=1, first_audio_ms=None, reason="silent"),
+            ],
+            "silent",
+            id="kept-silent",
+        ),
+        pytest.param(
+            [
+                _speech_end("t", at_ms=0),
+                _answer(
+                    "t", asked_at_ms=1, first_audio_ms=None, reason="unspoken"
+                ).replace('"ok"', '"failed"'),
+            ],
+            "no_first_audio",
+            id="unspoken",
         ),
         pytest.param(
             [

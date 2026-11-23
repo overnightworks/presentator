@@ -65,6 +65,7 @@ def copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands 
         browser_origin=settings.talk_origin,
         deadline_seconds=answers.deadline_seconds,
         stopping=stopping,
+        drain_seconds=settings.talk_drain_seconds,
     )
 
 

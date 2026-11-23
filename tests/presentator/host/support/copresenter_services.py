@@ -1,12 +1,13 @@
 """What a co-presenter app reaches: a gateway, a speech service, a browser socket."""
 
 import asyncio
+import json
 import socket
 import threading
 from collections.abc import AsyncGenerator, Generator, Mapping
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
-from typing import Final
+from typing import Any, Final
 
 from agents.backend.fake_gateway import completion
 from fastapi import FastAPI, Request, WebSocket
@@ -98,16 +99,20 @@ def a_gateway_and_a_speech_service(gateway: HeldGateway) -> Generator[dict[str, 
         }
 
 
-class HearingSocket:
-    """A browser's `/hear` WebSocket to one app process, read to its close."""
+HEARING_TARGET: Final = "/copresenter/hear?language=de"
 
-    def __init__(
+
+class HearingSocket:
+    """A browser's `/hear` or talk WebSocket to one app process, read to its close."""
+
+    def __init__(  # noqa: PLR0913 - the browser's address and what it sends
         self,
         port: int,
         *,
         host: str,
         origin: str,
         cookie: str,
+        target: str = HEARING_TARGET,
         headers: Mapping[str, str] | None = None,
     ) -> None:
         """Open the socket at the app's port, as the browser at `origin` does."""
@@ -116,7 +121,7 @@ class HearingSocket:
         self._send(
             UpgradeRequest(
                 host=host,
-                target="/copresenter/hear?language=de",
+                target=target,
                 extra_headers=[
                     (b"origin", origin.encode()),
                     (b"cookie", cookie.encode()),
@@ -146,6 +151,30 @@ class HearingSocket:
         assert isinstance(event, TextMessage), event
         return event.data
 
+    def next_frame(self, kind: str) -> dict[str, Any]:
+        """The next JSON frame of this kind; the frames before it are dropped."""
+        while True:
+            event = self._next_event()
+            assert isinstance(event, TextMessage), event
+            frame: dict[str, Any] = json.loads(event.data)
+            if frame["kind"] == kind:
+                return frame
+
+    def send_json(self, frame: Mapping[str, object]) -> None:
+        """Send one JSON message up, as the browser does."""
+        self._send(TextMessage(data=json.dumps(frame)))
+
+    def stays_open_for(self, seconds: float) -> bool:
+        """Whether nothing arrives, the server's close included, for this long."""
+        self._socket.settimeout(seconds)
+        try:
+            self._next_event()
+        except TimeoutError:
+            return True
+        finally:
+            self._socket.settimeout(_SECONDS)
+        return False
+
     def close_code(self) -> int:
         """The code the server closes the socket with, once it does."""
         event = self._next_event()
@@ -159,9 +188,11 @@ class HearingSocket:
 
 @contextmanager
 def a_hearing(
-    port: int, *, host: str, origin: str, cookie: str
+    port: int, *, host: str, origin: str, cookie: str, target: str = HEARING_TARGET
 ) -> Generator[HearingSocket]:
-    """One hearing open for the block."""
-    hearing = HearingSocket(port, host=host, origin=origin, cookie=cookie)
+    """One hearing, or the talk the target names, open for the block."""
+    hearing = HearingSocket(
+        port, host=host, origin=origin, cookie=cookie, target=target
+    )
     with closing(hearing):
         yield hearing
