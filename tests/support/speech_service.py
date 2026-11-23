@@ -436,6 +436,41 @@ def busy_at_the_upgrade(*, marked: bool = False) -> Hear:
     )
 
 
+class Cues:
+    """Events a test tells the service to send, when it chooses, from its own thread."""
+
+    def __init__(self) -> None:
+        """Start with the service not yet connected."""
+        self.connected = threading.Event()
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._events = asyncio.Queue[realtime_wire.ServerEvent]()
+
+    def send(self, event: realtime_wire.ServerEvent) -> None:
+        """Have the connected service send the event."""
+        assert self._loop is not None
+        self._loop.call_soon_threadsafe(self._events.put_nowait, event)
+
+    def hear(self, service: FakeSpeechService) -> Hear:
+        """Accept, then send each cued event while keeping every client event."""
+
+        async def realtime(socket_to_browser: WebSocket) -> None:
+            await _opened(socket_to_browser)
+            self._loop = asyncio.get_running_loop()
+            self.connected.set()
+            sending = asyncio.create_task(self._send_cued(socket_to_browser))
+            try:
+                await service.read_events(socket_to_browser)
+            finally:
+                sending.cancel()
+
+        return realtime
+
+    async def _send_cued(self, socket_to_browser: WebSocket) -> None:
+        while True:
+            event = await self._events.get()
+            await socket_to_browser.send_text(event.model_dump_json())
+
+
 def reading(service: FakeSpeechService) -> Hear:
     """A Realtime handler that accepts and keeps every client event."""
 

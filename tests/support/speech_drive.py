@@ -156,6 +156,7 @@ class SpeechScenario:
     peer: Served | None = None
     bounded_calls_stall: bool = False
     speech_scope: str = A_SPEECH_SCOPE
+    limiter: Callable[[], RecordingLimiter] = RecordingLimiter
     hearing_seconds: tuple[float, float] | None = None
     """The hearing's deadline and opening bound, when a scenario shortens them."""
 
@@ -336,7 +337,7 @@ def a_speech_instance(
 ) -> Generator[SpeechInstance]:
     """Sign an admin in at the talk host, over the fake service, for the block."""
     scenario = scenario or SpeechScenario()
-    limiter = RecordingLimiter()
+    limiter = scenario.limiter()
     deadline = ManualDeadline()
     gateway = scenario.gateway()
     errors: list[BaseException] = []
