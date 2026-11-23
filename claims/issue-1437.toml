@@ -1,0 +1,8 @@
+claim_id = "83e4739230914fd99931ac3c83842f7b"
+agent = "Claude c1bdc492-301e-41eb-b0a2-b29b0b318ca2"
+role = "builder"
+base = "e0378529ca39503adeaff19f2c5a44df3413ff85"
+branch = "claude/issue-1437-take-quality-v0-25-0"
+scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml", ".github/workflows/release.yml", "frontend/vitest.config.ts", "quality/baseline.toml", "quality/config.toml", "slidev/vitest.config.ts", "tests/presentator/api", "tests/support/lobby.py", "tests/support/lobby_drive.py"]
+opened_commit = "1fb12e742e1543e378dd8f752b868d9b405788b1"
+whole_reason = "The quality pin moves in its three workflows together with the vitest shuffle, the slidev baseline entries and their declaration, and the shrink of the built fixture that the new size measurement reaches, with its test users."
