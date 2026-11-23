@@ -19,9 +19,11 @@ from tests.support.copresenter_support import (
     a_copresenter_talk_host,
     a_gateway_error,
     delete_the_sessions,
+    the_token_thread_fails,
 )
-from tests.support.deck_text_support import A_DECK_TEXT
+from tests.support.deck_text_support import A_DECK_TEXT, FakeDeckTexts
 from tests.support.log_lines import events_of, json_logged
+from tests.support.speech_service import a_refusal
 from tests.support.talk_drive import (
     A_LINE,
     SENTENCES,
@@ -40,6 +42,8 @@ from tests.support.talk_drive import (
 from tests.support.talk_support import A_DECK, B_DECK, A
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from sqlalchemy import Engine
 
     from tests.support.talk_support import Hosts
@@ -277,6 +281,72 @@ def test_a_loop_that_raises_ends_the_hearing_and_closes_the_socket_1011(
         closed_with = talk.until_closed()
 
     assert closed_with == _INTERNAL_ERROR
+
+
+@pytest.mark.parametrize(
+    "texts",
+    [
+        pytest.param(FakeDeckTexts(unreadable=True), id="unreadable-mirror"),
+        pytest.param(FakeDeckTexts(text=None), id="no-slides"),
+    ],
+)
+def test_a_deck_without_readable_words_closes_1011_and_asks_nothing(
+    engine: Engine, texts: FakeDeckTexts
+) -> None:
+    code, requests = closed_at_open(
+        engine, f"{TALK}?deck={A_DECK}&language=de", texts=texts
+    )
+
+    assert (code, requests) == (_INTERNAL_ERROR, 0)
+
+
+def test_a_talk_whose_hearing_ends_with_nothing_heard_closes_in_order(
+    engine: Engine,
+) -> None:
+    with a_talk(engine) as talk:
+        talk.cues.close()
+
+        closed_with = talk.until_closed()
+
+    assert closed_with == _NORMAL_CLOSURE
+    assert requests_of(talk) == []
+
+
+@pytest.mark.parametrize(
+    "arrange",
+    [delete_the_sessions, the_token_thread_fails],
+    ids=["session-gone", "store-fails"],
+)
+def test_a_person_whose_groups_cannot_be_read_mid_talk_is_stopped_before_the_gateway(
+    engine: Engine, arrange: Callable[[Hosts], None]
+) -> None:
+    with a_talk(engine) as talk:
+        talk.say(A_LINE)
+        talk.play_through()
+        talk.play_through()
+        arrange(talk.instance.hosts)
+        talk.say("Noch eine Zeile.")
+
+        error = talk.until("error")[-1]
+
+        assert error == {"kind": "error", "message": GENERIC_ANSWER_FAILURE}
+        assert len(requests_of(talk)) == 1
+
+
+def test_a_speech_outage_ends_the_answer_and_the_next_line_still_wakes_a_decision(
+    engine: Engine,
+) -> None:
+    with a_talk(engine) as talk:
+        talk.instance.service.speak_answers.append(
+            a_refusal(wire.RefusalCode.UNAVAILABLE)
+        )
+        talk.say(A_LINE)
+        talk.say("Noch eine Zeile.")
+
+        frames = talk.until("audio")
+
+    assert [frame["kind"] for frame in frames] == ["heard", "heard", "audio"]
+    assert last_lines_of(talk) == [A_LINE, "Noch eine Zeile."]
 
 
 def test_a_stopping_pod_closes_a_talk_with_1012_at_open() -> None:

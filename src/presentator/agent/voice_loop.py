@@ -161,8 +161,7 @@ class LeasedBackend:
             log_stopped(stopped)
             raise
         finally:
-            if summary.has_events:
-                summary.log()
+            summary.log()
 
 
 async def lines_of(heard: AsyncIterator[HeardInTalk]) -> AsyncGenerator[PlaceEntry]:

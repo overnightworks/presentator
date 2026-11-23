@@ -552,6 +552,34 @@ async def _hearing_lease(
     use: CoPresenterUse,
     guard: SessionGuard,
 ) -> None:
+    async def relay(
+        tokens: SpeechTokenSource, session_watch: asyncio.Task[None]
+    ) -> None:
+        await _relay(
+            socket,
+            language=language,
+            tokens=tokens,
+            use=use,
+            session_watch=session_watch,
+        )
+
+    await serve_hearing(
+        socket, session_id=session_id, use=use, guard=guard, serve=relay
+    )
+
+
+async def serve_hearing(
+    socket: WebSocket,
+    *,
+    session_id: str,
+    use: CoPresenterUse,
+    guard: SessionGuard,
+    serve: Callable[[SpeechTokenSource, asyncio.Task[None]], Awaitable[None]],
+) -> None:
+    """Watch the session, read the hearing's tokens, then serve until it ends.
+
+    A failure nobody expects closes the socket 1011.
+    """
     session_watch = asyncio.create_task(
         watch_session(socket, session_id=session_id, guard=guard)
     )
@@ -560,16 +588,11 @@ async def _hearing_lease(
             socket, session_id=session_id, use=use, session_watch=session_watch
         )
         if tokens is not None:
-            await _relay(
-                socket,
-                language=language,
-                tokens=tokens,
-                use=use,
-                session_watch=session_watch,
-            )
+            await serve(tokens, session_watch)
     except WebSocketDisconnect:
         return
-    except RuntimeError:
+    except RuntimeError, ExceptionGroup:
+        # A voice loop raises its unexpected failures inside an ExceptionGroup.
         with suppress(RuntimeError):
             await socket.close(code=INTERNAL_ERROR)
     finally:

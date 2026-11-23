@@ -157,6 +157,7 @@ class SpeechScenario:
     bounded_calls_stall: bool = False
     speech_scope: str = A_SPEECH_SCOPE
     limiter: Callable[[], RecordingLimiter] = RecordingLimiter
+    texts: FakeDeckTexts = field(default_factory=FakeDeckTexts)
     hearing_seconds: tuple[float, float] | None = None
     """The hearing's deadline and opening bound, when a scenario shortens them."""
 
@@ -288,6 +289,7 @@ def a_surface_over(  # noqa: PLR0913 - each part is one thing the instance varie
     deadline: ManualDeadline,
     errors: list[BaseException],
     speech_scope: str,
+    texts: FakeDeckTexts,
 ) -> Callable[[FakeDeckStore, PostgresSessions, WebAuth], CoPresenterSurface]:
     """The talk host's surface over the real speech adapters and session access."""
     hearing, speaking = adapters
@@ -306,7 +308,7 @@ def a_surface_over(  # noqa: PLR0913 - each part is one thing the instance varie
                 speech=WitnessedSpeech(hearing, errors),
                 decks=store,
                 sources=FakeSourceStore(sources=[A_SOURCE]),
-                texts=FakeDeckTexts(),
+                texts=texts,
                 boundaries=split_sentences,
                 speaking=WitnessedSpeaking(speaking, errors),
                 talks=VoiceLoopTalks(
@@ -353,6 +355,7 @@ def a_speech_instance(
                 deadline=deadline,
                 errors=errors,
                 speech_scope=scenario.speech_scope,
+                texts=scenario.texts,
             ),
             speech_scope=scenario.speech_scope,
         )

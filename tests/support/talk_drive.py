@@ -24,6 +24,7 @@ from tests.support.copresenter_support import (
     RecordingLimiter,
     nothing_happens,
 )
+from tests.support.deck_text_support import FakeDeckTexts
 from tests.support.lobby import A_TALK_SOCKET_ADDRESS
 from tests.support.speech_drive import (
     ORIGIN,
@@ -251,9 +252,14 @@ def lines_in(body: dict[str, Any]) -> list[dict[str, Any]]:
     return [json.loads(line) for line in body["messages"][-1]["content"].splitlines()]
 
 
-def closed_at_open(engine: Engine, url: str) -> tuple[int, int]:
+def closed_at_open(
+    engine: Engine, url: str, *, texts: FakeDeckTexts | None = None
+) -> tuple[int, int]:
     """The close code of a talk refused at open, and the gateway's request count."""
-    scenario = SpeechScenario(gateway=lambda: FakeGateway(completion(TWO_SENTENCES)))
+    scenario = SpeechScenario(
+        gateway=lambda: FakeGateway(completion(TWO_SENTENCES)),
+        texts=texts or FakeDeckTexts(),
+    )
     with (
         a_speech_instance(engine, scenario) as instance,
         pytest.raises(WebSocketDisconnect) as closed,

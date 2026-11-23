@@ -159,13 +159,10 @@ class RunSummary:
         """Count one event of the turn."""
         self._counts[_count_of(event)] += 1
 
-    @property
-    def has_events(self) -> bool:
-        """Whether the turn showed any event."""
-        return any(self._counts.values())
-
     def log(self) -> None:
-        """Write the `gateway_run.ended` line."""
+        """Write the `gateway_run.ended` line of a run that showed an event."""
+        if not any(self._counts.values()):
+            return
         _LOGGER.info(
             _RUN_EVENT,
             extra={
@@ -225,8 +222,7 @@ class GatewayAnswerer:
                 yield answered
             finally:
                 await answered.aclose()
-                if summary.has_events:
-                    summary.log()
+                summary.log()
 
     def _turn_person(self, person: AskingPerson) -> TurnPerson:
         async def groups() -> frozenset[str]:  # NOSONAR(S7503) the client awaits it

@@ -24,7 +24,6 @@ from starlette.concurrency import run_in_threadpool
 
 from presentator.api.copresenter import (
     GENERIC_ANSWER_FAILURE,
-    INTERNAL_ERROR,
     POLICY_VIOLATION,
     SERVICE_RESTART,
     AnswerFailure,
@@ -32,8 +31,7 @@ from presentator.api.copresenter import (
     SessionGuard,
     finish_tasks,
     observe_session_end,
-    read_tokens,
-    watch_session,
+    serve_hearing,
 )
 from presentator.api.session_api import language_of
 from presentator.contracts.copresenter import (
@@ -115,15 +113,11 @@ class _DownFrames:
         await self._queue.join()
 
     async def send_all(self) -> None:
-        """Send each queued frame; a socket that is gone drops the rest."""
-        gone = False
+        """Send each queued frame; a socket that is gone drops them."""
         while True:
             frame = await self._queue.get()
-            if not gone:
-                try:
-                    await self._socket.send_json(frame)
-                except WebSocketDisconnect, RuntimeError:
-                    gone = True
+            with suppress(WebSocketDisconnect, RuntimeError):
+                await self._socket.send_json(frame)
             self._queue.task_done()
 
 
@@ -396,29 +390,20 @@ async def _talk_lease(
     surface: CoPresenterSurface,
     guard: SessionGuard,
 ) -> None:
-    session_id = talk.connection.session_id
-    session_watch = asyncio.create_task(
-        watch_session(socket, session_id=session_id, guard=guard)
-    )
-    try:
-        tokens = await read_tokens(
-            socket,
-            session_id=session_id,
-            use=surface.use,
-            session_watch=session_watch,
+    async def talking(
+        tokens: SpeechTokenSource, session_watch: asyncio.Task[None]
+    ) -> None:
+        await _talking(
+            socket, talk, tokens, surface=surface, session_watch=session_watch
         )
-        if tokens is not None:
-            await _talking(
-                socket, talk, tokens, surface=surface, session_watch=session_watch
-            )
-    except WebSocketDisconnect:
-        return
-    except RuntimeError, ExceptionGroup:
-        # The loop raises its unexpected failures inside an ExceptionGroup.
-        with suppress(RuntimeError):
-            await socket.close(code=INTERNAL_ERROR)
-    finally:
-        await finish_tasks((session_watch,))
+
+    await serve_hearing(
+        socket,
+        session_id=talk.connection.session_id,
+        use=surface.use,
+        guard=guard,
+        serve=talking,
+    )
 
 
 def _heard_by(
@@ -529,17 +514,15 @@ async def _relay_ended(
     decisions: _Decisions,
 ) -> None:
     """The hearing is over: the service closed, the browser left or it broke a rule."""
-    failure = relay.exception()
-    if failure is None:
-        hearing.end()
-        await talking
-        decisions.cut(_Cut.CANCELLED)
-        return
-    await _cut_talk(talking, decisions, _Cut.CANCELLED)
-    if isinstance(failure, UnreadableTalkMessageError):
+    try:
+        await relay
+    except UnreadableTalkMessageError:
+        await _cut_talk(talking, decisions, _Cut.CANCELLED)
         await socket.close(code=POLICY_VIOLATION)
         return
-    raise failure
+    hearing.end()
+    await talking
+    decisions.cut(_Cut.CANCELLED)
 
 
 async def _loop_ended(
