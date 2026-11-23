@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import asyncio
 from http import HTTPStatus
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from presentator.contracts.copresenter import RetryAfter
 from tests.support.talk_drive import A_LINE, HeldByAnotherPod, a_talk
 
 if TYPE_CHECKING:
     from sqlalchemy import Engine
+
+_NORMAL_CLOSURE: Final = 1000
 
 
 def test_a_decision_in_flight_holds_the_session_so_an_ask_is_refused(
@@ -52,12 +54,12 @@ def test_the_lease_is_free_after_the_service_closed_the_hearing(
 ) -> None:
     with a_talk(engine) as talk:
         talk.say(A_LINE)
-        talk.play_through()
-        talk.play_through()
+        talk.next_sound()
         talk.cues.close()
 
-        talk.until_closed()
+        closed_with = talk.until_closed()
 
+    assert closed_with == _NORMAL_CLOSURE
     assert talk.instance.limiter.freed == [talk.session_id]
 
 
