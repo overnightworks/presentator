@@ -15,7 +15,7 @@ from tests.support.postgres import (
     engine_on,
     point_at,
 )
-from tests.support.two_processes import two_presentators
+from tests.support.two_processes import HOST_PROCESS_SECONDS, two_presentators
 
 _A_REVISION_ONLY_A_NEWER_RELEASE_KNOWS = "9999"
 _WAITING_FOR_A_LOCK = """
@@ -24,7 +24,6 @@ WHERE locktype = 'advisory' AND NOT granted
   AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
 """
 _BOTH_MIGRATIONS = 2
-_WAIT_SECONDS = 30
 _POLL_SECONDS = 0.05
 _REVISIONS = text("SELECT version_num FROM alembic_version")
 
@@ -118,7 +117,7 @@ def test_two_migrations_of_a_database_a_newer_release_made_exit_zero_and_leave_i
 
 
 def _wait_until_both_wait_for_the_lock(engine: Engine) -> None:
-    deadline = time.monotonic() + _WAIT_SECONDS
+    deadline = time.monotonic() + HOST_PROCESS_SECONDS
     while time.monotonic() < deadline:
         with engine.connect() as connection:
             if (

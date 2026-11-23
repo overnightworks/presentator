@@ -37,6 +37,7 @@ from tests.support.lobby import A_TALK_ADDRESS, AN_API_GROUP
 from tests.support.object_store import ObjectStore
 from tests.support.postgres import engine_on
 from tests.support.sign_in_support import ADMIN
+from tests.support.two_processes import HOST_PROCESS_SECONDS
 
 _SERVICE_RESTART = 1012
 _SECONDS = 60
@@ -121,7 +122,10 @@ def test_a_stopping_app_drains_and_the_other_app_hears_on(  # noqa: PLR0913 - th
             asking.join(_SECONDS)
             # uvicorn raises the signal again once it has stopped, so a clean
             # stop reads as the signal's own end.
-            assert stopping.process.wait(timeout=_SECONDS) in {0, -signal.SIGTERM}
+            assert stopping.process.wait(timeout=HOST_PROCESS_SECONDS) in {
+                0,
+                -signal.SIGTERM,
+            }
 
         assert answers[0].status_code == HTTPStatus.OK
         assert "event: done" in answers[0].text
