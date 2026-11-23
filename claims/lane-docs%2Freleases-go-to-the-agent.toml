@@ -1,0 +1,7 @@
+claim_id = "37f95c1062f9426083f83126bd389e0b"
+agent = "Claude c1bdc492-301e-41eb-b0a2-b29b0b318ca2"
+role = "builder"
+base = "13ea3a4726a634c560fcc2f729bfb5a4c4b71f98"
+branch = "docs/releases-go-to-the-agent"
+scope = ["AGENTS.md"]
+opened_commit = "3826ff73a68f36a7efab757b310dd50965b1232a"
