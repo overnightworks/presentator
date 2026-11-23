@@ -10,9 +10,9 @@ from pathlib import Path
 import pytest
 
 from presentator.host.lifecycle import ServerEvent
-from tests.presentator.application.support.fakes import PATIENCE
 from tests.presentator.host.support.worker_process import Phase
 from tests.support.log_lines import json_lines
+from tests.support.two_processes import COLD_START_SECONDS
 
 _CHILD = "tests.presentator.host.support.worker_process"
 # A module started with `-m` imports `tests` from here.
@@ -51,7 +51,7 @@ def test_a_stop_signal_ends_the_worker_in_its_stop_line_alone(
         try:
             before = _read_until(process, reached)
             process.send_signal(stop_signal)
-            after, errors = process.communicate(timeout=PATIENCE.total_seconds())
+            after, errors = process.communicate(timeout=COLD_START_SECONDS)
         finally:
             process.kill()
 

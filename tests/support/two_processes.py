@@ -9,7 +9,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-_FINISH_SECONDS = 60
+# A cold start imports the whole host: about 2.5 s with a load of 11 on a
+# workstation, so a loaded CI runner needs a wide margin; one budget for every
+# test that waits on a process it started.
+COLD_START_SECONDS: Final = 60
 CONSOLE_ENTRY_POINT: Final = Path(sys.executable).parent / "presentator"
 WORKER_CONSOLE_ENTRY_POINT: Final = Path(sys.executable).parent / "presentator-worker"
 # A module started with `-m` imports `tests.support` from here.
@@ -141,5 +144,5 @@ def _processes(
 
 
 def _finished(process: subprocess.Popen[str]) -> Finished:
-    output, _ = process.communicate(timeout=_FINISH_SECONDS)
+    output, _ = process.communicate(timeout=COLD_START_SECONDS)
     return Finished(process.returncode, output)
