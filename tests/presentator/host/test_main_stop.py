@@ -216,9 +216,7 @@ def test_a_sigint_before_any_serving_ends_the_process_in_its_stop_line_alone(
                 try:
                     _wait_until_a_statement_waits(engine, _A_STATEMENT_WAITS_FOR_A_LOCK)
                     process.send_signal(signal.SIGINT)
-                    output, errors = process.communicate(
-                        timeout=HOST_PROCESS_SECONDS
-                    )
+                    output, errors = process.communicate(timeout=HOST_PROCESS_SECONDS)
                 finally:
                     process.kill()
             holder.rollback()
