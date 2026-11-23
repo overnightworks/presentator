@@ -1,8 +1,0 @@
-claim_id = "41227929ab3741d4959626cbd46aa673"
-agent = "Claude c1bdc492-301e-41eb-b0a2-b29b0b318ca2"
-role = "builder"
-base = "49f5703cfd680dde5ea2347aaaac82be5e3b2d44"
-branch = "claude/issue-1421-lane-review-of-1418-per-file-waits-on-ch"
-scope = ["tests/presentator/adapters/test_worker_children.py", "tests/presentator/host/support/controller_life.py", "tests/presentator/host/test_main_migrate.py", "tests/presentator/host/test_main_two_app_processes_drain.py", "tests/presentator/host/test_worker_entries_chain.py", "tests/presentator/host/test_worker_record_chain.py", "tests/presentator/host/test_worker_settings.py"]
-opened_commit = "0829eff64fc449eab0b06579e94e3b38c68cc147"
-whole_reason = "One shared budget for every wait on a child of the whole host or the worker; a split leaves per-file copies of it."
