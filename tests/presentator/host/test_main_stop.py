@@ -126,7 +126,7 @@ def test_a_sigterm_during_a_locked_source_poll_writes_its_failure_before_the_sto
             _wait_until_a_statement_waits(engine, _A_POLL_WAITS_FOR_THE_LOCK)
             signalled = time.monotonic()
             app.process.send_signal(signal.SIGTERM)
-            exit_code = app.process.wait(timeout=PATIENCE.total_seconds())
+            exit_code = app.process.wait(timeout=HOST_PROCESS_SECONDS)
             stopped_after = time.monotonic() - signalled
             holder.rollback()
             output = app.output_after_exit()
@@ -147,7 +147,7 @@ def test_a_sigint_ends_a_served_process_in_its_stop_line_alone(
 ) -> None:
     with serving_presentator(database_url, tmp_path, {}) as app:
         app.process.send_signal(signal.SIGINT)
-        exit_code = app.process.wait(timeout=PATIENCE.total_seconds())
+        exit_code = app.process.wait(timeout=HOST_PROCESS_SECONDS)
         output = app.output_after_exit()
 
     events = [line["event"] for line in json_lines(output)]
@@ -217,7 +217,7 @@ def test_a_sigint_before_any_serving_ends_the_process_in_its_stop_line_alone(
                     _wait_until_a_statement_waits(engine, _A_STATEMENT_WAITS_FOR_A_LOCK)
                     process.send_signal(signal.SIGINT)
                     output, errors = process.communicate(
-                        timeout=PATIENCE.total_seconds()
+                        timeout=HOST_PROCESS_SECONDS
                     )
                 finally:
                     process.kill()
