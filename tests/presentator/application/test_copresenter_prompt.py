@@ -1,6 +1,6 @@
 """The turn the answering model is given."""
 
-from presentator.application.copresenter_prompt import user_message
+from presentator.application.copresenter_prompt import deck_context, user_message
 from presentator.contracts.copresenter import DeckText, Question, SlideText
 
 _DECK = DeckText(
@@ -43,3 +43,15 @@ def test_the_message_names_the_answer_language_by_its_tag() -> None:
     message = user_message(asked_on(1), _DECK)
 
     assert message.endswith("\nAnswer in the language whose BCP 47 tag is de.")
+
+
+def test_the_talks_context_carries_the_title_and_every_slide_with_its_notes() -> None:
+    context = deck_context(_DECK)
+
+    assert context.startswith("Deck: Kunden\n")
+    assert "Slide 1: Start\n# Start" in context
+    assert "Slide 2: Zahlen\n# Zahlen\nSpeaker notes: say it slowly" in context
+
+
+def test_the_talks_context_names_no_current_slide() -> None:
+    assert "(current)" not in deck_context(_DECK)

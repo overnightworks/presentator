@@ -443,10 +443,17 @@ class Cues:
         """Start with the service not yet connected."""
         self.connected = threading.Event()
         self._loop: asyncio.AbstractEventLoop | None = None
-        self._events = asyncio.Queue[realtime_wire.ServerEvent]()
+        self._events = asyncio.Queue[realtime_wire.ServerEvent | None]()
 
     def send(self, event: realtime_wire.ServerEvent) -> None:
         """Have the connected service send the event."""
+        self._cue(event)
+
+    def close(self) -> None:
+        """Have the connected service close the hearing in order."""
+        self._cue(None)
+
+    def _cue(self, event: realtime_wire.ServerEvent | None) -> None:
         assert self._loop is not None
         self._loop.call_soon_threadsafe(self._events.put_nowait, event)
 
@@ -466,9 +473,9 @@ class Cues:
         return realtime
 
     async def _send_cued(self, socket_to_browser: WebSocket) -> None:
-        while True:
-            event = await self._events.get()
+        while (event := await self._events.get()) is not None:
             await socket_to_browser.send_text(event.model_dump_json())
+        await socket_to_browser.close()
 
 
 def reading(service: FakeSpeechService) -> Hear:

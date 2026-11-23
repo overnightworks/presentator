@@ -12,35 +12,40 @@ from sqlalchemy import text
 from starlette.websockets import WebSocketDisconnect
 
 from presentator.api.copresenter import GENERIC_ANSWER_FAILURE
+from presentator.api.health import Stopping
+from presentator.contracts.models import Role
 from tests.presentator.api.test_copresenter_answer import a_gateway_error
-from tests.support.copresenter_support import delete_the_sessions
+from tests.support.copresenter_support import (
+    TALK_ORIGIN,
+    a_copresenter_talk_host,
+    delete_the_sessions,
+)
 from tests.support.deck_text_support import A_DECK_TEXT
-from tests.support.log_lines import events_of
+from tests.support.log_lines import events_of, json_logged
 from tests.support.talk_drive import (
     A_LINE,
+    SENTENCES,
     TALK,
     TWO_SENTENCES,
-    HeldElsewhere,
+    HeldByAnotherPod,
     UnavailableLimiter,
     a_talk,
     closed_at_open,
+    last_lines_of,
     lines_in,
     requests_of,
     system_text_of,
 )
-from tests.support.talk_support import A, B_DECK
+from tests.support.talk_support import A_DECK, B_DECK, A
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from sqlalchemy import Engine
 
-    from tests.support.copresenter_support import RecordingLimiter
-    from tests.support.log_lines import LoggedText
     from tests.support.talk_support import Hosts
 
 _POLICY_VIOLATION: Final = 1008
 _NORMAL_CLOSURE: Final = 1000
+_SERVICE_RESTART: Final = 1012
 _API_LESS_GROUPS: Final = ["/apps/presentator"]
 _A_TRACE: Final = "1" * 32
 _A_TURN: Final = f"00-{_A_TRACE}-{'2' * 16}-01"
@@ -64,9 +69,7 @@ def test_a_heard_final_wakes_one_decision_and_each_sentence_waits_for_the_one_be
         talk.played(second["id"])
         (request,) = requests_of(talk)
         assert lines_in(request)[-1]["text"] == A_LINE
-        assert (first["text"], second["text"]) == tuple(TWO_SENTENCES.split(". "))[
-            0:1
-        ] + (second["text"],)
+        assert (first["text"], second["text"]) == SENTENCES
 
 
 def test_a_silent_reply_sends_no_sound_and_the_next_line_still_wakes_a_decision(
@@ -90,9 +93,7 @@ def test_the_model_gets_only_the_opened_decks_words_and_one_tool(
         (request,) = requests_of(talk)
 
         assert A_DECK_TEXT.title in system_text_of(request)
-        assert [tool["function"]["name"] for tool in request["tools"]] == [
-            "show_slide"
-        ]
+        assert [tool["function"]["name"] for tool in request["tools"]] == ["show_slide"]
 
 
 @pytest.mark.parametrize("deck", ["no-such-deck", B_DECK])
@@ -180,9 +181,13 @@ def test_the_model_sees_the_lines_fixed_label_and_neither_the_name_nor_the_subje
 _REFUSALS: Final = {
     "busy-with-a-wait": ((Reply(429, {"retry-after": "7"}),), None, None),
     "busy-without-a-wait": ((Reply(429),), None, None),
-    "budget-spent": ((Reply(422, body=a_gateway_error("budget_exceeded")),), None, None),
+    "budget-spent": (
+        (Reply(422, body=a_gateway_error("budget_exceeded")),),
+        None,
+        None,
+    ),
     "gateway-fails": ((Reply(500),), None, None),
-    "lease-held-elsewhere": ((), HeldElsewhere, None),
+    "lease-held-elsewhere": ((), HeldByAnotherPod, None),
     "lease-store-down": ((), UnavailableLimiter, None),
     "not-enabled": ((), None, _outside_the_api_group),
 }
@@ -230,17 +235,16 @@ def test_a_line_heard_in_english_is_spoken_in_english(engine: Engine) -> None:
 
 
 def test_a_session_that_ends_while_a_sound_plays_stops_it_and_closes_in_order(
-    engine: Engine, json_logged: LoggedText
+    engine: Engine, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    with a_talk(engine) as talk:
+    with json_logged(capsys) as logged, a_talk(engine) as talk:
         talk.say(A_LINE, traceparent=_A_TURN)
         sound = talk.next_sound()
         delete_the_sessions(talk.instance.hosts)
         talk.instance.deadline.release_first()
 
         after = talk.until("error")
-        with pytest.raises(WebSocketDisconnect) as closed:
-            talk.frame()
+        closed_with = talk.until_closed()
 
     assert after[0] == {"kind": "stop", "id": sound["id"]}
     assert after[-1] == {
@@ -248,11 +252,115 @@ def test_a_session_that_ends_while_a_sound_plays_stops_it_and_closes_in_order(
         "message": GENERIC_ANSWER_FAILURE,
         "reason": "session-ended",
     }
-    assert closed.value.code == _NORMAL_CLOSURE
-    assert talk.instance.limiter.freed == [talk.instance.limiter.session_ids[0]]
-    (answer,) = events_of(json_logged, "answer.ended")
+    assert closed_with == _NORMAL_CLOSURE
+    assert talk.instance.limiter.freed == [talk.session_id]
+    (answer,) = events_of(logged, "answer.ended")
     assert (answer["outcome"], answer["reason"], answer["trace_id"]) == (
         "refused",
         "session_ended",
         _A_TRACE,
     )
+
+
+def test_a_stopping_pod_closes_a_talk_with_1012_at_open() -> None:
+    stopping = Stopping()
+    lobby, private, _clock = a_copresenter_talk_host(stopping=stopping)
+    lobby.sign_in(role=Role.ADMIN)
+    stopping.begin()
+
+    with (
+        lobby.client.websocket_connect(
+            f"{TALK}?deck={A_DECK}&language=de", headers={"origin": TALK_ORIGIN}
+        ) as socket,
+        pytest.raises(WebSocketDisconnect) as closed,
+    ):
+        socket.receive_text()
+
+    assert closed.value.code == _SERVICE_RESTART
+    assert private.speech.hearing_opens == 0
+
+
+def test_a_decision_writes_one_answer_line_in_the_trace_of_the_line_that_woke_it(
+    engine: Engine, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with json_logged(capsys) as logged, a_talk(engine) as talk:
+        talk.say(A_LINE, traceparent=_A_TURN)
+        talk.play_through()
+        talk.play_through()
+        talk.until_freed()
+
+    (answer,) = events_of(logged, "answer.ended")
+    (run,) = events_of(logged, "gateway_run.ended")
+    assert (answer["outcome"], answer["trace_id"]) == ("ok", _A_TRACE)
+    assert isinstance(answer["first_output_ms"], float | int)
+    assert run["trace_id"] == _A_TRACE
+    assert events_of(logged, "gateway_turn.stopped") == []
+
+
+def test_a_refused_decision_names_the_reason_in_its_line_and_reaches_no_gateway(
+    engine: Engine, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with (
+        json_logged(capsys) as logged,
+        a_talk(engine, limiter=HeldByAnotherPod) as talk,
+    ):
+        talk.say(A_LINE, traceparent=_A_TURN)
+        talk.until("error")
+
+    (answer,) = events_of(logged, "answer.ended")
+    assert (answer["outcome"], answer["reason"], answer["trace_id"]) == (
+        "refused",
+        "busy",
+        _A_TRACE,
+    )
+    assert events_of(logged, "gateway_turn.stopped") == []
+
+
+def test_a_gateway_stop_writes_one_stop_line_and_ends_the_decision_unavailable(
+    engine: Engine, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with json_logged(capsys) as logged, a_talk(engine, Reply(500)) as talk:
+        talk.say(A_LINE, traceparent=_A_TURN)
+        talk.until("error")
+
+    (answer,) = events_of(logged, "answer.ended")
+    assert events_of(logged, "gateway_turn.stopped")
+    assert (answer["outcome"], answer["reason"], answer["trace_id"]) == (
+        "failed",
+        "unavailable",
+        _A_TRACE,
+    )
+
+
+def test_a_decision_cut_by_the_browser_leaving_ends_cancelled_in_its_trace(
+    engine: Engine, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with json_logged(capsys) as logged, a_talk(engine) as talk:
+        talk.say(A_LINE, traceparent=_A_TURN)
+        talk.next_sound()
+        talk.leave()
+
+    (answer,) = events_of(logged, "answer.ended")
+    assert (answer["outcome"], answer["trace_id"]) == ("cancelled", _A_TRACE)
+
+
+def test_a_line_that_repeats_the_answer_wakes_nothing_and_is_logged_without_its_text(
+    engine: Engine, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with json_logged(capsys) as logged, a_talk(engine) as talk:
+        talk.say(A_LINE)
+        talk.play_through()
+        talk.play_through()
+        talk.say(SENTENCES[0])
+        talk.say("Noch eine Zeile.")
+        talk.next_sound()
+
+    hearing = events_of(logged, "websocket.ended")[0]["trace_id"]
+    (dropped,) = events_of(logged, "echo.dropped")
+    (ended,) = events_of(logged, "hearing_session.ended")
+    assert last_lines_of(talk) == [A_LINE, "Noch eine Zeile."]
+    assert SENTENCES[0] not in json.dumps(dropped)
+    assert dropped["trace_id"] == hearing == ended["trace_id"]
+    assert hearing not in [
+        line["trace_id"] for line in events_of(logged, "answer.ended")
+    ]

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Final, cast
+from typing import TYPE_CHECKING, Any, Final, NoReturn, cast
 
 import pytest
 from agents.backend.fake_gateway import FakeGateway, Reply, completion
@@ -17,28 +18,35 @@ from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
     RetryAfter,
 )
+from tests.presentator.application.support.ask_leases import FakeAskTicket
 from tests.support.copresenter_support import (
+    THE_ASKED_DECK,
     RecordingLimiter,
     nothing_happens,
 )
 from tests.support.lobby import A_TALK_SOCKET_ADDRESS
-from tests.support.speech_drive import ORIGIN, SpeechScenario, a_speech_instance
+from tests.support.speech_drive import (
+    ORIGIN,
+    THREAD_WAIT_SECONDS,
+    SpeechScenario,
+    a_speech_instance,
+)
 from tests.support.speech_service import Cues, FakeSpeechService, a_completed
 from tests.support.talk_support import A_DECK
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
-    from fastapi.testclient import WebSocketTestSession
     from sqlalchemy import Engine
+    from starlette.testclient import WebSocketTestSession
 
     from tests.support.speech_drive import SpeechInstance
     from tests.support.talk_support import Hosts
 
 TALK: Final = f"{A_TALK_SOCKET_ADDRESS}/copresenter/talk"
 A_LINE: Final = "Hallo zusammen."
-TWO_SENTENCES: Final = "Erster Satz. Zweiter Satz."
-CONNECT_SECONDS: Final = 10
+SENTENCES: Final = ("Erster Satz.", "Zweiter Satz.")
+TWO_SENTENCES: Final = " ".join(SENTENCES)
 
 
 class UnavailableLimiter(RecordingLimiter):
@@ -49,11 +57,36 @@ class UnavailableLimiter(RecordingLimiter):
         raise CoPresenterUnavailableError
 
 
-class HeldElsewhere(RecordingLimiter):
-    """The ask lease another process holds, for every session."""
+class _FreedSessions(list[str]):
+    """The sessions whose lease was freed; adding one tells the test thread."""
 
-    async def admit(self, session_id: str) -> RetryAfter:
-        """Refuse, naming the wait."""
+    def __init__(self, told: threading.Event) -> None:
+        super().__init__()
+        self._told = told
+
+    def append(self, session_id: str, /) -> None:
+        super().append(session_id)
+        self._told.set()
+
+
+class SignalledLimiter(RecordingLimiter):
+    """The ask lease that tells the test thread when a ticket was freed."""
+
+    def __init__(self) -> None:
+        """Start with nothing freed."""
+        super().__init__()
+        self.freed_once = threading.Event()
+        self.freed = _FreedSessions(self.freed_once)
+
+
+class HeldByAnotherPod(RecordingLimiter):
+    """The ask lease whose first session is held by a ticket of another pod."""
+
+    async def admit(self, session_id: str) -> FakeAskTicket | RetryAfter:
+        """Take the session's ticket for the other pod, and refuse the caller."""
+        admitted = await super().admit(session_id)
+        if isinstance(admitted, RetryAfter):
+            return admitted
         return RetryAfter(BUSY_RETRY_SECONDS)
 
 
@@ -104,9 +137,54 @@ class Talking:
         """The browser shows this slide."""
         self.up({"kind": "shown", "slide": slide})
 
+    @property
+    def session_id(self) -> str:
+        """The session this talk is signed in by, as the lease saw it."""
+        return self.instance.limiter.session_ids[0]
+
+    def until_closed(self) -> int:
+        """Take the frames down until the socket closes; the code it closed with."""
+        with pytest.raises(WebSocketDisconnect) as closed:
+            self._frames_forever()
+        return closed.value.code
+
+    def _frames_forever(self) -> NoReturn:
+        while True:
+            self.frame()
+
+    def until_freed(self) -> None:
+        """Return once the talk freed the session's lease.
+
+        The test client cancels a route that is still running when its socket is
+        left, so what a talk does after a decision or a leave is seen by waiting here.
+        """
+        limiter = self.instance.limiter
+        assert isinstance(limiter, SignalledLimiter)
+        assert limiter.freed_once.wait(THREAD_WAIT_SECONDS)
+
+    def leave(self) -> None:
+        """The browser leaves in order; the call returns once the lease is free."""
+        self.socket.close()
+        self.until_freed()
+
+    def ask(self) -> int:
+        """The status of a question this person's browser asks over HTTP."""
+        return self.instance.talk.post(
+            "/copresenter/ask", json=THE_ASKED_DECK
+        ).status_code
+
     def up(self, frame: object) -> None:
         """Send a message up, as written."""
-        self.socket.send_text(json.dumps(frame))
+        self.up_text(json.dumps(frame))
+
+    def up_text(self, text: str) -> None:
+        """Send this text up as the browser's message."""
+        self.socket.send_text(text)
+
+    def microphone(self, sound: bytes = b"sound") -> None:
+        """Send a binary frame up; the messages before it are read once this returns."""
+        self.socket.send_bytes(sound)
+        assert self.instance.service.arrived.acquire(timeout=THREAD_WAIT_SECONDS)
 
 
 @contextmanager
@@ -114,7 +192,7 @@ def a_talk(
     engine: Engine,
     *replies: Reply,
     deck: str = A_DECK,
-    limiter: Callable[[], RecordingLimiter] = RecordingLimiter,
+    limiter: Callable[[], RecordingLimiter] = SignalledLimiter,
     arrange: Callable[[Hosts], None] = nothing_happens,
 ) -> Generator[Talking]:
     """A signed-in person's open talk about a deck, the service connected.
@@ -137,8 +215,15 @@ def a_talk(
         ) as socket,
     ):
         socket.send_bytes(b"first")
-        assert cues.connected.wait(CONNECT_SECONDS)
+        assert cues.connected.wait(THREAD_WAIT_SECONDS)
+        for _ in range(2):
+            assert service.arrived.acquire(timeout=THREAD_WAIT_SECONDS)
         yield Talking(socket=socket, cues=cues, instance=instance)
+
+
+def last_lines_of(talking: Talking) -> list[str]:
+    """The last line each request the gateway got carries, in order."""
+    return [lines_in(request)[-1]["text"] for request in requests_of(talking)]
 
 
 def requests_of(talking: Talking) -> list[dict[str, Any]]:
@@ -158,7 +243,7 @@ def lines_in(body: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def closed_at_open(engine: Engine, url: str) -> tuple[int, int]:
-    """The close code of a talk the route refuses at open, and the gateway's requests."""
+    """The close code of a talk refused at open, and the gateway's request count."""
     scenario = SpeechScenario(gateway=lambda: FakeGateway(completion(TWO_SENTENCES)))
     with (
         a_speech_instance(engine, scenario) as instance,

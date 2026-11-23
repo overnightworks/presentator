@@ -217,6 +217,7 @@ def test_the_composition_root_serves_the_copresenter_at_the_talk_host_only(
         talk, session.id, installed_web_auth_config(instance.talk)
     )
     hearing = f"wss://{_LOBBY_HOST}/copresenter/hear?language=de"
+    talking = f"wss://{_LOBBY_HOST}/copresenter/talk?deck={A_DECK}&language=de"
 
     at_the_lobby = lobby.get("/copresenter/who", headers=_JSON)
     at_the_talk_host = talk.get("/copresenter/who", headers=_JSON)
@@ -225,6 +226,11 @@ def test_the_composition_root_serves_the_copresenter_at_the_talk_host_only(
         lobby.websocket_connect(hearing, headers={"origin": settings.public_origin}),
     ):
         pytest.fail("the lobby accepted a hearing")
+    with (
+        pytest.raises((WebSocketDisconnect, WebSocketDenialResponse)),
+        lobby.websocket_connect(talking, headers={"origin": settings.public_origin}),
+    ):
+        pytest.fail("the lobby accepted a talk")
 
     assert at_the_lobby.status_code == _NOT_FOUND
     assert at_the_talk_host.status_code == _NOT_FOUND
