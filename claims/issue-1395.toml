@@ -1,5 +1,5 @@
 claim_id = "ec690431fb6a4e85bf73cb31d69fd13d"
-agent = "Claude bb4f7650-3c70-40b7-b8a1-07d899d94181"
+agent = "Claude c1bdc492-301e-41eb-b0a2-b29b0b318ca2"
 role = "builder"
 base = "06e94a6437f061a75acc9682d6f215afd74899f6"
 branch = "claude/issue-1395-the-loop-route-answers-on-the-hearing-so"
