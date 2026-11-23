@@ -12,7 +12,7 @@ from tests.presentator.host.support.config_refusals import (
     assert_refusal_names,
     assert_refusal_never_quotes,
 )
-from tests.support.two_processes import CONSOLE_ENTRY_POINT
+from tests.support.two_processes import COLD_START_SECONDS, CONSOLE_ENTRY_POINT
 
 _URL = "PRESENTATOR_REDIS_URL"
 _PASSWORD_FILE = "PRESENTATOR_REDIS_PASSWORD_FILE"  # noqa: S105 - a variable name
@@ -140,7 +140,7 @@ def test_a_refused_start_writes_neither_the_url_nor_its_password_anywhere(
         env={"PATH": os.environ["PATH"], **settings},
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=COLD_START_SECONDS,
         check=False,
     )
 

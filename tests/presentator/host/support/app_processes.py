@@ -30,10 +30,14 @@ from tests.support.object_store import no_object_store_environment
 from tests.support.postgres import database_environment
 from tests.support.redis import emptied_database_url
 from tests.support.sign_in_support import ADMIN, MEMBER
-from tests.support.two_processes import CONSOLE_ENTRY_POINT, TwoProcesses, two_modules
+from tests.support.two_processes import (
+    COLD_START_SECONDS,
+    CONSOLE_ENTRY_POINT,
+    TwoProcesses,
+    two_modules,
+)
 
 _CHILD: Final = "tests.presentator.host.support.app_process"
-_START_SECONDS: Final = 60
 _REQUEST_SECONDS: Final = 30
 _OUTPUT_END_SECONDS: Final = 30
 _LAST_LINES: Final = 10
@@ -275,7 +279,7 @@ def _environment(
 
 
 def _wait_until_ready(app: App) -> None:
-    deadline = time.monotonic() + _START_SECONDS
+    deadline = time.monotonic() + COLD_START_SECONDS
     while time.monotonic() < deadline:
         assert app.process.poll() is None, "the app process ended while starting"
         try:
