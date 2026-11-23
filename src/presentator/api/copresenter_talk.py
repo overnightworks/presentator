@@ -477,6 +477,8 @@ async def _talking(
             await _loop_ended(talking, relay, decisions)
     finally:
         await finish_tasks((talking, relay, sender))
+        # A talk ended by a fault, or by its route's cancel, cut the decision open.
+        decisions.cut(_Cut.CANCELLED)
 
 
 async def _session_ended(  # noqa: PLR0913 - the parts of one talk
@@ -522,7 +524,6 @@ async def _relay_ended(
         return
     hearing.end()
     await talking
-    decisions.cut(_Cut.CANCELLED)
 
 
 async def _loop_ended(

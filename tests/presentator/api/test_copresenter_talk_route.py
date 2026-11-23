@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any, Final
 
+import anyio
 import pytest
 from agents.backend.fake_gateway import Reply, completion
 from speech_client import wire
@@ -430,6 +431,32 @@ def test_a_decision_cut_by_the_browser_leaving_ends_cancelled_in_its_trace(
         talk.say(A_LINE, traceparent=_A_TURN)
         talk.next_sound()
         talk.leave()
+
+    (answer,) = events_of(logged, "answer.ended")
+    assert (answer["outcome"], answer["trace_id"]) == ("cancelled", _A_TRACE)
+
+
+def _a_talk_whose_hearing_fails(engine: Engine) -> None:
+    with a_talk(engine) as talk:
+        talk.say(A_LINE, traceparent=_A_TURN)
+        talk.next_sound()
+        talk.say(A_LINE, language=wire.Language.EN)
+        # The route raises the service's fault: the socket ends with no close frame.
+        with pytest.raises(anyio.EndOfStream):
+            talk.until_closed()
+
+
+def test_a_decision_cut_by_a_hearing_that_fails_ends_cancelled_in_its_trace(
+    engine: Engine,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("presentator.adapters.speech.LANGUAGES", ("de",))
+    with (
+        json_logged(capsys) as logged,
+        pytest.raises(ValueError, match="no offered language"),
+    ):
+        _a_talk_whose_hearing_fails(engine)
 
     (answer,) = events_of(logged, "answer.ended")
     assert (answer["outcome"], answer["trace_id"]) == ("cancelled", _A_TRACE)
