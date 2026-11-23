@@ -12,7 +12,6 @@ import pytest
 
 from presentator.host import console, main, worker
 from presentator.host.lifecycle import ServerEvent
-from tests.presentator.application.support.fakes import PATIENCE
 from tests.presentator.host.support.held_start.sitecustomize import (
     AT_EXIT,
     HELD,
@@ -20,7 +19,11 @@ from tests.presentator.host.support.held_start.sitecustomize import (
     HOLD_AT,
 )
 from tests.support.log_lines import json_lines
-from tests.support.two_processes import CONSOLE_ENTRY_POINT, WORKER_CONSOLE_ENTRY_POINT
+from tests.support.two_processes import (
+    CONSOLE_ENTRY_POINT,
+    HOST_PROCESS_SECONDS,
+    WORKER_CONSOLE_ENTRY_POINT,
+)
 
 _HELD_START = Path(__file__).resolve().parent / "support" / "held_start"
 
@@ -56,7 +59,7 @@ def _interrupted_while_held(console_script: Path, held_at: str) -> _Interrupted:
             with os.fdopen(read_end, "rb") as held:
                 assert held.read(len(HELD)) == HELD
             process.send_signal(signal.SIGINT)
-            output, errors = process.communicate(timeout=PATIENCE.total_seconds())
+            output, errors = process.communicate(timeout=HOST_PROCESS_SECONDS)
         finally:
             process.kill()
     return _Interrupted(process.returncode, output, errors)
