@@ -1,4 +1,4 @@
-"""The realm's names come from the seven `REALM_` keys, and only from them."""
+"""The realm's names come from the nine `REALM_` keys, and only from them."""
 
 from pathlib import Path
 
@@ -18,6 +18,8 @@ _REALM_KEYS = (
     "REALM_MCP_SCOPE",
     "REALM_AGENT_GROUP",
     "REALM_MCP_CLIENT_ID",
+    "REALM_AI_GROUP",
+    "REALM_SPEECH_SCOPE",
 )
 
 
@@ -32,7 +34,7 @@ def _write_a_dot_env(directory: Path, entries: dict[str, str]) -> None:
     (directory / ".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def test_the_realm_is_read_from_its_seven_keys(
+def test_the_realm_is_read_from_its_nine_keys(
     environment: pytest.MonkeyPatch,
 ) -> None:
     del environment
@@ -78,6 +80,7 @@ def test_an_empty_realm_key_refuses_naming_only_it(
         "REALM_ADMIN_GROUP",
         "REALM_MCP_GROUP",
         "REALM_AGENT_GROUP",
+        "REALM_AI_GROUP",
     ],
 )
 @pytest.mark.parametrize(
@@ -100,18 +103,19 @@ def test_a_malformed_realm_group_refuses_naming_only_its_key_and_never_the_value
     assert malformed not in str(refused)
 
 
+@pytest.mark.parametrize("key", ["REALM_MCP_SCOPE", "REALM_SPEECH_SCOPE"])
 @pytest.mark.parametrize(
     "malformed",
     [pytest.param("two scopes", id="a space"), pytest.param('"quoted"', id="a quote")],
 )
 def test_a_malformed_realm_scope_refuses_naming_only_its_key_and_never_the_value(
-    environment: pytest.MonkeyPatch, malformed: str
+    environment: pytest.MonkeyPatch, key: str, malformed: str
 ) -> None:
-    environment.setenv("REALM_MCP_SCOPE", malformed)
+    environment.setenv(key, malformed)
 
     refused = _refusal()
 
-    assert refused.variables == ("REALM_MCP_SCOPE",)
+    assert refused.variables == (key,)
     assert malformed not in str(refused)
 
 
@@ -158,6 +162,8 @@ def test_a_dot_env_holds_the_realm_and_the_settings_and_the_environment_wins(
         "REALM_MCP_SCOPE": "scope-of-the-file",
         "REALM_AGENT_GROUP": "/agents-of-the-file",
         "REALM_MCP_CLIENT_ID": "mcp-client-of-the-file",
+        "REALM_AI_GROUP": "/ai-of-the-file",
+        "REALM_SPEECH_SCOPE": "speech-scope-of-the-file",
         "PRESENTATOR_S3_BUCKET": "bucket-of-the-file",
     }
     _write_a_dot_env(tmp_path, entries)
@@ -173,6 +179,8 @@ def test_a_dot_env_holds_the_realm_and_the_settings_and_the_environment_wins(
     assert settings.realm.mcp_scope == "scope-of-the-file"
     assert str(settings.realm.agent_group) == "/agents-of-the-file"
     assert settings.realm.mcp_client_id == "mcp-client-of-the-file"
+    assert str(settings.realm.ai_group) == "/ai-of-the-file"
+    assert settings.realm.speech_scope == "speech-scope-of-the-file"
 
 
 def test_an_unknown_realm_key_in_a_dot_env_refuses_naming_it(
@@ -199,6 +207,73 @@ def test_the_retired_client_id_key_in_the_process_environment_is_ignored(
     environment.setenv("PRESENTATOR_OIDC_CLIENT_ID", "left-over-from-before")
 
     assert load_settings().realm == A_REALM
+
+
+def test_the_realm_carries_the_ai_group_and_the_speech_scope(
+    environment: pytest.MonkeyPatch,
+) -> None:
+    del environment
+
+    realm = load_settings().realm
+
+    assert realm.ai_group == A_REALM.ai_group
+    assert realm.speech_scope == A_REALM.speech_scope
+
+
+@pytest.mark.parametrize(
+    ("realm_key", "retired_key"),
+    [
+        ("REALM_AI_GROUP", "PRESENTATOR_AGENT__API_GROUP"),
+        ("REALM_SPEECH_SCOPE", "PRESENTATOR_SPEECH_SERVICE_SCOPE"),
+    ],
+)
+def test_the_retired_key_alone_does_not_start_the_instance(
+    environment: pytest.MonkeyPatch, realm_key: str, retired_key: str
+) -> None:
+    environment.delenv(realm_key)
+    environment.setenv(retired_key, "/left-over/or-scope")
+
+    assert _refusal().variables == (realm_key,)
+
+
+def test_the_retired_agent_group_in_the_process_environment_is_ignored(
+    environment: pytest.MonkeyPatch,
+) -> None:
+    environment.setenv("PRESENTATOR_AGENT__API_GROUP", "/left-over-from-before")
+
+    settings = load_settings()
+
+    config = settings.agent.configured(settings.realm.ai_group)
+    assert config.api_group == str(A_REALM.ai_group)
+
+
+def test_the_retired_agent_group_in_a_dot_env_is_ignored(
+    environment: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    del environment
+    _write_a_dot_env(tmp_path, {"PRESENTATOR_AGENT__API_GROUP": "/left-over"})
+
+    settings = load_settings()
+
+    config = settings.agent.configured(settings.realm.ai_group)
+    assert config.api_group == str(A_REALM.ai_group)
+
+
+def test_the_retired_speech_scope_in_the_process_environment_is_ignored(
+    environment: pytest.MonkeyPatch,
+) -> None:
+    environment.setenv("PRESENTATOR_SPEECH_SERVICE_SCOPE", "left-over-scope")
+
+    assert load_settings().realm.speech_scope == A_REALM.speech_scope
+
+
+def test_the_retired_speech_scope_in_a_dot_env_refuses_and_is_named(
+    environment: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    del environment
+    _write_a_dot_env(tmp_path, {"PRESENTATOR_SPEECH_SERVICE_SCOPE": "left-over"})
+
+    assert _refusal().variables == ("PRESENTATOR_SPEECH_SERVICE_SCOPE",)
 
 
 @pytest.mark.usefixtures("served_database")

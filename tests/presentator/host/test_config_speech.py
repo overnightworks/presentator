@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 A_CREDENTIALED_ORIGIN = "http://user:pa55word-MARKER@speech:8080"
 # The per-language form `PRESENTATOR_SPEECH_VOICES__EN` is read; this one is not.
 _UNREAD_VOICE_VARIABLE = "PRESENTATOR_SPEECH_VOICE_EN"
-_FIELDS = ("speech_service", "speech_service_scope")
+_FIELDS = ("speech_service",)
 
 
 def _settings_with(**overrides: object) -> Settings:
@@ -40,7 +40,7 @@ def test_the_service_and_its_scope_build_settings_without_any_network() -> None:
     settings = _settings_with()
 
     assert settings.speech_service == A_SPEECH_SERVICE
-    assert settings.speech_service_scope == A_SPEECH_SCOPE
+    assert settings.realm.speech_scope == A_SPEECH_SCOPE
 
 
 def test_each_language_has_a_voice_that_speaks_it_when_no_setting_names_one() -> None:
@@ -84,16 +84,6 @@ def test_an_origin_that_is_not_one_canonical_http_origin_refuses_without_echoing
         refused.value.errors(include_input=False, include_context=False)
     )
     assert "speech_service" in str(refused.value)
-
-
-@pytest.mark.parametrize("scope", ["two scopes", 'a"quote', "a\\backslash", ""])
-def test_a_scope_that_is_not_one_token_refuses_without_echoing_it(scope: str) -> None:
-    with pytest.raises(ValidationError) as refused:
-        _settings_with(speech_service_scope=scope)
-
-    assert "speech_service_scope" in str(refused.value)
-    errors = refused.value.errors(include_input=False, include_context=False)
-    assert all(scope not in str(error["msg"]) for error in errors if scope)
 
 
 @pytest.mark.parametrize("language", LANGUAGES)
@@ -161,12 +151,10 @@ def test_an_env_file_names_a_voice_and_an_entry_no_setting_reads_refuses(
     tmp_path: Path, environment: pytest.MonkeyPatch
 ) -> None:
     environment.chdir(tmp_path)
-    for name in ("SERVICE", "SERVICE_SCOPE"):
-        environment.delenv(f"PRESENTATOR_SPEECH_{name}")
+    environment.delenv("PRESENTATOR_SPEECH_SERVICE")
     env_file = tmp_path / ".env"
     lines = [
         f"PRESENTATOR_SPEECH_SERVICE={A_SPEECH_SERVICE}",
-        f"PRESENTATOR_SPEECH_SERVICE_SCOPE={A_SPEECH_SCOPE}",
     ]
     env_file.write_text(
         "\n".join([*lines, f"{_voice_variable('en')}={wire.VoiceId.RYAN}"]) + "\n",

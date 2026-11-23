@@ -29,10 +29,8 @@ out.
 | `PRESENTATOR_TALK_ORIGIN` | The talk host's canonical https origin, on another hostname than `PRESENTATOR_PUBLIC_ORIGIN`; talks are served and signed in there. |
 | `PRESENTATOR_AGENT__GATEWAY__ORIGIN` | Where the LiteLLM gateway answers: one `http` or `https` origin, scheme, host and optional port, without a path, credentials, query or fragment. No default. |
 | `PRESENTATOR_AGENT__GATEWAY__KEY_FILE` | Absolute path of the file holding this app's gateway key. It is read for every question, not at start, so a missing file refuses the question and not the start. The file holds the key alone on one line of printable ASCII without a space, 1024 bytes at most; the client strips one trailing `\n`, so any other control character, a `\r` from a Windows editor included, refuses every question with only `key_unusable` logged. No default. |
-| `PRESENTATOR_AGENT__API_GROUP` | The Keycloak group path whose members the co-presenter answers; any other person is answered "not enabled". No default. |
 | `PRESENTATOR_AGENT__GATEWAY__CA_FILE` | Optional absolute path of the CA file an `https` gateway origin needs; an `http` origin forbids it. |
 | `PRESENTATOR_SPEECH_SERVICE` | The one plain `http` origin of the shared speech service, without a path. No default. |
-| `PRESENTATOR_SPEECH_SERVICE_SCOPE` | The one scope token that names the service at the issuer; both sign-ins and the workload grant ask for it. No default. |
 | `PRESENTATOR_SPEECH_VOICES` | The voice that speaks an answer, by the answer's offered language: a map from language tag to a voice id of the speech service's catalogue, the speech client's `VoiceId`, that speaks that language. One entry is set as `PRESENTATOR_SPEECH_VOICES__EN`, or the whole map as JSON. An entry set here replaces the shipped one of its language; the shipped ones are `de` to `de_DE-thorsten-medium` and `en` to `en_US-norman-medium`. Every language the catalogs offer needs an entry, so a further language is its catalog files plus one entry here; a missing entry, or a voice that does not speak its language, refuses the start. The co-presenter is ready to speak only when the service offers every named voice as ready; a voice of several languages, such as `ryan`, may stand in several entries. A `.env` that still names the removed `PRESENTATOR_SPEECH_VOICE`, `PRESENTATOR_SPEECH_VOICE_DE` or `PRESENTATOR_SPEECH_VOICE_EN` refuses the start, because `.env` forbids unknown `PRESENTATOR_` and `REALM_` entries; set in the process environment, as on the cluster, the same removed names are ignored and the shipped voice speaks. |
 | `PRESENTATOR_OIDC_ISSUER` | The https URL of the Keycloak realm, without a trailing slash; exactly the `issuer` of its discovery document. |
 | `PRESENTATOR_OIDC_CLIENT_SECRET_FILE` | Absolute path of a file holding the client secret, read once at start, minus one trailing newline. |
@@ -42,7 +40,7 @@ There is no `/setup` and no first admin ([sign-in](sign-in.md), SI2).
 ## The realm's names
 
 The platform names the Keycloak realm's client, groups and scope and hands them
-to every app under these seven keys. They are read from the process
+to every app under these nine keys. They are read from the process
 environment and from `.env` under `REALM_`, are not `PRESENTATOR_` keys, and
 none has a default: a missing, empty or malformed one, or an admin group that
 does not lie strictly below the login group, refuses the start naming only its
@@ -58,6 +56,8 @@ reaches the realm. `presentator migrate` and `presentator-worker` read none.
 | `REALM_MCP_SCOPE` | The one scope token the realm grants for `/mcp`. |
 | `REALM_MCP_CLIENT_ID` | The one public client whose tokens act as the person who signed in at `/mcp`. |
 | `REALM_AGENT_GROUP` | The group path of the agents' own accounts, admitted from any client. |
+| `REALM_AI_GROUP` | The group path whose members the co-presenter answers; any other person is answered "not enabled". |
+| `REALM_SPEECH_SCOPE` | The one scope token that names the speech service at the issuer; both sign-ins and the workload grant ask for it. |
 
 A `.env` that still names the removed `PRESENTATOR_OIDC_CLIENT_ID` refuses the
 start naming it; set in the process environment the same name is ignored.

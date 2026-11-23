@@ -68,7 +68,9 @@ def test_the_sign_in_asks_exactly_for_the_person_scopes_and_the_speech_scope(
     scope: str, origin: str
 ) -> None:
     """The speech audience is the only audience the sign-in asks for."""
-    settings = a_settings().model_copy(update={"speech_service_scope": scope})
+    settings = a_settings().model_copy(
+        update={"realm": A_REALM.model_copy(update={"speech_scope": scope})}
+    )
 
     config = oidc_client_config(settings, SecretStr(A_CLIENT_CREDENTIAL), origin=origin)
 
