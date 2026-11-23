@@ -306,13 +306,16 @@ def test_a_refused_decision_names_the_reason_in_its_line_and_reaches_no_gateway(
     ):
         talk.say(A_LINE, traceparent=_A_TURN)
         talk.until("error")
+        # The next decision wakes only after the refused one has ended.
+        talk.say("Noch eine Zeile.")
+        talk.until("error")
 
-    (answer,) = events_of(logged, "answer.ended")
-    assert (answer["outcome"], answer["reason"], answer["trace_id"]) == (
-        "refused",
-        "busy",
-        _A_TRACE,
-    )
+    (answer,) = [
+        line
+        for line in events_of(logged, "answer.ended")
+        if line["trace_id"] == _A_TRACE
+    ]
+    assert (answer["outcome"], answer["reason"]) == ("refused", "busy")
     assert events_of(logged, "gateway_turn.stopped") == []
 
 
@@ -322,6 +325,7 @@ def test_a_gateway_stop_writes_one_stop_line_and_ends_the_decision_unavailable(
     with json_logged(capsys) as logged, a_talk(engine, Reply(500)) as talk:
         talk.say(A_LINE, traceparent=_A_TURN)
         talk.until("error")
+        talk.leave()
 
     (answer,) = events_of(logged, "answer.ended")
     assert events_of(logged, "gateway_turn.stopped")
