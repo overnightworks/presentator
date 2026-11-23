@@ -591,8 +591,13 @@ async def serve_hearing(
             await serve(tokens, session_watch)
     except WebSocketDisconnect:
         return
-    except RuntimeError, ExceptionGroup:
+    except (RuntimeError, ExceptionGroup) as error:
         # A voice loop raises its unexpected failures inside an ExceptionGroup.
+        _log.error(
+            "hearing.failed",
+            exc_info=error,
+            extra={"error_type": type(error).__name__},
+        )
         with suppress(RuntimeError):
             await socket.close(code=INTERNAL_ERROR)
     finally:

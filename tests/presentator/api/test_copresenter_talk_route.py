@@ -275,14 +275,22 @@ def test_a_session_that_ends_while_a_sound_plays_stops_it_and_closes_in_order(
 
 
 def test_a_loop_that_raises_ends_the_hearing_and_closes_the_socket_1011(
-    engine: Engine,
+    engine: Engine, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    with a_talk(engine, limiter=BrokenLimiter) as talk:
-        talk.say(A_LINE)
+    with json_logged(capsys) as logged, a_talk(engine, limiter=BrokenLimiter) as talk:
+        talk.say(A_LINE, traceparent=_A_TURN)
 
         closed_with = talk.until_closed()
 
+    (answer,) = events_of(logged, "answer.ended")
+    (failure,) = events_of(logged, "hearing.failed")
     assert closed_with == _INTERNAL_ERROR
+    assert (answer["outcome"], answer["reason"], answer["error_type"]) == (
+        "failed",
+        "unexpected",
+        "ExceptionGroup",
+    )
+    assert failure["error_type"] == "ExceptionGroup"
 
 
 @pytest.mark.parametrize(

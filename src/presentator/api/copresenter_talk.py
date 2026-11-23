@@ -178,7 +178,6 @@ class _Cut(StrEnum):
 
     CANCELLED = "cancelled"
     SESSION_ENDED = "session_ended"
-    UNEXPECTED = "unexpected"
 
 
 @dataclass(slots=True)
@@ -221,6 +220,13 @@ class _Decisions:
         decision, self._open = self._open, None
         decision.trace.run(_end_cut, decision.step, how)
 
+    def failed(self, error: BaseException) -> None:
+        """End the decision the loop's failure cut; the line carries its type."""
+        if self._open is None:
+            return
+        decision, self._open = self._open, None
+        decision.trace.run(_end_failed, decision.step, error)
+
     def _decision(self) -> _OpenDecision:
         # The loop reports a decision's start before anything else of it.
         return cast("_OpenDecision", self._open)
@@ -242,11 +248,14 @@ def _end_cut(step: StepTimer, how: _Cut) -> None:
         case _Cut.SESSION_ENDED:
             step.refuse(AnswerRefusal.SESSION_ENDED)
             step.end()
-        case _Cut.UNEXPECTED:
-            step.fail(AnswerFailure.UNEXPECTED)
-            step.end()
         case _:
             assert_never(how)
+
+
+def _end_failed(step: StepTimer, error: BaseException) -> None:
+    step.fail(AnswerFailure.UNEXPECTED)
+    # The block's exit is what writes the error's type on the line.
+    step.__exit__(type(error), error, error.__traceback__)
 
 
 class TalkSounds:
@@ -531,6 +540,7 @@ async def _loop_ended(
     talking: asyncio.Task[None], relay: asyncio.Task[None], decisions: _Decisions
 ) -> None:
     """The model's loop ended before the hearing did: it raised."""
-    decisions.cut(_Cut.UNEXPECTED)
+    # The loop raised: that is why it ended before the hearing did.
+    decisions.failed(cast("BaseException", talking.exception()))
     await finish_tasks((relay,))
     talking.result()

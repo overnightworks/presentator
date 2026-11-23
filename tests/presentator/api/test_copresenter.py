@@ -51,6 +51,7 @@ from tests.support.copresenter_support import (
     ask,
     who,
 )
+from tests.support.log_lines import events_of, json_logged
 
 if TYPE_CHECKING:
     from starlette.requests import HTTPConnection
@@ -456,20 +457,27 @@ async def _send_hearing_event_to_a_disconnected_browser(client: TestClient) -> N
     assert asyncio.all_tasks() == {asyncio.current_task()}
 
 
-def test_unexpected_private_hearing_failure_closes_the_public_connection() -> None:
+def test_unexpected_private_hearing_failure_closes_the_public_connection(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     lobby, private, _clock = a_copresenter_talk_host()
     client = lobby.client
     private.speech.hearing.events = [RuntimeError("private hearing failed")]
     lobby.sign_in()
 
-    with client.websocket_connect(
-        HEARING,
-        headers={"origin": TALK_ORIGIN},
-    ) as socket:
+    with (
+        json_logged(capsys) as logged,
+        client.websocket_connect(
+            HEARING,
+            headers={"origin": TALK_ORIGIN},
+        ) as socket,
+    ):
         socket.send_bytes(b"pcm")
         with pytest.raises(WebSocketDisconnect) as refused:
             socket.receive_json()
 
+    (failure,) = events_of(logged, "hearing.failed")
+    assert failure["error_type"] == "RuntimeError"
     assert refused.value.code == INTERNAL_ERROR
     assert private.speech.hearing.frames == [b"pcm"]
     assert private.speech.hearing.closed == 1

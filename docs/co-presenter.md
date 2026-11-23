@@ -120,7 +120,10 @@ before it opened names neither, and a reopening attempt that did not open ends
 as `attempt_failed`. A message from the overlay that the hearing cannot read
 ends it `refused` with `reason` `unreadable_message`. The speech client reports
 no opened session, so a first opening counts as open at its first event and its
-duration is an upper bound. No line holds a transcript, token, address or path.
+duration is an upper bound. A failure nobody expects, which closes the socket
+1011, writes one `hearing.failed` with its `error_type` and traceback, and a
+decision it cuts ends `failed` with the same `error_type`. Beyond that
+traceback's source frames, no line holds a transcript, token, address or path.
 On `/copresenter/hear`, each final transcript hands the overlay the service's
 trace of its turn; the overlay asks under that trace with a span of its own and
 its flags, or under a new trace with flags `00` when no valid one came (W3C
@@ -148,11 +151,12 @@ three seconds. A line's start is its `ts` less its `duration_ms`. The end of
 speech is the start of the speech service's `turn_end_wait.ended` in the turn's
 trace, the wait from the first silent audio to the turn's end; the first audio
 is the start of `answer.ended` plus its `first_output_ms`, which counts from the
-ask, or from the decision's start on the loop route. `uv run --locked python scripts/answer_start.py <files>` (or the lines on
-standard input) reads both services' JSON lines of a release, joins them by
-`trace_id` and prints `turns`, `p50_ms` and `p95_ms` (nearest rank), then one
-`unjoined <trace_id> <reason>` per trace it leaves out: `no_end_of_speech` (an
-ask under a fresh trace), `no_answer` (a turn nobody asked), `no_first_audio`
+ask, or from the decision's start on the loop route. `uv run --locked python
+scripts/answer_start.py <files>` (or the lines on standard input) reads both
+services' JSON lines of a release, joins them by `trace_id` and prints `turns`,
+`p50_ms` and `p95_ms` (nearest rank), then one `unjoined <trace_id> <reason>`
+per trace it leaves out: `no_end_of_speech` (an ask under a fresh trace),
+`no_answer` (a turn nobody asked), `no_first_audio`
 (an answer that sent no audio), `repeated` or `malformed`. It exits 1 when no
 turn joins. The two instants come from two processes' wall clocks, so the
 figure carries their offset, and it ends where the server sends the first audio,
