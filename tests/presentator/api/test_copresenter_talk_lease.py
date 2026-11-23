@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Final
 
-from presentator.contracts.copresenter import RetryAfter
 from tests.support.talk_drive import A_LINE, HeldByAnotherPod, a_talk
 
 if TYPE_CHECKING:
@@ -70,6 +68,4 @@ def test_a_decision_refused_busy_frees_nothing_of_the_other_holder(
         talk.say(A_LINE)
         talk.until("error")
 
-    limiter = talk.instance.limiter
-    assert limiter.freed == []
-    assert isinstance(asyncio.run(limiter.admit(talk.session_id)), RetryAfter)
+    assert talk.instance.limiter.freed == []

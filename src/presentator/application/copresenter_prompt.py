@@ -9,7 +9,6 @@ def user_message(question: Question, deck_text: DeckText) -> str:
     The answer language is named by its BCP 47 tag, the catalogs' own name for
     it, so a language the catalogs add is named without a list of its own here.
     """
-    pages = "\n\n".join(_page(slide) for slide in deck_text.slides)
     current = deck_text.at(question.slide)
     here = (
         f"Slide {question.slide} is not in this deck."
@@ -20,7 +19,7 @@ def user_message(question: Question, deck_text: DeckText) -> str:
         f"Deck: {deck_text.title}\n"
         f"You are on slide {question.slide}.\n\n"
         f"--- CURRENT SLIDE ---\n{here}\n--- END CURRENT SLIDE ---\n\n"
-        f"--- DECK ---\n{pages}\n--- END DECK ---\n\n"
+        f"{_deck_block(deck_text)}\n\n"
         f"The person said: {question.said}\n"
         f"Answer in the language whose BCP 47 tag is {question.language}."
     )
@@ -28,8 +27,12 @@ def user_message(question: Question, deck_text: DeckText) -> str:
 
 def deck_context(deck_text: DeckText) -> str:
     """The deck's words, pinned for a talk; the lines tell which slide is shown."""
+    return f"Deck: {deck_text.title}\n\n{_deck_block(deck_text)}"
+
+
+def _deck_block(deck_text: DeckText) -> str:
     pages = "\n\n".join(_page(slide) for slide in deck_text.slides)
-    return f"Deck: {deck_text.title}\n\n--- DECK ---\n{pages}\n--- END DECK ---"
+    return f"--- DECK ---\n{pages}\n--- END DECK ---"
 
 
 def _page(slide: SlideText, *, current_mark: bool = False) -> str:

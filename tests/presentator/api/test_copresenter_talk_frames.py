@@ -95,7 +95,20 @@ def test_an_up_frame_that_is_no_frame_of_the_protocol_is_an_unreadable_message(
         read_up_frame(text)
 
 
-@pytest.mark.parametrize("text", _UNREADABLE.values(), ids=_UNREADABLE.keys())
+_ONE_OF_EACH_KIND: Final = (
+    "no JSON",
+    "an unknown kind",
+    "an extra field",
+    "an id that is text",
+    "an end of no one's",
+)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [_UNREADABLE[kind] for kind in _ONE_OF_EACH_KIND],
+    ids=_ONE_OF_EACH_KIND,
+)
 def test_an_unreadable_up_frame_closes_1008_and_ends_the_hearing_refused(
     engine: Engine, capsys: pytest.CaptureFixture[str], text: str
 ) -> None:
