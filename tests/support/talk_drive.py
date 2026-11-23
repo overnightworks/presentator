@@ -204,6 +204,7 @@ def a_talk(
     deck: str = A_DECK,
     limiter: Callable[[], RecordingLimiter] = SignalledLimiter,
     arrange: Callable[[Hosts], None] = nothing_happens,
+    hearing_fails_on_line: int | None = None,
 ) -> Generator[Talking]:
     """A signed-in person's open talk about a deck, the service connected.
 
@@ -217,6 +218,7 @@ def a_talk(
         gateway=lambda: FakeGateway(*(replies or (completion(TWO_SENTENCES),))),
         limiter=limiter,
         arrange=arrange,
+        hearing_fails_on_line=hearing_fails_on_line,
     )
     with (
         a_speech_instance(engine, scenario) as instance,

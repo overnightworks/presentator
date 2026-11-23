@@ -24,6 +24,7 @@ from tests.support.copresenter_support import (
 )
 from tests.support.deck_text_support import A_DECK_TEXT, FakeDeckTexts
 from tests.support.log_lines import events_of, json_logged
+from tests.support.speech_drive import HearingFaultError
 from tests.support.speech_service import a_refusal
 from tests.support.talk_drive import (
     A_LINE,
@@ -437,25 +438,19 @@ def test_a_decision_cut_by_the_browser_leaving_ends_cancelled_in_its_trace(
 
 
 def _a_talk_whose_hearing_fails(engine: Engine) -> None:
-    with a_talk(engine) as talk:
+    with a_talk(engine, hearing_fails_on_line=2) as talk:
         talk.say(A_LINE, traceparent=_A_TURN)
         talk.next_sound()
-        talk.say(A_LINE, language=wire.Language.EN)
-        # The route raises the service's fault: the socket ends with no close frame.
+        talk.say(A_LINE)
+        # The route raises the hearing's fault: the socket ends with no close frame.
         with pytest.raises(anyio.EndOfStream):
             talk.until_closed()
 
 
 def test_a_decision_cut_by_a_hearing_that_fails_ends_cancelled_in_its_trace(
-    engine: Engine,
-    capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
+    engine: Engine, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("presentator.adapters.speech.LANGUAGES", ("de",))
-    with (
-        json_logged(capsys) as logged,
-        pytest.raises(ValueError, match="no offered language"),
-    ):
+    with json_logged(capsys) as logged, pytest.raises(HearingFaultError):
         _a_talk_whose_hearing_fails(engine)
 
     (answer,) = events_of(logged, "answer.ended")
