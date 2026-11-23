@@ -1,7 +1,0 @@
-claim_id = "37c00c9fe66d434fb81a07e1e1e98fa4"
-agent = "Claude c1bdc492-301e-41eb-b0a2-b29b0b318ca2"
-role = "builder"
-base = "49f5703cfd680dde5ea2347aaaac82be5e3b2d44"
-branch = "claude/issue-1422-take-tandem-v0-15-0"
-scope = ["pyproject.toml", "uv.lock"]
-opened_commit = "e910b2446e543a3ba6d509453b8819ada9dd68aa"
