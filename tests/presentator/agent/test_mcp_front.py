@@ -21,6 +21,7 @@ from sqlalchemy import Engine
 from webauth.ports import AccountKind
 from webauth.proxies import TrustedProxies
 
+from presentator.api.copresenter import OpenTalks
 from presentator.api.deck_list_api import DECK_LIST_PATH
 from presentator.api.people import ADMIN_PREFIX
 from presentator.api.preference_api import ACCOUNT_PATH, SETTINGS_PATH
@@ -73,6 +74,7 @@ def an_instance(world: World) -> Instance:
             chore_code=ChoreCode.SESSION_SWEEP,
             interval=timedelta(seconds=1),
         ),
+        open_talks=OpenTalks(),
     )
 
 

@@ -20,6 +20,7 @@ from presentator.adapters.postgres.locks import (
     MIGRATION_LOCK,
     hold_until_transaction_ends,
 )
+from presentator.api.copresenter import OpenTalks
 from presentator.host.lifecycle import ServerEvent, signals_end_as_a_stop
 from presentator.host.main import Instance, served_by_host
 from presentator.host.polling import ChoreCode, Schedule
@@ -84,6 +85,7 @@ def test_leaving_the_lifespan_stops_the_chores_before_it_closes_the_instance() -
         session_sweep=a_schedule(ChoreCode.SESSION_SWEEP),
         close=lambda: happened.append("closed"),
         aclose=an_aclose,
+        open_talks=OpenTalks(),
     )
 
     with TestClient(served_by_host(instance, a_settings())):

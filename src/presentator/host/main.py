@@ -169,7 +169,7 @@ class Instance:
     close: Callable[[], None] = _nothing_to_close
     aclose: Callable[[], Awaitable[None]] = _nothing_to_aclose
     stopping: Stopping = field(default_factory=Stopping)
-    open_talks: OpenTalks = field(default_factory=OpenTalks)
+    open_talks: OpenTalks
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
