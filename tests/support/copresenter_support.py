@@ -361,6 +361,7 @@ def a_copresenter_talk_host(  # noqa: PLR0913 - each is one thing a scenario var
     decks: FakeDeckStore | None = None,
     deadline_seconds: float = AN_ANSWER_DEADLINE_SECONDS,
     stopping: Callable[[], bool] = never_stopping,
+    browser_origin: str = TALK_ORIGIN,
 ) -> tuple[Lobby, PrivateFakes, FrozenClock]:
     private = PrivateFakes()
     people = a_crowd(users)
@@ -369,7 +370,7 @@ def a_copresenter_talk_host(  # noqa: PLR0913 - each is one thing a scenario var
         copresenter=CoPresenterSurface(
             use=a_use(private, decks or the_admins_decks()),
             limiter=limiter or FakeAskLimiter(),
-            browser_origin=TALK_ORIGIN,
+            browser_origin=browser_origin,
             deadline_seconds=deadline_seconds,
             delay=delay,
             stopping=stopping,
