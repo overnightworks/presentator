@@ -25,7 +25,8 @@ class PostgresSessions:
     """The `sessions` table behind webauth's `SessionRecordStore` and the records.
 
     Every call is one transaction of its own, which the extra's store runs on.
-    A database failure raises the extra's `SessionStoreError`. Instants are
+    A database failure raises the extra's `SessionStoreError`, an unreachable
+    database its `StoreUnavailableError`, which webauth answers 503. Instants are
     `timestamptz`, read and written as aware datetimes. The refresh token and
     the ID token sit in plain text in the session's row and leave with it; the
     row holds the SHA-256 digest of the session's id, never the id.

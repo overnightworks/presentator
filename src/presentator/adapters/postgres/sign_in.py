@@ -55,7 +55,8 @@ class PostgresIdentityWrites:
 
     def get(self, user_id: str) -> User | None:
         """The account of that id; a read needs no entry."""
-        return lobby_user(PostgresSubjectUserStore(self.engine).get(user_id))
+        with database_errors_as_store_errors():
+            return lobby_user(PostgresSubjectUserStore(self.engine).get(user_id))
 
     def delete_account(self, user_id: str) -> None:
         """Delete the account; its sessions end with it."""

@@ -430,7 +430,7 @@ def test_a_store_failure_inside_the_callback_leaves_no_account_no_session_and_no
 
     failed = scene.sign_in(browser)
 
-    assert failed.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert failed.status_code == HTTPStatus.SERVICE_UNAVAILABLE
     assert DEFAULT_SESSION_COOKIE_NAME not in cookie_names(failed)
     assert (scene.count("users"), scene.count("sessions")) == (0, 0)
     assert scene.audit.events == []
