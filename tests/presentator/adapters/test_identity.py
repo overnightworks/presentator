@@ -165,10 +165,11 @@ def test_an_unreachable_database_in_the_account_read_is_a_store_outage(
     unreachable = create_engine(database.url.set(port=1))
     writes = PostgresIdentityWrites(unreachable, LoggingAuditSink())
 
-    with pytest.raises(StoreUnavailableError):
-        writes.get("user-1")
-
-    unreachable.dispose()
+    try:
+        with pytest.raises(StoreUnavailableError):
+            writes.get("user-1")
+    finally:
+        unreachable.dispose()
 
 
 def test_a_session_deleted_after_its_load_is_not_brought_back_by_touch(
