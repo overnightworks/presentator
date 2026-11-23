@@ -259,11 +259,7 @@ class SpeechHearing:
             # The client leaves the browser socket to the app when the token source
             # raises, so the hearing ends here. The token read wrote its own line.
             except CoPresenterUnavailableError as unavailable:
-                read_end = _token_read_end(unavailable)
-                openings.end(read_end.mark)
-                session.handled()
-                read_end.mark(session)
-                await browser.close(read_end.close)
+                await _end_on_token_read(browser, unavailable, openings, session)
                 return
             except Exception as error:
                 openings.end_raised(error)
@@ -314,6 +310,20 @@ class SpeechHearing:
         shows no fault word; anything else is a hearing the service cannot give.
         """
         await browser.close(_token_read_end(unavailable).close)
+
+
+async def _end_on_token_read(
+    browser: HearingSocket,
+    unavailable: CoPresenterUnavailableError,
+    openings: _Openings,
+    session: StepTimer,
+) -> None:
+    """End the hearing whose tokens could not be read, and close the browser."""
+    read_end = _token_read_end(unavailable)
+    openings.end(read_end.mark)
+    session.handled()
+    read_end.mark(session)
+    await browser.close(read_end.close)
 
 
 class ReadinessFailure(StrEnum):
