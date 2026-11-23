@@ -618,8 +618,8 @@ mcp-server = [
 
 [[package]]
 name = "overnightworks-design"
-version = "0.37.0"
-source = { git = "https://github.com/overnightworks/design?rev=v0.37.0#5014da6e824ee2cec440862fd8c4bcdf278bdfba" }
+version = "0.41.0"
+source = { git = "https://github.com/overnightworks/design?rev=v0.41.0#e3feccf0cfff4bd558335d42c7441f4659a3f5b2" }
 
 [package.optional-dependencies]
 catalogs = [
@@ -697,7 +697,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "coverage", specifier = "==7.17.3" },
-    { name = "overnightworks-design", extras = ["catalogs"], git = "https://github.com/overnightworks/design?rev=v0.37.0" },
+    { name = "overnightworks-design", extras = ["catalogs"], git = "https://github.com/overnightworks/design?rev=v0.41.0" },
     { name = "pypdf", specifier = "==7.1.0" },
     { name = "pyright", specifier = "==1.1.414" },
     { name = "pytest", specifier = "==9.2.0" },
