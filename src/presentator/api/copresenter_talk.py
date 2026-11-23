@@ -477,7 +477,8 @@ async def _talking(
             await _loop_ended(talking, relay, decisions)
     finally:
         await finish_tasks((talking, relay, sender))
-        # A talk ended by a fault, or by its route's cancel, cut the decision open.
+        # Whatever ended the talk, end the decision still open, cancelled; a path
+        # that already cut it leaves nothing open.
         decisions.cut(_Cut.CANCELLED)
 
 
