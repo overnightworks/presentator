@@ -29,6 +29,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.requests import HTTPConnection
 from starlette.responses import Response
 
+from presentator.api.failure_frames import failure_frames
 from presentator.api.health import never_stopping
 from presentator.api.session_api import language_of
 from presentator.application.spoken_answer import spoken_language
@@ -595,8 +596,10 @@ async def serve_hearing(
         # A voice loop raises its unexpected failures inside an ExceptionGroup.
         _log.error(
             "hearing.failed",
-            exc_info=error,
-            extra={"error_type": type(error).__name__},
+            extra={
+                "error_type": type(error).__name__,
+                "frames": failure_frames(error),
+            },
         )
         with suppress(RuntimeError):
             await socket.close(code=INTERNAL_ERROR)

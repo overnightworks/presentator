@@ -462,7 +462,8 @@ def test_unexpected_private_hearing_failure_closes_the_public_connection(
 ) -> None:
     lobby, private, _clock = a_copresenter_talk_host()
     client = lobby.client
-    private.speech.hearing.events = [RuntimeError("private hearing failed")]
+    private_message = "no route to https://objects.example/decks at /srv/decks/a.pdf"
+    private.speech.hearing.events = [RuntimeError(private_message)]
     lobby.sign_in()
 
     with (
@@ -478,6 +479,8 @@ def test_unexpected_private_hearing_failure_closes_the_public_connection(
 
     (failure,) = events_of(logged, "hearing.failed")
     assert failure["error_type"] == "RuntimeError"
+    assert "RuntimeError" in str(failure["frames"])
+    assert private_message not in logged.text
     assert refused.value.code == INTERNAL_ERROR
     assert private.speech.hearing.frames == [b"pcm"]
     assert private.speech.hearing.closed == 1

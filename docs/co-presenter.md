@@ -121,9 +121,11 @@ as `attempt_failed`. A message from the overlay that the hearing cannot read
 ends it `refused` with `reason` `unreadable_message`. The speech client reports
 no opened session, so a first opening counts as open at its first event and its
 duration is an upper bound. A failure nobody expects, which closes the socket
-1011, writes one `hearing.failed` with its `error_type` and traceback, and a
-decision it cuts ends `failed` with the same `error_type`. Beyond that
-traceback's source frames, no line holds a transcript, token, address or path.
+1011, writes one `hearing.failed` with its `error_type` and the `frames` of the
+error and of every error it holds or came from (each one's type, then its
+module, function and line, never a message or a file path), and a decision it
+cuts ends `failed` with the same `error_type`. No line holds a transcript,
+token, address or path.
 On `/copresenter/hear`, each final transcript hands the overlay the service's
 trace of its turn; the overlay asks under that trace with a span of its own and
 its flags, or under a new trace with flags `00` when no valid one came (W3C
