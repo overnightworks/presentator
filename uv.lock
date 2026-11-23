@@ -615,6 +615,10 @@ mcp-server = [
     { name = "mcp" },
     { name = "overnightworks-logline" },
 ]
+voice = [
+    { name = "overnightworks-logline" },
+    { name = "syntok" },
+]
 
 [[package]]
 name = "overnightworks-design"
@@ -645,7 +649,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "httpx2" },
-    { name = "overnightworks-agents", extra = ["backend", "mcp-server"] },
+    { name = "overnightworks-agents", extra = ["backend", "mcp-server", "voice"] },
     { name = "overnightworks-logline" },
     { name = "overnightworks-speech-client" },
     { name = "overnightworks-tandem" },
@@ -681,9 +685,9 @@ requires-dist = [
     { name = "cryptography", specifier = "==50.0.2" },
     { name = "fastapi", specifier = "==0.162.7" },
     { name = "httpx2", specifier = "==2.16.0" },
-    { name = "overnightworks-agents", extras = ["backend", "mcp-server"], git = "https://github.com/overnightworks/agents?rev=v0.70.0" },
+    { name = "overnightworks-agents", extras = ["backend", "mcp-server", "voice"], git = "https://github.com/overnightworks/agents?rev=v0.70.0" },
     { name = "overnightworks-logline", git = "https://github.com/overnightworks/logline?rev=v1.9.0" },
-    { name = "overnightworks-speech-client", git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.22.0" },
+    { name = "overnightworks-speech-client", git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.23.0" },
     { name = "overnightworks-tandem", git = "https://github.com/overnightworks/tandem?rev=v0.15.0" },
     { name = "overnightworks-webauth", extras = ["postgres", "redis"], git = "https://github.com/overnightworks/webauth?rev=v0.46.0" },
     { name = "psycopg", extras = ["binary"], specifier = "==3.3.9" },
@@ -712,8 +716,8 @@ dev = [
 
 [[package]]
 name = "overnightworks-speech-client"
-version = "0.22.0"
-source = { git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.22.0#8d56f8c5f702e2e7bc2b628cb77a1688329952f5" }
+version = "0.23.0"
+source = { git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.23.0#b687a24c074699df701e7f82aab94b60bcc3385f" }
 dependencies = [
     { name = "overnightworks-logline" },
     { name = "pydantic" },

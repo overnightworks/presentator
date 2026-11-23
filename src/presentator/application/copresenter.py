@@ -4,8 +4,9 @@ import asyncio
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from functools import partial
 
-from presentator.application.copresenter_prompt import user_message
+from presentator.application.copresenter_prompt import deck_context, user_message
 from presentator.application.own_decks import OwnDecks
 from presentator.application.preferences import offered_language
 from presentator.application.spoken_answer import spoken_events
@@ -16,11 +17,13 @@ from presentator.contracts.copresenter import (
     AskingPerson,
     CoPresenterReadiness,
     CoPresenterUnavailableError,
+    HeardInTalk,
     HearingTranscript,
     Question,
     SessionEndedError,
     SpeechTokens,
     SpeechTokenSource,
+    TalkEvent,
 )
 from presentator.contracts.models import Role
 from presentator.contracts.words import Language
@@ -28,12 +31,15 @@ from presentator.ports.copresenter import (
     AgentAnswers,
     AskLimiter,
     AskTicket,
+    CoPresenterTalks,
     DeckTexts,
     HearingSocket,
     PersonAccess,
     SentenceBoundaries,
     Speaking,
     SpeechHearing,
+    Talk,
+    TalkBrowser,
 )
 from presentator.ports.decks import DeckStore, SourceStore
 
@@ -62,6 +68,7 @@ class CoPresenterUse:
     boundaries: SentenceBoundaries
     speaking: Speaking
     person_access: PersonAccess
+    talks: CoPresenterTalks
 
     def asked_deck(self, slug: str, *, viewer: str) -> AskedDeck | None:
         """The viewer's own built deck and its source, or nothing for any other."""
@@ -141,7 +148,7 @@ class CoPresenterUse:
             raise CoPresenterUnavailableError
         return tokens
 
-    async def relay_hearing(
+    async def relay_hearing(  # noqa: PLR0913 - one parameter per input of the hearing
         self,
         browser: HearingSocket,
         language: str,
@@ -149,9 +156,55 @@ class CoPresenterUse:
         *,
         ended: asyncio.Event,
         heard: Callable[[HearingTranscript], Awaitable[None]],
+        text: Callable[[str], None] | None = None,
     ) -> None:
         """Hear for the person whose tokens these are until the hearing ends."""
-        await self.speech.relay(browser, language, tokens, ended=ended, heard=heard)
+        await self.speech.relay(
+            browser, language, tokens, ended=ended, heard=heard, text=text
+        )
+
+    async def talk(  # noqa: PLR0913 - one keyword per thing a talk is given
+        self,
+        asked: AskedDeck,
+        *,
+        session_id: str,
+        subject: str,
+        role: Role,
+        controls_language: Language,
+        limiter: AskLimiter,
+        browser: TalkBrowser,
+        hearing: AsyncIterator[HeardInTalk],
+        report: Callable[[TalkEvent], None],
+    ) -> None:
+        """Let the model hear the talk about the asked deck until its hearing ends.
+
+        Raises CoPresenterUnavailableError when the deck's words cannot be read.
+        """
+        deck_text = await asyncio.to_thread(
+            self.texts.text_of, asked.deck, asked.source
+        )
+        if deck_text is None:
+            raise CoPresenterUnavailableError
+
+        async def speak(sentence: str, language: str) -> bytes:
+            tokens = await self._read_tokens(session_id)
+            return await self.speaking.speak(sentence, language, tokens)
+
+        await self.talks.run(
+            Talk(
+                session_id=session_id,
+                subject=subject,
+                role=role,
+                groups=partial(self.person_access.groups_of, session_id),
+                context=deck_context(deck_text),
+                speak=speak,
+                controls_language=controls_language,
+                limiter=limiter,
+                browser=browser,
+                hearing=hearing,
+                report=report,
+            )
+        )
 
     async def refuse_hearing(
         self, browser: HearingSocket, unavailable: CoPresenterUnavailableError

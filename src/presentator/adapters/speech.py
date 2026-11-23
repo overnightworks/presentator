@@ -46,6 +46,7 @@ from presentator.contracts.copresenter import (
     SessionEndedError,
     SpeechTokens,
     SpeechTokenSource,
+    UnreadableTalkMessageError,
 )
 from presentator.contracts.words import LANGUAGES, Language
 
@@ -215,7 +216,7 @@ class SpeechHearing:
             local_hearing_ready=health.hearing.ready,
         )
 
-    async def relay(
+    async def relay(  # noqa: PLR0913 - one parameter per input of the hearing
         self,
         browser: HearingSocket,
         language: str,
@@ -223,8 +224,10 @@ class SpeechHearing:
         *,
         ended: asyncio.Event,
         heard: Callable[[HearingTranscript], Awaitable[None]],
+        text: Callable[[str], None] | None = None,
     ) -> None:
         """Relay the browser's audio to the service and its transcripts back."""
+        unreadable: UnreadableTalkMessageError | None = None
         with StepTimer(_HEARING_SESSION_EVENT, _LOGGER) as session:
             try:
                 hears = wire.Language(language)
@@ -236,16 +239,27 @@ class SpeechHearing:
             openings = _Openings()
             try:
                 outcome = await self._hear(
-                    browser, hears, tokens, ended=ended, heard=heard, openings=openings
+                    browser,
+                    hears,
+                    tokens,
+                    ended=ended,
+                    heard=heard,
+                    text=text,
+                    openings=openings,
                 )
+            # The caller's text handler broke a rule of the browser's messages; the
+            # line is an info line like the hop's own rule breaks, and the caller
+            # gets the error after the line is written.
+            except UnreadableTalkMessageError as error:
+                openings.end(
+                    lambda opening: opening.refuse(HearingFailure.UNREADABLE_MESSAGE)
+                )
+                session.refuse(HearingFailure.UNREADABLE_MESSAGE)
+                unreadable = error
             # The client leaves the browser socket to the app when the token source
             # raises, so the hearing ends here. The token read wrote its own line.
             except CoPresenterUnavailableError as unavailable:
-                read_end = _token_read_end(unavailable)
-                openings.end(read_end.mark)
-                session.handled()
-                read_end.mark(session)
-                await browser.close(read_end.close)
+                await _end_on_token_read(browser, unavailable, openings, session)
                 return
             except Exception as error:
                 openings.end_raised(error)
@@ -256,6 +270,8 @@ class SpeechHearing:
             finally:
                 openings.end_cancelled()
                 session.add(openings=openings.count, utterances=openings.utterances)
+        if unreadable is not None:
+            raise unreadable
 
     async def _hear(  # noqa: PLR0913 - one parameter per input of the hearing
         self,
@@ -265,6 +281,7 @@ class SpeechHearing:
         *,
         ended: asyncio.Event,
         heard: Callable[[HearingTranscript], Awaitable[None]],
+        text: Callable[[str], None] | None,
         openings: _Openings,
     ) -> UtteranceOutcome:
         async def opening_tokens() -> SessionTokens:
@@ -280,7 +297,7 @@ class SpeechHearing:
             deadline_seconds=self._hearing_deadline_seconds,
             held_limit_bytes=_HELD_LIMIT_BYTES,
             ended=ended,
-            callbacks=_hearing_callbacks(openings, heard),
+            callbacks=_hearing_callbacks(openings, heard, text),
             opening_seconds=self._opening_seconds,
         )
 
@@ -293,6 +310,20 @@ class SpeechHearing:
         shows no fault word; anything else is a hearing the service cannot give.
         """
         await browser.close(_token_read_end(unavailable).close)
+
+
+async def _end_on_token_read(
+    browser: HearingSocket,
+    unavailable: CoPresenterUnavailableError,
+    openings: _Openings,
+    session: StepTimer,
+) -> None:
+    """End the hearing whose tokens could not be read, and close the browser."""
+    read_end = _token_read_end(unavailable)
+    openings.end(read_end.mark)
+    session.handled()
+    read_end.mark(session)
+    await browser.close(read_end.close)
 
 
 class ReadinessFailure(StrEnum):
@@ -365,6 +396,7 @@ class HearingFailure(StrEnum):
     UNREACHABLE = "unreachable"
     SOURCE_EMPTY = "source_empty"
     RECONNECT_FAILED = "reconnect_failed"
+    UNREADABLE_MESSAGE = "unreadable_message"
 
 
 class HearingEnding(StrEnum):
@@ -425,7 +457,9 @@ class _Openings:
 
 
 def _hearing_callbacks(
-    openings: _Openings, heard: Callable[[HearingTranscript], Awaitable[None]]
+    openings: _Openings,
+    heard: Callable[[HearingTranscript], Awaitable[None]],
+    text: Callable[[str], None] | None,
 ) -> HearingCallbacks:
     async def heard_utterance(utterance: Utterance) -> None:
         openings.opened()
@@ -460,6 +494,7 @@ def _hearing_callbacks(
         on_speech_started=opened,
         on_turn_ended=opened,
         on_reconnected=reconnected,
+        on_text=text,
     )
 
 

@@ -86,6 +86,7 @@ if TYPE_CHECKING:
         DeckTexts,
         HearingSocket,
         PersonAccess,
+        Talk,
     )
 
 TALK_ORIGIN = A_TALK_ADDRESS
@@ -155,7 +156,7 @@ class RecordingSpeech:
             local_hearing_ready=self.local_hearing_ready,
         )
 
-    async def relay(
+    async def relay(  # noqa: PLR0913 - the port's signature
         self,
         browser: HearingSocket,
         language: str,
@@ -163,6 +164,7 @@ class RecordingSpeech:
         *,
         ended: asyncio.Event,
         heard: Callable[[HearingTranscript], Awaitable[None]],
+        text: Callable[[str], None] | None = None,
     ) -> None:
         """Take frames, answer each with the next event, and end as the relay does."""
         assert language == "de"
@@ -328,6 +330,14 @@ class PrivateFakes:
     texts: FakeDeckTexts = field(default_factory=FakeDeckTexts)
 
 
+class NoTalks:
+    """The talks of a use whose test drives no talk: asked to run one, it fails."""
+
+    async def run(self, talk: Talk) -> None:
+        message = f"no talk runs here: {talk.session_id}"
+        raise AssertionError(message)
+
+
 def a_use(fakes: PrivateFakes, decks: FakeDeckStore) -> CoPresenterUse:
     sources = FakeSourceStore(sources=[A_SOURCE])
     return CoPresenterUse(
@@ -339,6 +349,7 @@ def a_use(fakes: PrivateFakes, decks: FakeDeckStore) -> CoPresenterUse:
         boundaries=split_sentences,
         speaking=fakes.speaking,
         person_access=fakes.person_access,
+        talks=NoTalks(),
     )
 
 
@@ -350,6 +361,7 @@ def a_copresenter_talk_host(  # noqa: PLR0913 - each is one thing a scenario var
     decks: FakeDeckStore | None = None,
     deadline_seconds: float = AN_ANSWER_DEADLINE_SECONDS,
     stopping: Callable[[], bool] = never_stopping,
+    browser_origin: str = TALK_ORIGIN,
 ) -> tuple[Lobby, PrivateFakes, FrozenClock]:
     private = PrivateFakes()
     people = a_crowd(users)
@@ -358,7 +370,7 @@ def a_copresenter_talk_host(  # noqa: PLR0913 - each is one thing a scenario var
         copresenter=CoPresenterSurface(
             use=a_use(private, decks or the_admins_decks()),
             limiter=limiter or FakeAskLimiter(),
-            browser_origin=TALK_ORIGIN,
+            browser_origin=browser_origin,
             deadline_seconds=deadline_seconds,
             delay=delay,
             stopping=stopping,
@@ -557,6 +569,11 @@ class Run:
         return json.loads(payload)
 
 
+def a_gateway_error(error_type: str) -> bytes:
+    """A gateway reply body that names its error type."""
+    return json.dumps({"error": {"type": error_type, "code": "422"}}).encode()
+
+
 def delete_the_sessions(hosts: Hosts) -> None:
     with hosts.database.begin() as connection:
         connection.execute(text("DELETE FROM sessions"))
@@ -675,6 +692,7 @@ def drive(engine: Engine, scenario: Scenario = Scenario()) -> Run:
                 boundaries=split_sentences,
                 speaking=fakes.speaking,
                 person_access=WitnessedAccess(_access_over(auth, sessions), errors),
+                talks=NoTalks(),
             ),
             limiter=limiter,
             browser_origin=A_TALK_ADDRESS,

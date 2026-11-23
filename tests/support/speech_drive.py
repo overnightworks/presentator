@@ -26,7 +26,8 @@ from presentator.adapters.speech import (
     SpeechHearing,
     SpeechSpeaking,
 )
-from presentator.agent.backend import gateway_answerer
+from presentator.agent.backend import copresenter_gateway, gateway_answerer
+from presentator.agent.voice_loop import VoiceLoopTalks
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.application.copresenter import CoPresenterUse
 from presentator.contracts.copresenter import (
@@ -62,6 +63,7 @@ from tests.support.copresenter_support import (
     the_token_thread_fails,
 )
 from tests.support.deck_text_support import FakeDeckTexts
+from tests.support.failing_hearing import hearing_failing_on
 from tests.support.hearing_endings import HEARING_ENDS
 from tests.support.leak_support import everything_shown
 from tests.support.lobby import (
@@ -155,8 +157,12 @@ class SpeechScenario:
     peer: Served | None = None
     bounded_calls_stall: bool = False
     speech_scope: str = A_SPEECH_SCOPE
+    limiter: Callable[[], RecordingLimiter] = RecordingLimiter
+    texts: FakeDeckTexts = field(default_factory=FakeDeckTexts)
     hearing_seconds: tuple[float, float] | None = None
     """The hearing's deadline and opening bound, when a scenario shortens them."""
+    hearing_fails_on_line: int | None = None
+    """The hearing raises an unexpected error instead of handing on this line."""
 
 
 @dataclass(kw_only=True)
@@ -221,7 +227,7 @@ class WitnessedSpeech:
             self._errors.append(error)
             raise
 
-    async def relay(
+    async def relay(  # noqa: PLR0913 - the port's signature
         self,
         browser: HearingSocket,
         language: str,
@@ -229,10 +235,11 @@ class WitnessedSpeech:
         *,
         ended: asyncio.Event,
         heard: Callable[[HearingTranscript], Awaitable[None]],
+        text: Callable[[str], None] | None = None,
     ) -> None:
         try:
             await self._speech.relay(
-                browser, language, tokens, ended=ended, heard=heard
+                browser, language, tokens, ended=ended, heard=heard, text=text
             )
         except BaseException as error:
             self._errors.append(error)
@@ -278,13 +285,14 @@ def _real_speech_adapters(
 
 
 def a_surface_over(  # noqa: PLR0913 - each part is one thing the instance varies or keeps
-    adapters: tuple[SpeechHearing, SpeechSpeaking],
+    adapters: tuple[SpeechHearingPort, SpeechSpeaking],
     *,
     gateway: Gateway,
     limiter: RecordingLimiter,
     deadline: ManualDeadline,
     errors: list[BaseException],
     speech_scope: str,
+    texts: FakeDeckTexts,
 ) -> Callable[[FakeDeckStore, PostgresSessions, WebAuth], CoPresenterSurface]:
     """The talk host's surface over the real speech adapters and session access."""
     hearing, speaking = adapters
@@ -303,9 +311,13 @@ def a_surface_over(  # noqa: PLR0913 - each part is one thing the instance varie
                 speech=WitnessedSpeech(hearing, errors),
                 decks=store,
                 sources=FakeSourceStore(sources=[A_SOURCE]),
-                texts=FakeDeckTexts(),
+                texts=texts,
                 boundaries=split_sentences,
                 speaking=WitnessedSpeaking(speaking, errors),
+                talks=VoiceLoopTalks(
+                    copresenter_gateway(an_agent_config(), transport=gateway),
+                    auth.relying_party,
+                ),
                 person_access=WitnessedAccess(
                     SessionAccess(
                         auth.relying_party,
@@ -331,21 +343,26 @@ def a_speech_instance(
 ) -> Generator[SpeechInstance]:
     """Sign an admin in at the talk host, over the fake service, for the block."""
     scenario = scenario or SpeechScenario()
-    limiter = RecordingLimiter()
+    limiter = scenario.limiter()
     deadline = ManualDeadline()
     gateway = scenario.gateway()
     errors: list[BaseException] = []
     serving = scenario.peer or (lambda: a_loopback_server(scenario.service.app()))
     with a_served_origin(serving) as origin:
+        hearing, speaking = _real_speech_adapters(origin, scenario)
         hosts = two_hosts(
             engine,
             copresenter=a_surface_over(
-                _real_speech_adapters(origin, scenario),
+                (
+                    hearing_failing_on(hearing, scenario.hearing_fails_on_line),
+                    speaking,
+                ),
                 gateway=gateway,
                 limiter=limiter,
                 deadline=deadline,
                 errors=errors,
                 speech_scope=scenario.speech_scope,
+                texts=scenario.texts,
             ),
             speech_scope=scenario.speech_scope,
         )

@@ -10,7 +10,10 @@ from redis import Redis
 from presentator.adapters.shared_redis import SharedRedis
 from presentator.agent.backend import COPRESENTER_AGENT_FILE, SHOW_SLIDE
 from presentator.contracts.copresenter import RetryAfter
-from presentator.host.main import ASK_LEASE_MARGIN_SECONDS, ask_limiter_of
+from presentator.host.copresenter_surface import (
+    ASK_LEASE_MARGIN_SECONDS,
+    ask_limiter_of,
+)
 from tests.presentator.agent.support.driving import on_an_event_loop
 from tests.support.redis import opened, stored_keys
 

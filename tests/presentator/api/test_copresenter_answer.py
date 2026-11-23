@@ -51,6 +51,7 @@ from tests.support.copresenter_support import (
     Scenario,
     a_copresenter_talk_host,
     a_deck_text_over_the_clients_bound,
+    a_gateway_error,
     ask,
     ask_as_asked,
     delete_the_sessions,
@@ -331,11 +332,6 @@ def test_a_gateway_that_does_not_answer_ends_in_a_plain_error_and_never_in_done(
     assert "reason" not in run.error_payload()
     assert run.fakes.speaking.spoken == []
     assert the_ticket_was_released(run)
-
-
-def a_gateway_error(error_type: str) -> bytes:
-    """A gateway reply body that names its error type."""
-    return json.dumps({"error": {"type": error_type, "code": "422"}}).encode()
 
 
 @pytest.mark.parametrize(

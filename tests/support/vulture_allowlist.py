@@ -12,6 +12,7 @@ from importlib import import_module
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.postgres.accounts import PostgresSubjectUserStore
 from presentator.adapters.postgres.sessions import PostgresSessions
+from presentator.agent.voice_loop import LeasedBackend, TalkVoice
 from presentator.api.copresenter import AskRequest
 from presentator.api.decks import TalkFiles
 from presentator.api.lobby_shell import _InlineScripts  # pyright: ignore[reportPrivateUsage] - HTMLParser.feed, not Python code, calls its hooks
@@ -92,3 +93,10 @@ DeckExport.built_commit
 # Pydantic and the preference store look a chosen theme up by its value.
 ThemeChoice.LIGHT
 ThemeChoice.DARK
+
+# `run_voice_loop` calls the backend's `run` for each turn and the voice's four members.
+LeasedBackend.run
+TalkVoice.render
+TalkVoice.play
+TalkVoice.pause
+TalkVoice.resume

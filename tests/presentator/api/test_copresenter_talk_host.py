@@ -13,6 +13,7 @@ from starlette.websockets import WebSocketDisconnect
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.contracts.models import Role, User
+from tests.presentator.application.support.fakes import FakeDeckStore
 from tests.support.copresenter_support import (
     HEARING,
     POLICY_VIOLATION,
@@ -27,6 +28,7 @@ from tests.support.copresenter_support import (
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_TALK_ADDRESS,
+    A_TALK_SOCKET_ADDRESS,
     USERNAME,
     a_web_auth,
     hand_over_session_cookies,
@@ -36,18 +38,23 @@ from tests.support.talk_support import A_DECK, MEMBER, A, Hosts, two_hosts
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
 
+    from presentator.contracts.decks import Deck
+
+TALK = f"{A_TALK_SOCKET_ADDRESS}/copresenter/talk?deck={A_DECK}&language=de"
 _JSON = {"accept": "application/json"}
 _ASK = "/copresenter/ask"
 
 
-def _hear_with_origin(browser: TestClient, origin: str | None) -> int | None:
+def _hear_with_origin(
+    browser: TestClient, origin: str | None, address: str = HEARING
+) -> int | None:
     """The code the test client reports for a handshake the server denied before accept.
 
     On the wire that is an HTTP 403; None when the hearing was accepted.
     """
     headers = {} if origin is None else {"origin": origin}
     try:
-        with browser.websocket_connect(HEARING, headers=headers):
+        with browser.websocket_connect(address, headers=headers):
             return None
     except WebSocketDisconnect as refused:
         return refused.code
@@ -123,18 +130,26 @@ def test_an_ask_with_neither_provenance_header_is_refused_by_the_origin_check() 
 
 
 # CP13
+_REFUSED_ORIGINS = {
+    "the-lobby-origin": A_BROWSERS_ADDRESS,
+    "null": "null",
+    "none": None,
+    "the-talk-host-over-http": TALK_ORIGIN.replace("https://", "http://"),
+    "foreign": "https://elsewhere.example.test",
+}
+_REFUSED_ORIGIN_CASES = [
+    pytest.param(origin, id=name) for name, origin in _REFUSED_ORIGINS.items()
+]
+
+
 @pytest.mark.parametrize(
     ("origin", "denied_with"),
     [
         pytest.param(TALK_ORIGIN, None, id="the-talk-origin"),
-        pytest.param(A_BROWSERS_ADDRESS, POLICY_VIOLATION, id="the-lobby-origin"),
-        pytest.param(None, POLICY_VIOLATION, id="none"),
-        pytest.param(
-            TALK_ORIGIN.replace("https://", "http://"),
-            POLICY_VIOLATION,
-            id="the-talk-host-over-http",
+        *(
+            pytest.param(origin, POLICY_VIOLATION, id=name)
+            for name, origin in _REFUSED_ORIGINS.items()
         ),
-        pytest.param("https://elsewhere.example.test", POLICY_VIOLATION, id="foreign"),
     ],
 )
 def test_hear_is_accepted_only_from_the_talk_origin(
@@ -144,6 +159,45 @@ def test_hear_is_accepted_only_from_the_talk_origin(
     talk.sign_in()
 
     assert _hear_with_origin(talk.client, origin) == denied_with
+
+
+class _UnreadDecks(FakeDeckStore):
+    """A deck store a refused talk must never reach."""
+
+    def get(self, slug: str) -> Deck | None:
+        message = f"a refused talk read the deck {slug}"
+        raise AssertionError(message)
+
+
+@pytest.mark.parametrize("origin", _REFUSED_ORIGIN_CASES)
+def test_talk_is_refused_before_accept_from_every_origin_but_the_talk_origin(
+    origin: str | None,
+) -> None:
+    talk, private, _clock = a_copresenter_talk_host(decks=_UnreadDecks())
+    talk.sign_in()
+
+    assert _hear_with_origin(talk.client, origin, TALK) == POLICY_VIOLATION
+    assert private.speech.hearing_opens == 0
+
+
+def test_talk_is_refused_before_accept_from_an_origin_the_surface_does_not_name() -> (
+    None
+):
+    """The route holds the surface's origin itself, whatever the sign-in admits."""
+    talk, private, _clock = a_copresenter_talk_host(
+        decks=_UnreadDecks(), browser_origin=A_BROWSERS_ADDRESS
+    )
+    talk.sign_in()
+
+    assert _hear_with_origin(talk.client, TALK_ORIGIN, TALK) == POLICY_VIOLATION
+    assert private.speech.hearing_opens == 0
+
+
+def test_talk_is_refused_before_accept_when_nobody_is_signed_in() -> None:
+    talk, private, _clock = a_copresenter_talk_host(decks=_UnreadDecks())
+
+    assert _hear_with_origin(talk.client, TALK_ORIGIN, TALK) == POLICY_VIOLATION
+    assert private.speech.hearing_opens == 0
 
 
 def test_hear_is_accepted_for_a_user_from_the_talk_origin() -> None:
