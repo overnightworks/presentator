@@ -603,36 +603,22 @@ def test_an_empty_entry_among_the_admitted_token_clients_refuses_to_start(
 
 
 @pytest.mark.usefixtures("environment")
+@pytest.mark.parametrize("entry", ["hal", ""], ids=["a filled entry", "an empty entry"])
 def test_the_retired_setting_in_an_env_file_refuses_to_start_and_is_named(
-    tmp_path: Path,
+    tmp_path: Path, entry: str
 ) -> None:
     """A missed rename in the application's `.env` is loud."""
-    (tmp_path / ".env").write_text("PRESENTATOR_ADMIN_TOKEN_CLIENTS=hal\n")
+    (tmp_path / ".env").write_text(f"PRESENTATOR_ADMIN_TOKEN_CLIENTS={entry}\n")
 
     with pytest.raises(ConfigurationError, match="admin_token_clients"):
         load_settings()
 
 
-def _set_in_process_environment(environment: pytest.MonkeyPatch, _: Path) -> None:
-    environment.setenv("PRESENTATOR_ADMIN_TOKEN_CLIENTS", "hal")
-
-
-def _set_empty_in_env_file(_: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    (tmp_path / ".env").write_text("PRESENTATOR_ADMIN_TOKEN_CLIENTS=\n")
-
-
-@pytest.mark.parametrize(
-    "arrange",
-    [_set_empty_in_env_file, _set_in_process_environment],
-    ids=["an empty env file entry", "the process environment"],
-)
-def test_the_retired_setting_elsewhere_is_ignored_and_the_new_one_stays_empty(
+def test_the_retired_setting_in_the_process_environment_is_ignored(
     environment: pytest.MonkeyPatch,
-    tmp_path: Path,
-    arrange: Callable[[pytest.MonkeyPatch, Path], None],
 ) -> None:
-    """The silent cases the release's migration step exists for."""
-    arrange(environment, tmp_path)
+    """The silent case the release's migration step exists for."""
+    environment.setenv("PRESENTATOR_ADMIN_TOKEN_CLIENTS", "hal")
 
     assert load_settings().admitted_token_clients() == frozenset()
 

@@ -167,15 +167,19 @@ def test_an_env_file_names_a_voice_and_an_entry_no_setting_reads_refuses(
     lines = [
         f"PRESENTATOR_SPEECH_SERVICE={A_SPEECH_SERVICE}",
         f"PRESENTATOR_SPEECH_SERVICE_SCOPE={A_SPEECH_SCOPE}",
-        f"{_voice_variable('en')}={wire.VoiceId.RYAN}",
     ]
-    env_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    env_file.write_text(
+        "\n".join([*lines, f"{_voice_variable('en')}={wire.VoiceId.RYAN}"]) + "\n",
+        encoding="utf-8",
+    )
     assert load_settings().speech_voices["en"] == wire.VoiceId.RYAN
 
-    env_file.write_text(f"{_UNREAD_VOICE_VARIABLE}=ryan\n", encoding="utf-8")
+    env_file.write_text(
+        "\n".join([*lines, f"{_UNREAD_VOICE_VARIABLE}=ryan"]) + "\n", encoding="utf-8"
+    )
     with pytest.raises(ConfigurationError) as refused:
         load_settings()
-    assert _UNREAD_VOICE_VARIABLE.lower() in str(refused.value).lower()
+    assert refused.value.variables == (_UNREAD_VOICE_VARIABLE,)
 
 
 def test_a_voice_variable_no_setting_reads_in_the_process_environment_is_ignored(

@@ -246,7 +246,7 @@ def test_the_talk_hosts_sign_in_stores_no_id_token_while_the_lobbys_does(
     settings = load_settings()
     now = datetime.now(UTC)
     issuer = FakeIssuer(
-        issuer=settings.oidc_issuer, client_id=settings.oidc_client_id, now=now
+        issuer=settings.oidc_issuer, client_id=settings.realm.client_id, now=now
     )
 
     router = main.served_by_host(

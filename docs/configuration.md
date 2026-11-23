@@ -1,21 +1,22 @@
 # Configuration
 
-Audience: the operator whose deployment supplies the settings, and an
-engineer looking one up. Settings are environment variables with the prefix
-`PRESENTATOR_`, read from the process environment and, in development, from a
-gitignored `.env` at the repository root. A refused setting ends the start
-of either console script in one `process.failed` line with `reason`
-`configuration_refused` and the refused variables in `setting`, never a value
-or a path, so a mistyped secret does not land in the startup output; the exit
-status is 1 for `presentator` and 2 for `presentator-worker`. Any other
-refused start of `presentator-worker` ends in one such line with exit status
-2: its `reason` is `key`, `bind` or `listen` for the serving step that
-refused, or the self-check predicate that failed. A
-refused command line, of `presentator` or of `presentator-worker`, ends in one
-such line with exit status 2: `argument_refused` names the missing or wrong
-argument in `argument`, such as an empty or blank host or a `--port` outside 1
-to 65535, and `argument_unknown` stands for a word no argument takes, which
-the line leaves out.
+Audience: the operator whose deployment supplies the settings, and an engineer
+looking one up. Settings are environment variables with the prefix
+`PRESENTATOR_`, except the realm's names, which carry `REALM_`; both are read
+from the process environment and, in development, from a gitignored `.env` at
+the repository root. A refused setting ends the start of either console script
+in one `process.failed` line with `reason` `configuration_refused` and the
+refused variables in `setting`, never a value or a path, so a mistyped secret
+does not land in the startup output; the exit status is 1 for `presentator`
+and 2 for `presentator-worker`. Any other refused start of
+`presentator-worker` ends in one such line with exit status 2: its `reason` is
+`key`, `bind` or `listen` for the serving step that refused, or the self-check
+predicate that failed. A refused command line, of `presentator` or of
+`presentator-worker`, ends in one such line with exit status 2:
+`argument_refused` names the missing or wrong argument in `argument`, such as
+an empty or blank host or a `--port` outside 1 to 65535, and
+`argument_unknown` stands for a word no argument takes, which the line leaves
+out.
 
 ## Every run names
 
@@ -32,12 +33,34 @@ the line leaves out.
 | `PRESENTATOR_AGENT__GATEWAY__CA_FILE` | Optional absolute path of the CA file an `https` gateway origin needs; an `http` origin forbids it. |
 | `PRESENTATOR_SPEECH_SERVICE` | The one plain `http` origin of the shared speech service, without a path. No default. |
 | `PRESENTATOR_SPEECH_SERVICE_SCOPE` | The one scope token that names the service at the issuer; both sign-ins and the workload grant ask for it. No default. |
-| `PRESENTATOR_SPEECH_VOICES` | The voice that speaks an answer, by the answer's offered language: a map from language tag to a voice id of the speech service's catalogue, the speech client's `VoiceId`, that speaks that language. One entry is set as `PRESENTATOR_SPEECH_VOICES__EN`, or the whole map as JSON. An entry set here replaces the shipped one of its language; the shipped ones are `de` to `de_DE-thorsten-medium` and `en` to `en_US-norman-medium`. Every language the catalogs offer needs an entry, so a further language is its catalog files plus one entry here; a missing entry, or a voice that does not speak its language, refuses the start. The co-presenter is ready to speak only when the service offers every named voice as ready; a voice of several languages, such as `ryan`, may stand in several entries. A `.env` that still names the removed `PRESENTATOR_SPEECH_VOICE`, `PRESENTATOR_SPEECH_VOICE_DE` or `PRESENTATOR_SPEECH_VOICE_EN` refuses the start, because `.env` forbids unknown entries; set in the process environment, as on the cluster, the same removed names are ignored and the shipped voice speaks. |
+| `PRESENTATOR_SPEECH_VOICES` | The voice that speaks an answer, by the answer's offered language: a map from language tag to a voice id of the speech service's catalogue, the speech client's `VoiceId`, that speaks that language. One entry is set as `PRESENTATOR_SPEECH_VOICES__EN`, or the whole map as JSON. An entry set here replaces the shipped one of its language; the shipped ones are `de` to `de_DE-thorsten-medium` and `en` to `en_US-norman-medium`. Every language the catalogs offer needs an entry, so a further language is its catalog files plus one entry here; a missing entry, or a voice that does not speak its language, refuses the start. The co-presenter is ready to speak only when the service offers every named voice as ready; a voice of several languages, such as `ryan`, may stand in several entries. A `.env` that still names the removed `PRESENTATOR_SPEECH_VOICE`, `PRESENTATOR_SPEECH_VOICE_DE` or `PRESENTATOR_SPEECH_VOICE_EN` refuses the start, because `.env` forbids unknown `PRESENTATOR_` and `REALM_` entries; set in the process environment, as on the cluster, the same removed names are ignored and the shipped voice speaks. |
 | `PRESENTATOR_OIDC_ISSUER` | The https URL of the Keycloak realm, without a trailing slash; exactly the `issuer` of its discovery document. |
-| `PRESENTATOR_OIDC_CLIENT_ID` | The Keycloak client id. |
 | `PRESENTATOR_OIDC_CLIENT_SECRET_FILE` | Absolute path of a file holding the client secret, read once at start, minus one trailing newline. |
 
 There is no `/setup` and no first admin ([sign-in](sign-in.md), SI2).
+
+## The realm's names
+
+The platform names the Keycloak realm's client, groups and scope and hands them
+to every app under these seven keys. They are read from the process
+environment and from `.env` under `REALM_`, are not `PRESENTATOR_` keys, and
+none has a default: a missing, empty or malformed one, or an admin group that
+does not lie strictly below the login group, refuses the start naming only its
+`REALM_` variable. `PRESENTATOR_REALM__*` is no setting, and no value of it
+reaches the realm. `presentator migrate` and `presentator-worker` read none.
+
+| Setting | Meaning |
+| --- | --- |
+| `REALM_CLIENT_ID` | The Keycloak client the lobby and the talk host sign people in as. |
+| `REALM_LOGIN_GROUP` | The group path whose members enter, such as `/apps/name`: it starts with `/` and has no empty segment, no whitespace around a segment and no control character. |
+| `REALM_ADMIN_GROUP` | The group path of the admins, strictly below `REALM_LOGIN_GROUP`. |
+| `REALM_MCP_GROUP` | The group path whose members' agents may reach `/mcp`. |
+| `REALM_MCP_SCOPE` | The one scope token the realm grants for `/mcp`. |
+| `REALM_MCP_CLIENT_ID` | The one public client whose tokens act as the person who signed in at `/mcp`. |
+| `REALM_AGENT_GROUP` | The group path of the agents' own accounts, admitted from any client. |
+
+A `.env` that still names the removed `PRESENTATOR_OIDC_CLIENT_ID` refuses the
+start naming it; set in the process environment the same name is ignored.
 
 ## The database
 

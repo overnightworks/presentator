@@ -99,7 +99,7 @@ from presentator.host.command_line import (
     read_the_command_line,
     unpin_the_host,
 )
-from presentator.host.config import Settings, load_settings
+from presentator.host.config import RealmSettings, Settings, load_settings
 from presentator.host.copresenter_surface import copresenter_surface
 from presentator.host.deck_toolchain import (
     build_bound_of,
@@ -397,6 +397,7 @@ def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
             origin=settings.public_origin,
             issuer=settings.oidc_issuer,
             trusted_proxies=trusted_proxies,
+            realm=settings.realm,
         ),
         own_decks=OwnDecks(
             decks=decks.store,
@@ -409,7 +410,7 @@ def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
 
 
 def agent_front(
-    *, origin: str, issuer: str, trusted_proxies: TrustedProxies
+    *, origin: str, issuer: str, trusted_proxies: TrustedProxies, realm: RealmSettings
 ) -> AgentFront:
     """The MCP front, installed over the lobby's routes once they are in."""
     return AgentFront(
@@ -418,6 +419,10 @@ def agent_front(
             origin=origin,
             issuer=issuer,
             trusted_proxies=trusted_proxies,
+            mcp_scope=realm.mcp_scope,
+            mcp_group=realm.mcp_group,
+            agent_group=realm.agent_group,
+            mcp_client_id=realm.mcp_client_id,
         ),
     )
 

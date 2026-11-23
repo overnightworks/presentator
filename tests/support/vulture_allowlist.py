@@ -22,7 +22,7 @@ from presentator.contracts import words
 from presentator.contracts.people import DeckExport
 from presentator.contracts.preferences import ThemeChoice
 from presentator.host import console
-from presentator.host.config import Settings
+from presentator.host.config import RealmSettings, Settings
 from presentator.host.worker_settings import WorkerSettings
 
 # `HTMLParser.feed` dispatches to these by name; nothing calls them directly.
@@ -47,6 +47,9 @@ Settings._two_hostnames  # noqa: SLF001 - pydantic, not Python code, is the call
 Settings._worker_is_reached  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
 Settings._voices_speak_their_language  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
 Settings._statement_bound_fits_postgres  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
+
+# Pydantic runs this `model_validator` after every `RealmSettings` validation.
+RealmSettings._admin_group_lies_below_the_login_group  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
 
 # Pydantic reads these fields when it writes a validation answer.
 ValidationFault.loc
