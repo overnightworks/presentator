@@ -167,10 +167,10 @@ scripts/answer_start.py <files>` (or the lines on standard input) reads both
 services' JSON lines of a release, joins them by `trace_id` and prints `turns`,
 `p50_ms` and `p95_ms` (nearest rank), then one `unjoined <trace_id> <reason>`
 per trace it leaves out: `no_end_of_speech` (an ask under a fresh trace),
-`no_answer` (a turn nobody asked), `silent` (a decision the model kept
-silent, which is no fault), `no_first_audio` (an answer that sent no audio,
-such as an unspoken one whose speech failed before any sound; one whose sound
-the browser refused did send audio and joins as a figure), `repeated` or `malformed`. It exits 1 when no
-turn joins. The two instants come from two processes' wall clocks, so the
-figure carries their offset, and it ends where the server sends the first audio,
-before the network and the browser's playback.
+`no_answer` (a turn nobody asked), `silent` (a decision the model kept silent,
+which is no fault), `no_first_audio` (an answer that sent no audio, such as an
+unspoken one whose speech failed before any sound; one whose sound the browser
+refused did send audio and joins as a figure), `repeated` or `malformed`. It
+exits 1 when no turn joins. The two instants come from two processes' wall
+clocks, so the figure carries their offset, and it ends where the server sends
+the first audio, before the network and the browser's playback.
