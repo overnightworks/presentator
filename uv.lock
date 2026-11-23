@@ -598,8 +598,8 @@ wheels = [
 
 [[package]]
 name = "overnightworks-agents"
-version = "0.70.0"
-source = { git = "https://github.com/overnightworks/agents?rev=v0.70.0#99f410c8f3a8b36cb7c674f2bc081fc996d2bf2d" }
+version = "0.73.0"
+source = { git = "https://github.com/overnightworks/agents?rev=v0.73.0#89b79c6091273c8c386e3a0e9d236ff29da9c8d8" }
 dependencies = [
     { name = "pydantic" },
     { name = "ruamel-yaml" },
@@ -685,7 +685,7 @@ requires-dist = [
     { name = "cryptography", specifier = "==50.0.2" },
     { name = "fastapi", specifier = "==0.162.7" },
     { name = "httpx2", specifier = "==2.16.0" },
-    { name = "overnightworks-agents", extras = ["backend", "mcp-server", "voice"], git = "https://github.com/overnightworks/agents?rev=v0.70.0" },
+    { name = "overnightworks-agents", extras = ["backend", "mcp-server", "voice"], git = "https://github.com/overnightworks/agents?rev=v0.73.0" },
     { name = "overnightworks-logline", git = "https://github.com/overnightworks/logline?rev=v1.9.0" },
     { name = "overnightworks-speech-client", git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.23.0" },
     { name = "overnightworks-tandem", git = "https://github.com/overnightworks/tandem?rev=v0.15.0" },
