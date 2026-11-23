@@ -43,6 +43,7 @@ from tests.presentator.adapters.support.worker_children_support import (
 )
 from tests.support import worker_support as support
 from tests.support.step_support import OWN_IDENTITY, quick_step
+from tests.support.two_processes import HOST_PROCESS_SECONDS
 from tests.support.worker_support import (
     accept_time,
     descriptors_left_open_since,
@@ -765,10 +766,13 @@ def test_a_stalled_controller_serving_an_idle_connection_exits_one_at_seven_seco
     )
     try:
         client = support.connect_when_bound(
-            volume, lambda: controller.poll() is None, WAIT_SECONDS, WAIT_SECONDS
+            volume,
+            lambda: controller.poll() is None,
+            HOST_PROCESS_SECONDS,
+            HOST_PROCESS_SECONDS,
         )
         with closing(client):
-            exit_status = controller.wait(timeout=WAIT_SECONDS + 5)
+            exit_status = controller.wait(timeout=HOST_PROCESS_SECONDS + 5)
         exited_at = time.monotonic()
         assert controller.stdout is not None
         accepted_at = float(controller.stdout.readline())

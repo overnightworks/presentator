@@ -15,7 +15,7 @@ from tests.presentator.host.support.worker_life import (
 from tests.support import step_support
 from tests.support import worker_support as support
 from tests.support.step_support import OWN_IDENTITY
-from tests.support.worker_chain import WAIT_SECONDS
+from tests.support.two_processes import HOST_PROCESS_SECONDS
 
 CONSUMING_CONTROLLER = """
 import os, sys
@@ -128,12 +128,14 @@ def controller_life(volume: Path, workspace: Path, sent: bytes) -> ControllerLif
         try:
             controller.release()
             with closing(
-                support.connect_when_serving(volume, controller, WAIT_SECONDS)
+                support.connect_when_serving(volume, controller, HOST_PROCESS_SECONDS)
             ) as client:
                 client.sendall(sent)
-                announced_pid = step_support.await_running_step(reader, WAIT_SECONDS)
+                announced_pid = step_support.await_running_step(
+                    reader, HOST_PROCESS_SECONDS
+                )
                 reply = read_to_end(client)
-            exit_status = controller.wait_within(WAIT_SECONDS)
+            exit_status = controller.wait_within(HOST_PROCESS_SECONDS)
             logged = log.read_text().splitlines()
             present = support.present_among(logged_process_ids(logged))
         finally:

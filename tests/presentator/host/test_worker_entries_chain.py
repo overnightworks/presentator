@@ -29,6 +29,7 @@ from tests.presentator.host.support.worker_life import (
 from tests.support import step_support
 from tests.support import worker_support as support
 from tests.support.step_support import OWN_IDENTITY
+from tests.support.two_processes import HOST_PROCESS_SECONDS
 from tests.support.worker_chain import WAIT_SECONDS, ChainSpawn
 from tests.support.worker_support import (
     OWN_UID,
@@ -153,13 +154,13 @@ def assert_refused_upload_closes(
     try:
         controller.release()
         with closing(
-            support.connect_when_serving(volume, controller, WAIT_SECONDS)
+            support.connect_when_serving(volume, controller, HOST_PROCESS_SECONDS)
         ) as client:
             client.settimeout(support.BULK_SEND_SECONDS)
             client.sendall(support.VALID_STEP + refused)
             client.settimeout(WAIT_SECONDS)
             reply = read_reply(client)
-        exit_status = controller.wait_within(WAIT_SECONDS)
+        exit_status = controller.wait_within(HOST_PROCESS_SECONDS)
     finally:
         lines = end_controller(controller, log)
 
