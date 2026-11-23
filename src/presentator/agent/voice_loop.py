@@ -119,11 +119,12 @@ class TalkLease:
     async def close(self) -> None:
         """Free the lease whatever ended the talk; a cancelled caller still frees it."""
         self.end_span()
-        await asyncio.shield(self._released())
+        await self._released()
 
     async def _released(self) -> None:
+        """Wait for the release; a cancelled waiter leaves it running."""
         if self._releasing is not None:
-            await self._releasing
+            await asyncio.shield(self._releasing)
             self._releasing = None
 
 

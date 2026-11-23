@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
-from presentator.agent.voice_loop import lines_of
+from presentator.agent.voice_loop import TalkLease, lines_of
 from presentator.contracts.copresenter import (
     HeardInTalk,
     HearingTranscript,
@@ -16,6 +17,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from agents.member import PlaceEntry
+
+    from presentator.contracts.copresenter import RetryAfter
 
 
 def _final(text: str) -> HearingTranscript:
@@ -74,3 +77,46 @@ async def test_the_names_of_a_line_are_the_loops_own_and_a_persons_never() -> No
     (line,) = await _entries(_final("Eins."))
 
     assert (line.kind, line.name) == ("talk", "speaker")
+
+
+class _SlowTicket:
+    """A ticket whose release ends only when the test lets it."""
+
+    session_id = "session"
+
+    def __init__(self) -> None:
+        self.may_end = asyncio.Event()
+        self.released = False
+
+    async def release(self) -> None:
+        await self.may_end.wait()
+        self.released = True
+
+
+class _OneTicketLimiter:
+    def __init__(self, ticket: _SlowTicket) -> None:
+        self._ticket = ticket
+
+    async def admit(self, session_id: str) -> _SlowTicket | RetryAfter:
+        del session_id
+        return self._ticket
+
+
+@on_an_event_loop
+async def test_a_cancelled_take_leaves_the_release_before_it_running() -> None:
+    ticket = _SlowTicket()
+    lease = TalkLease(_OneTicketLimiter(ticket), ticket.session_id)
+    await lease.take()
+    lease.end_span()
+
+    taking = asyncio.create_task(lease.take())
+    await asyncio.sleep(0)
+    taking.cancel()
+    await asyncio.wait({taking})
+    closing = asyncio.create_task(lease.close())
+    await asyncio.sleep(0)
+    assert not closing.done()
+    ticket.may_end.set()
+    await closing
+
+    assert ticket.released
