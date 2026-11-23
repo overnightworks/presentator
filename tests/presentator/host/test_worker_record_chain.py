@@ -26,6 +26,7 @@ from tests.presentator.host.support.worker_life import (
     run_life,
 )
 from tests.support.step_support import OWN_IDENTITY
+from tests.support.two_processes import HOST_PROCESS_SECONDS
 from tests.support.worker_chain import (
     SLEEPER,
     WAIT_SECONDS,
@@ -239,7 +240,9 @@ def test_a_controller_that_stalls_after_the_upload_spawn_dies_at_the_emergency_e
     )
     try:
         controller.release()
-        with closing(connect_when_serving(volume, controller, WAIT_SECONDS)) as client:
+        with closing(
+            connect_when_serving(volume, controller, HOST_PROCESS_SECONDS)
+        ) as client:
             client.sendall(VALID_STEP)
             exit_status = controller.wait_within(EMERGENCY_END_SECONDS + 30)
             exited_at = time.monotonic()

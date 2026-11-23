@@ -18,10 +18,10 @@ from presentator.host.worker_settings import (
     worker_settings_variables,
 )
 from tests.presentator.host.support.config_refusals import assert_refusal_never_quotes
+from tests.support.two_processes import HOST_PROCESS_SECONDS
 
 TIMEOUT_VARIABLE = "PRESENTATOR_BUILD_TIMEOUT_SECONDS"
 MEGABYTES_VARIABLE = "PRESENTATOR_BUILD_OUTPUT_MEGABYTES"
-SUBPROCESS_SECONDS = 30
 DESIGNED_DEFAULT_SECONDS = 300.0
 DESIGNED_DEFAULT_MEGABYTES = 300
 UNIQUE_BAD_VALUE = "hunter2-seconds"
@@ -175,7 +175,7 @@ def test_importing_the_worker_reads_no_setting(
     imported = subprocess.run(
         [sys.executable, "-I", "-c", "import presentator.host.worker"],
         capture_output=True,
-        timeout=SUBPROCESS_SECONDS,
+        timeout=HOST_PROCESS_SECONDS,
         check=False,
     )
 
@@ -200,7 +200,7 @@ def test_importing_the_worker_loads_no_web_framework_and_no_database() -> None:
         ],
         capture_output=True,
         text=True,
-        timeout=SUBPROCESS_SECONDS,
+        timeout=HOST_PROCESS_SECONDS,
         check=True,
     )
 
