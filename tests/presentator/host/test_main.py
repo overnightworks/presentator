@@ -237,8 +237,10 @@ def test_a_removed_build_key_in_the_env_file_of_a_direct_run_refuses_to_start(
     )
     environment.chdir(tmp_path)
 
-    with pytest.raises(ConfigurationError, match="presentator_build_image"):
+    with pytest.raises(ConfigurationError) as refused:
         load_settings()
+
+    assert refused.value.variables == ("PRESENTATOR_BUILD_IMAGE",)
 
 
 @pytest.mark.usefixtures("environment")

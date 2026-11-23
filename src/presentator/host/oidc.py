@@ -8,24 +8,20 @@ from webauth.oidc import OidcClientConfig
 
 from presentator.api.auth import LOGIN_PATH, SIGN_IN_CALLBACK_PATH
 from presentator.host.config import Settings, read_secret_file
-from presentator.host.environment import cannot_start, variable_of
+from presentator.host.environment import REALM_PREFIX, cannot_start, variable_of
 
 _PROTOCOL_PATH: Final = "protocol/openid-connect"
 _PERSON_SCOPES: Final = ("openid", "profile", "groups")
 _CLOCK_LEEWAY_SECONDS: Final = 30
-# Who may enter is set in Keycloak alone: these two group paths are the
-# product's, not a deployment's.
-_LOGIN_GROUP: Final = "/apps/presentator"
-_ADMIN_GROUP: Final = "/apps/presentator/admin"
-# The settings a client configuration is built from; the lobby's and the talk
+# The variables a client configuration is built from; the lobby's and the talk
 # host's clients differ only in their origin.
-_CLIENT_FIELDS: Final = (
-    "oidc_issuer",
-    "oidc_client_id",
-    "oidc_client_secret_file",
-    "speech_service_scope",
-    "public_origin",
-    "talk_origin",
+_CLIENT_VARIABLES: Final = (
+    variable_of("oidc_issuer"),
+    variable_of("client_id", prefix=REALM_PREFIX),
+    variable_of("oidc_client_secret_file"),
+    variable_of("speech_service_scope"),
+    variable_of("public_origin"),
+    variable_of("talk_origin"),
 )
 
 
@@ -45,7 +41,7 @@ def oidc_client_config(
             token_endpoint=f"{realm}/token",
             jwks_url=f"{realm}/certs",
             end_session_endpoint=f"{realm}/logout",
-            client_id=settings.oidc_client_id,
+            client_id=settings.realm.client_id,
             client_secret=client_secret,
             redirect_uri=f"{origin}{SIGN_IN_CALLBACK_PATH}",
             post_logout_redirect_uri=f"{settings.public_origin}{LOGIN_PATH}",
@@ -55,8 +51,7 @@ def oidc_client_config(
     except ValueError as refused:
         # webauth's reasons name a field, never its value.
         message = f"the sign-in client configuration: {refused}"
-        variables = tuple(variable_of(field) for field in _CLIENT_FIELDS)
-        raise cannot_start(message, variables=variables) from None
+        raise cannot_start(message, variables=_CLIENT_VARIABLES) from None
 
 
 def client_configs_of(settings: Settings) -> tuple[OidcClientConfig, OidcClientConfig]:
@@ -74,6 +69,6 @@ def admission_of(settings: Settings) -> AdmissionConfig:
     """Only members of the app's Keycloak group enter, and its admin group admins."""
     return AdmissionConfig(
         bound_issuer=settings.oidc_issuer,
-        login_group=_LOGIN_GROUP,
-        admin_group=_ADMIN_GROUP,
+        login_group=settings.realm.login_group,
+        admin_group=settings.realm.admin_group,
     )

@@ -97,6 +97,31 @@ def _no_bucket(environment: pytest.MonkeyPatch, directory: Path) -> str:
     return str(directory)
 
 
+def _a_login_group_without_a_slash(
+    environment: pytest.MonkeyPatch, directory: Path
+) -> str:
+    del directory
+    refused = "a-login-group-no-slash-starts"
+    environment.setenv("REALM_LOGIN_GROUP", refused)
+    return refused
+
+
+def _an_admin_group_outside_the_login_group(
+    environment: pytest.MonkeyPatch, directory: Path
+) -> str:
+    del directory
+    outside = "/outside/the-login-group"
+    environment.setenv("REALM_ADMIN_GROUP", outside)
+    return outside
+
+
+def _a_malformed_login_group_and_no_bucket(
+    environment: pytest.MonkeyPatch, directory: Path
+) -> str:
+    _no_bucket(environment, directory)
+    return _a_login_group_without_a_slash(environment, directory)
+
+
 def _unparsable_object_store_key(
     environment: pytest.MonkeyPatch, directory: Path
 ) -> str:
@@ -122,7 +147,7 @@ def _unparsable_object_store_key(
             [],
             _an_issuer_the_sign_in_client_refuses,
             (
-                "PRESENTATOR_OIDC_ISSUER,PRESENTATOR_OIDC_CLIENT_ID,"
+                "PRESENTATOR_OIDC_ISSUER,REALM_CLIENT_ID,"
                 "PRESENTATOR_OIDC_CLIENT_SECRET_FILE,PRESENTATOR_SPEECH_SERVICE_SCOPE,"
                 "PRESENTATOR_PUBLIC_ORIGIN,PRESENTATOR_TALK_ORIGIN"
             ),
@@ -133,6 +158,13 @@ def _unparsable_object_store_key(
             "PRESENTATOR_DATABASE_URL,PRESENTATOR_DATABASE_PASSWORD_FILE",
         ),
         ([], _no_bucket, "PRESENTATOR_S3_BUCKET"),
+        ([], _a_login_group_without_a_slash, "REALM_LOGIN_GROUP"),
+        ([], _an_admin_group_outside_the_login_group, "REALM_ADMIN_GROUP"),
+        (
+            [],
+            _a_malformed_login_group_and_no_bucket,
+            "PRESENTATOR_S3_BUCKET,REALM_LOGIN_GROUP",
+        ),
         # Postgres reads zero as no bound at all; written so that the log's own
         # digits never spell it.
         (

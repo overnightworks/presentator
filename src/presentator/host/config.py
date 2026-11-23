@@ -17,7 +17,9 @@ from pydantic import (
     ValidationError,
     model_validator,
 )
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_core import ErrorDetails
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from webauth.admission import GroupPath
 from webauth.proxies import TrustedProxies
 
 from presentator.adapters.build_wire import (
@@ -31,6 +33,7 @@ from presentator.agent.settings import AgentSettings
 from presentator.contracts.words import LANGUAGES, Language
 from presentator.host.environment import (
     ENVIRONMENT_PREFIX,
+    REALM_PREFIX,
     ConfigurationError,
     cannot_start,
     variable_of,
@@ -60,6 +63,7 @@ _WORKER_REACHED: Final = (
     " run in the worker"
 )
 
+_ADMIN_BELOW_LOGIN: Final = "is a group strictly below the login group"
 _NESTED: Final = "__"
 _SHIPPED_VOICES: Final[Mapping[Language, VoiceId]] = {
     "de": VoiceId.THORSTEN,
@@ -270,6 +274,14 @@ def _an_absolute_path(given: Path) -> Path:
     return given
 
 
+def _a_group_path(given: object) -> object:
+    """Read a text as a group path; its refusal names the rule and never the text."""
+    return GroupPath(given) if isinstance(given, str) else given
+
+
+# NoDecode: pydantic-settings counts a dataclass as complex and would JSON-decode
+# the value first.
+type RealmGroup = Annotated[GroupPath, NoDecode, BeforeValidator(_a_group_path)]
 type PostgresUrl = Annotated[str, AfterValidator(_a_postgres_url_without_a_password)]
 type RedisUrl = Annotated[SecretStr, AfterValidator(_a_redis_url)]
 type AbsolutePath = Annotated[Path, AfterValidator(_an_absolute_path)]
@@ -306,13 +318,52 @@ def _postgres_database(url: str, password_file: Path) -> PostgresDatabase:
     )
 
 
+class RealmSettings(BaseSettings):
+    """The names of the app's objects in the Keycloak realm.
+
+    The platform hands every app these under `REALM_*`; none has a default, and
+    an empty value reads as missing.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix=REALM_PREFIX,
+        env_file=".env",
+        env_ignore_empty=True,
+        hide_input_in_errors=True,
+        dotenv_filtering="match_prefix",
+    )
+
+    # The client the lobby and the talk host sign people in as.
+    client_id: str = Field(min_length=1)
+    # The group whose members enter, and the group of those who administer.
+    login_group: RealmGroup
+    admin_group: RealmGroup
+    # The group whose members' agents reach `/mcp`, the scope their token
+    # carries and the public client they sign in through.
+    mcp_group: RealmGroup
+    mcp_scope: Annotated[str, AfterValidator(_one_scope_token)]
+    mcp_client_id: str = Field(min_length=1)
+    # The group of the agents' own accounts, admitted from any client.
+    agent_group: RealmGroup
+
+    @model_validator(mode="after")
+    def _admin_group_lies_below_the_login_group(self) -> Self:
+        if not self.admin_group.lies_below(self.login_group):
+            raise _FieldRefusedError(_ADMIN_BELOW_LOGIN, field="admin_group")
+        return self
+
+
 class Settings(
     BaseSettings,
     env_prefix=ENVIRONMENT_PREFIX,
     env_file=".env",
     env_nested_delimiter=_NESTED,
+    dotenv_filtering="match_prefix",
 ):
-    """Read from `PRESENTATOR_*` in the environment, or from a local `.env`."""
+    """Read from `PRESENTATOR_*` in the environment, or from a local `.env`.
+
+    The realm is read from `REALM_*` by `load_settings`, never from this prefix.
+    """
 
     # Where the master key is read from once at start, so it never rides the
     # environment.
@@ -376,8 +427,9 @@ class Settings(
     # The issuer is the realm the lobby signs people in at; the secret is read
     # from a file once at start, so it never rides the environment.
     oidc_issuer: Annotated[str, AfterValidator(_an_https_realm_url)]
-    oidc_client_id: str = Field(min_length=1)
     oidc_client_secret_file: Annotated[Path, AfterValidator(_an_absolute_path)]
+    # The realm's names, which `load_settings` hands in.
+    realm: RealmSettings
     # Which backend answers, where its gateway is, the file holding this app's
     # key there and the group that may ask. They are deployment facts: no default.
     agent: AgentSettings
@@ -546,15 +598,23 @@ def load_settings() -> Settings:
     """Read what the environment carries, refusing what cannot start an instance.
 
     pydantic-settings fills the fields while it validates, so this call is what
-    reads `PRESENTATOR_*`; the constructor would ask for the required key as an
-    argument instead of looking for it.
+    reads `PRESENTATOR_*` and `REALM_*`; the constructor would ask for the
+    required key as an argument instead of looking for it. The realm is read
+    first and handed in whole, so no `PRESENTATOR_REALM__*` variable sets it.
     """
+    realm_refused: ValidationError | None = None
     try:
-        settings = Settings.model_validate({})
+        realm: RealmSettings | None = RealmSettings.model_validate({})
+    except ValidationError as refused:
+        realm, realm_refused = None, refused
+    try:
+        # A refused realm is handed in as none, which settings always refuse, so
+        # the faults of the other settings are still named beside the realm's.
+        settings = Settings.model_validate({"realm": realm})
     except ValidationError as refused:
         # A refused value is often a real secret, and the library's own message
         # quotes it; only the field and the reason may leave this call.
-        raise _refused_by(refused) from None
+        raise _refused_by(refused, realm_refused) from None
     # Reading the key here refuses a bad key file at start, after the other
     # settings validated, and binds it for every later use.
     _ = settings.secret_key
@@ -572,26 +632,39 @@ def load_database_settings() -> DatabaseSettings:
     return settings
 
 
-def _refused_by(refused: ValidationError) -> ConfigurationError:
-    """The refusal of a validation, naming the variables of the fields it refused."""
-    fields: list[str] = []
-    for fault in refused.errors():
-        # A rule over several fields has no location; its error names the field.
-        error = fault.get("ctx", {}).get("error")
-        if isinstance(error, _FieldRefusedError):
-            fields.append(error.field)
-        else:
-            # A nested setting's variable joins its path as the environment does.
-            fields.append(_NESTED.join(str(part) for part in fault["loc"]))
-    variables = tuple(variable_of(field) for field in dict.fromkeys(fields))
-    return cannot_start(_what_is_wrong(refused), variables=variables)
+def _refused_by(
+    refused: ValidationError, realm_refused: ValidationError | None = None
+) -> ConfigurationError:
+    """The refusal of a validation, naming the variables of the fields it refused.
 
-
-def _what_is_wrong(refused: ValidationError) -> str:
-    return ", ".join(
-        # A fault of the whole model has no field; its reason already names one.
-        str(fault.get("ctx", {}).get("error", fault["msg"]))
-        if not fault["loc"]
-        else f"{'.'.join(str(part) for part in fault['loc'])}: {fault['msg']}"
+    The settings' own faults come first, then the realm's; a fault of `refused`
+    under `realm` is the realm's own, which `realm_refused` carries.
+    """
+    faults = [
+        (ENVIRONMENT_PREFIX, fault)
         for fault in refused.errors()
+        if fault["loc"][:1] != ("realm",)
+    ]
+    if realm_refused is not None:
+        faults += [(REALM_PREFIX, fault) for fault in realm_refused.errors()]
+    variables = tuple(
+        dict.fromkeys(_variable_refused_by(fault, prefix) for prefix, fault in faults)
     )
+    reasons = ", ".join(_reason_of(fault) for _, fault in faults)
+    return cannot_start(reasons, variables=variables)
+
+
+def _variable_refused_by(fault: ErrorDetails, prefix: str) -> str:
+    # A rule over several fields has no location; its error names the field.
+    error = fault.get("ctx", {}).get("error")
+    if isinstance(error, _FieldRefusedError):
+        return variable_of(error.field, prefix=prefix)
+    # A nested setting's variable joins its path as the environment does.
+    return variable_of(_NESTED.join(str(part) for part in fault["loc"]), prefix=prefix)
+
+
+def _reason_of(fault: ErrorDetails) -> str:
+    # A fault of the whole model has no field; its reason already names one.
+    if not fault["loc"]:
+        return str(fault.get("ctx", {}).get("error", fault["msg"]))
+    return f"{'.'.join(str(part) for part in fault['loc'])}: {fault['msg']}"

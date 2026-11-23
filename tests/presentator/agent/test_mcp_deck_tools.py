@@ -16,7 +16,6 @@ import pytest
 from httpx2 import Response
 from sqlalchemy import Engine
 
-from presentator.agent.mcp import AGENT_GROUP, MCP_GROUP
 from presentator.api.deck_api import DECK_VIEW_PATH
 from presentator.api.deck_text_api import DECK_TEXT_PATH
 from presentator.contracts.copresenter import DeckText
@@ -32,7 +31,7 @@ from tests.presentator.agent.support.mcp_world import (
     called_through_mcp,
 )
 from tests.support.deck_text_support import A_DECK_TEXT, A_MIRROR_PATH, FakeDeckTexts
-from tests.support.lobby import NOW
+from tests.support.lobby import A_REALM, NOW
 from tests.support.sign_in_support import MEMBER
 
 _JSON = World.JSON
@@ -332,7 +331,9 @@ def test_cookie_only_the_owner_reads_the_deck_and_another_person_gets_not_found(
 def test_an_own_account_agent_finds_no_deck_of_a_person(
     world: World, path: str, tool: str
 ) -> None:
-    headers = world.own_agent(groups=[*MEMBER, MCP_GROUP, AGENT_GROUP])
+    headers = world.own_agent(
+        groups=[*MEMBER, str(A_REALM.mcp_group), str(A_REALM.agent_group)]
+    )
 
     by_tool = called_through_mcp(
         world.program(), headers, tool, {"slug": World.FELIX_DECK}

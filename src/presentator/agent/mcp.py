@@ -20,6 +20,7 @@ from logline import set_route
 from starlette.requests import HTTPConnection
 from starlette.routing import Route
 from starlette.types import Receive, Scope, Send
+from webauth.admission import GroupPath
 from webauth.middleware.bearer_gate import (
     MarkedRoute,
     ProtectedResource,
@@ -28,16 +29,6 @@ from webauth.middleware.bearer_gate import (
 from webauth.policies import AuthorizedParties
 from webauth.proxies import TrustedProxies
 from webauth.web_auth import web_auth_front
-
-# The realm names the front is built on; no deployment varies them.
-# The scope is the one the realm's `mcp-presentator` client scope grants.
-MCP_SCOPE = "mcp-presentator"
-# The group of people who may use the front, below presentator's login group.
-MCP_GROUP = "/apps/presentator/mcp"
-# The group of the service accounts that sign in with their own client.
-AGENT_GROUP = "/agents"
-# The one public client whose tokens act as the person who signed in.
-MCP_CLIENT_ID = "agents"
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,16 +69,24 @@ def _run_front_with_the_lobby(lobby: FastAPI, front: McpPersonFront) -> None:
     lobby.router.lifespan_context = lifespan
 
 
-def install_mcp_front(
+def install_mcp_front(  # noqa: PLR0913 - the host's one call names each input of the front
     lobby: FastAPI,
     *,
     origin: str,
     issuer: str,
     trusted_proxies: TrustedProxies,
+    mcp_scope: str,
+    mcp_group: GroupPath,
+    agent_group: GroupPath,
+    mcp_client_id: str,
 ) -> ProtectedResource:
     """Serve `/mcp` on `lobby` and answer the resource its gate admits tokens for.
 
-    Every schema-bearing route of `lobby` is registered already.
+    Every schema-bearing route of `lobby` is registered already. The realm names
+    the gate rests on come from the caller: the scope the realm's client scope
+    grants, the group of the people who may use the front, the group of the
+    service accounts that sign in with their own client, and the one public
+    client whose tokens act as the person who signed in.
     """
     tools = marked_tools(lobby, trusted_proxies=trusted_proxies)
 
@@ -101,9 +100,9 @@ def install_mcp_front(
     _run_front_with_the_lobby(lobby, front)
     return ProtectedResource(
         url=f"{origin}{MCP_ENDPOINT_PATH}",
-        scope=MCP_SCOPE,
-        required_group=MCP_GROUP,
-        agent_group=AGENT_GROUP,
-        authorized_parties=AuthorizedParties(frozenset({MCP_CLIENT_ID})),
+        scope=mcp_scope,
+        required_group=mcp_group,
+        agent_group=agent_group,
+        authorized_parties=AuthorizedParties(frozenset({mcp_client_id})),
         marked_routes=tools.marks,
     )

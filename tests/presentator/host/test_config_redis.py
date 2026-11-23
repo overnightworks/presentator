@@ -131,7 +131,8 @@ def test_a_refused_start_writes_neither_the_url_nor_its_password_anywhere(
     settings = {
         name: value
         for name, value in os.environ.items()
-        if name.startswith("PRESENTATOR_") and not name.startswith("PRESENTATOR_TEST_")
+        if name.startswith(("PRESENTATOR_", "REALM_"))
+        and not name.startswith("PRESENTATOR_TEST_")
     }
 
     started = subprocess.run(  # noqa: S603 - the interpreter of this run
