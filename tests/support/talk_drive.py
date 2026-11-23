@@ -57,6 +57,15 @@ class UnavailableLimiter(RecordingLimiter):
         raise CoPresenterUnavailableError
 
 
+class BrokenLimiter(RecordingLimiter):
+    """The ask lease that fails in a way nothing expects."""
+
+    async def admit(self, session_id: str) -> RetryAfter:
+        """Raise: the lease is broken."""
+        message = f"the lease of {session_id} is broken"
+        raise RuntimeError(message)
+
+
 class _FreedSessions(list[str]):
     """The sessions whose lease was freed; adding one tells the test thread."""
 

@@ -406,7 +406,8 @@ async def _talk_lease(
             )
     except WebSocketDisconnect:
         return
-    except RuntimeError:
+    except RuntimeError, ExceptionGroup:
+        # The loop raises its unexpected failures inside an ExceptionGroup.
         with suppress(RuntimeError):
             await socket.close(code=INTERNAL_ERROR)
     finally:

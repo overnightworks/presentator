@@ -27,6 +27,7 @@ from tests.support.talk_drive import (
     SENTENCES,
     TALK,
     TWO_SENTENCES,
+    BrokenLimiter,
     HeldByAnotherPod,
     UnavailableLimiter,
     a_talk,
@@ -46,6 +47,7 @@ if TYPE_CHECKING:
 _POLICY_VIOLATION: Final = 1008
 _NORMAL_CLOSURE: Final = 1000
 _SERVICE_RESTART: Final = 1012
+_INTERNAL_ERROR: Final = 1011
 _API_LESS_GROUPS: Final = ["/apps/presentator"]
 _A_TRACE: Final = "1" * 32
 _A_TURN: Final = f"00-{_A_TRACE}-{'2' * 16}-01"
@@ -263,6 +265,17 @@ def test_a_session_that_ends_while_a_sound_plays_stops_it_and_closes_in_order(
         "session_ended",
         _A_TRACE,
     )
+
+
+def test_a_loop_that_raises_ends_the_hearing_and_closes_the_socket_1011(
+    engine: Engine,
+) -> None:
+    with a_talk(engine, limiter=BrokenLimiter) as talk:
+        talk.say(A_LINE)
+
+        closed_with = talk.until_closed()
+
+    assert closed_with == _INTERNAL_ERROR
 
 
 def test_a_stopping_pod_closes_a_talk_with_1012_at_open() -> None:
