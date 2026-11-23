@@ -71,7 +71,8 @@ def test_a_heard_final_wakes_one_decision_and_each_sentence_waits_for_the_one_be
         talk.played(second["id"])
         (request,) = requests_of(talk)
         assert lines_in(request)[-1]["text"] == A_LINE
-        assert (first["text"], second["text"]) == SENTENCES
+        assert first["text"] == SENTENCES[0]
+        assert second["text"] == SENTENCES[1]
 
 
 def test_a_silent_reply_sends_no_sound_and_the_next_line_still_wakes_a_decision(
