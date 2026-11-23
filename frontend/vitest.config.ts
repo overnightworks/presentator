@@ -10,6 +10,7 @@ export default defineConfig({
 	test: {
 		include: ['src/**/*.test.ts'],
 		environment: 'jsdom',
+		sequence: { shuffle: true },
 		coverage: {
 			// Istanbul counts the same branches in the instrumented build the
 			// drive runs, so `pnpm coverage:merge` can add the two reports up.

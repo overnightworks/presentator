@@ -164,3 +164,39 @@ reason = "it exercises the room notice across a presenter and a projector window
 path = "tests/presentator/adapters/test_person_records.py"
 rule = "test-layout"
 reason = "it checks every store of a person at once, so no single adapter module is its subject"
+
+[[gate.loosened]]
+what = "size baseline adds ccn slidev/tests/overlay-render-pass.browser.test.ts inspectRoot 19"
+item = "#1437"
+date = 2026-11-23
+reason = "quality v0.25.0 measures TypeScript functions; the operator ruled the adoption path on quality#884 (18.11.2026): the existing entry is recorded by hand and declared here until the operator's door merges it"
+
+[[gate.loosened]]
+what = "size baseline adds ccn slidev/tests/presenter-overlay-harness.ts createOverlayDeckServer 17"
+item = "#1437"
+date = 2026-11-23
+reason = "quality v0.25.0 measures TypeScript functions; the operator ruled the adoption path on quality#884 (18.11.2026): the existing entry is recorded by hand and declared here until the operator's door merges it"
+
+[[gate.loosened]]
+what = "size baseline adds ccn slidev/tests/presenter-overlay-harness.ts startServer 41"
+item = "#1437"
+date = 2026-11-23
+reason = "quality v0.25.0 measures TypeScript functions; the operator ruled the adoption path on quality#884 (18.11.2026): the existing entry is recorded by hand and declared here until the operator's door merges it"
+
+[[gate.loosened]]
+what = "size baseline adds function_lines slidev/tests/presenter-overlay-harness.ts createOverlayDeckServer 68"
+item = "#1437"
+date = 2026-11-23
+reason = "quality v0.25.0 measures TypeScript functions; the operator ruled the adoption path on quality#884 (18.11.2026): the existing entry is recorded by hand and declared here until the operator's door merges it"
+
+[[gate.loosened]]
+what = "size baseline adds function_lines slidev/tests/presenter-overlay-harness.ts installMediaFakes 128"
+item = "#1437"
+date = 2026-11-23
+reason = "quality v0.25.0 measures TypeScript functions; the operator ruled the adoption path on quality#884 (18.11.2026): the existing entry is recorded by hand and declared here until the operator's door merges it"
+
+[[gate.loosened]]
+what = "size baseline adds function_lines slidev/tests/presenter-overlay-harness.ts startServer 175"
+item = "#1437"
+date = 2026-11-23
+reason = "quality v0.25.0 measures TypeScript functions; the operator ruled the adoption path on quality#884 (18.11.2026): the existing entry is recorded by hand and declared here until the operator's door merges it"
