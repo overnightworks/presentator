@@ -420,27 +420,21 @@ class ManualDeadline:
     """A deadline released from the test without sleeping or resetting it."""
 
     started: threading.Event = field(default_factory=threading.Event)
-    _checks: list[tuple[asyncio.AbstractEventLoop, asyncio.Future[None]]] = field(
-        default_factory=list[tuple[asyncio.AbstractEventLoop, asyncio.Future[None]]]
-    )
-    _lock: threading.Lock = field(default_factory=threading.Lock)
-    _waiting: threading.Condition = field(default_factory=threading.Condition)
-    _pending: list[tuple[asyncio.AbstractEventLoop, asyncio.Future[None], float]] = (
+    _checks: list[tuple[asyncio.AbstractEventLoop, asyncio.Future[None], float]] = (
         field(
             default_factory=list[
                 tuple[asyncio.AbstractEventLoop, asyncio.Future[None], float]
             ]
         )
     )
+    _waiting: threading.Condition = field(default_factory=threading.Condition)
 
     async def wait(self, seconds: float) -> None:
         loop = asyncio.get_running_loop()
         check = loop.create_future()
-        with self._lock:
-            self._checks.append((loop, check))
-            self.started.set()
         with self._waiting:
-            self._pending.append((loop, check, seconds))
+            self._checks.append((loop, check, seconds))
+            self.started.set()
             self._waiting.notify_all()
         await asyncio.shield(check)
 
@@ -448,15 +442,15 @@ class ManualDeadline:
         """Return once a wait of this length is waiting."""
         with self._waiting:
             assert self._waiting.wait_for(
-                lambda: any(wait[2] == seconds for wait in self._pending), timeout
+                lambda: any(wait[2] == seconds for wait in self._checks), timeout
             )
 
     def release(self, seconds: float) -> None:
         """Release every wait of this length, once one is waiting."""
         self.waiting(seconds)
         with self._waiting:
-            released = [wait for wait in self._pending if wait[2] == seconds]
-            self._pending = [wait for wait in self._pending if wait[2] != seconds]
+            released = [wait for wait in self._checks if wait[2] == seconds]
+            self._checks = [wait for wait in self._checks if wait[2] != seconds]
         for loop, check, _seconds in released:
             loop.call_soon_threadsafe(_complete, check)
 
@@ -465,8 +459,8 @@ class ManualDeadline:
         self.release(CHECK_INTERVAL_SECONDS)
 
     def release_first(self) -> None:
-        with self._lock:
-            loop, check = self._checks[0]
+        with self._waiting:
+            loop, check, _seconds = self._checks.pop(0)
         loop.call_soon_threadsafe(_complete, check)
 
 
