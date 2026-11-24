@@ -138,6 +138,9 @@ def test_the_lobby_starts_with_no_mcp_setting_and_serves_the_front() -> None:
         pytest.param("PRESENTATOR_AGENT__BACKENDS", "agent.backends", id="other"),
         pytest.param("PRESENTATOR_AGENT__BACKEND", "agent.backend", id="backend"),
         pytest.param("PRESENTATOR_AGENT__API_GROUPS", "agent.api_groups", id="groups"),
+        pytest.param(
+            "PRESENTATOR_AGENT__API_GROUP", "agent.api_group", id="retired-group"
+        ),
     ],
 )
 def test_a_stale_agent_variable_refuses_the_start_naming_the_key_not_the_value(
