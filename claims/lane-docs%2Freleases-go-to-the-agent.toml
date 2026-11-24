@@ -1,5 +1,5 @@
 claim_id = "37f95c1062f9426083f83126bd389e0b"
-agent = "Claude c1bdc492-301e-41eb-b0a2-b29b0b318ca2"
+agent = "Claude dcc219ab-da18-47d5-b7ac-f311ec73d19e"
 role = "builder"
 base = "13ea3a4726a634c560fcc2f729bfb5a4c4b71f98"
 branch = "docs/releases-go-to-the-agent"
