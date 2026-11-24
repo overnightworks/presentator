@@ -1,5 +1,5 @@
 claim_id = "d18ae308afd940a6824848f19be544c1"
-agent = "Claude c1bdc492-301e-41eb-b0a2-b29b0b318ca2"
+agent = "Claude dcc219ab-da18-47d5-b7ac-f311ec73d19e"
 role = "builder"
 base = "13ea3a4726a634c560fcc2f729bfb5a4c4b71f98"
 branch = "claude/issue-1447-read-realm-ai-group-and-speech-scope"
