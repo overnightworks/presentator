@@ -1,5 +1,5 @@
 claim_id = "83e4739230914fd99931ac3c83842f7b"
-agent = "Claude c1bdc492-301e-41eb-b0a2-b29b0b318ca2"
+agent = "Claude dcc219ab-da18-47d5-b7ac-f311ec73d19e"
 role = "builder"
 base = "e0378529ca39503adeaff19f2c5a44df3413ff85"
 branch = "claude/issue-1437-take-quality-v0-25-0"
