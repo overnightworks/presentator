@@ -37,7 +37,8 @@ def copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands 
     stopping: Stopping,
 ) -> CoPresenterSurface:
     """What only a signed-in admin may reach at the talk host: the gateway's answers."""
-    answers = gateway_answerer(settings.agent, web_auth.relying_party)
+    agent = settings.agent.configured(settings.realm.ai_group)
+    answers = gateway_answerer(agent, web_auth.relying_party)
     return CoPresenterSurface(
         use=CoPresenterUse(
             answers=answers,
@@ -51,14 +52,12 @@ def copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands 
             speaking=SpeechSpeaking(
                 settings.speech_service, voices=settings.speech_voices
             ),
-            talks=VoiceLoopTalks(
-                copresenter_gateway(settings.agent), web_auth.relying_party
-            ),
+            talks=VoiceLoopTalks(copresenter_gateway(agent), web_auth.relying_party),
             person_access=SessionAccess(
                 web_auth.relying_party,
                 sessions,
                 web_auth.config,
-                speech_scope=settings.speech_service_scope,
+                speech_scope=settings.realm.speech_scope,
             ),
         ),
         limiter=ask_limiter_of(redis, deadline_seconds=answers.deadline_seconds),

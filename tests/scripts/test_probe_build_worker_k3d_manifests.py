@@ -207,6 +207,15 @@ def test_the_web_documents_are_the_overlays_config_map_and_deployment_with_a_red
     assert documents[0] is not named(rendered, "Deployment")
 
 
+def test_the_web_deployment_starts_with_one_pod_whatever_the_render_runs(
+    manifests_module: ModuleType, production_image: str
+) -> None:
+    rendered = workload_documents(production_image)
+    named(rendered, "Deployment")["spec"]["replicas"] = 2
+    deployment = manifests_module.web_documents(rendered)[0]
+    assert deployment["spec"]["replicas"] == 1
+
+
 def test_the_probe_redis_never_makes_the_cluster_pull(
     manifests_module: ModuleType,
 ) -> None:

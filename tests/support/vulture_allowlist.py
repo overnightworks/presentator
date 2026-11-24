@@ -12,6 +12,7 @@ from importlib import import_module
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.postgres.accounts import PostgresSubjectUserStore
 from presentator.adapters.postgres.sessions import PostgresSessions
+from presentator.agent.settings import AgentSettings
 from presentator.agent.voice_loop import LeasedBackend, TalkVoice
 from presentator.api.copresenter import AskRequest
 from presentator.api.decks import TalkFiles
@@ -41,6 +42,9 @@ AskRequest.empty_language_is_no_language
 
 # pydantic reads a model's `model_config` by name when the class is built.
 WorkerSettings.model_config
+
+# Pydantic runs this `model_validator` before every `AgentSettings` validation.
+AgentSettings._without_the_retired_api_group  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
 
 # Pydantic runs this `model_validator` after every `Settings` validation.
 Settings._two_hostnames  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]

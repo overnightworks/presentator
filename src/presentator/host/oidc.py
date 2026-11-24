@@ -19,7 +19,7 @@ _CLIENT_VARIABLES: Final = (
     variable_of("oidc_issuer"),
     variable_of("client_id", prefix=REALM_PREFIX),
     variable_of("oidc_client_secret_file"),
-    variable_of("speech_service_scope"),
+    variable_of("speech_scope", prefix=REALM_PREFIX),
     variable_of("public_origin"),
     variable_of("talk_origin"),
 )
@@ -45,7 +45,7 @@ def oidc_client_config(
             client_secret=client_secret,
             redirect_uri=f"{origin}{SIGN_IN_CALLBACK_PATH}",
             post_logout_redirect_uri=f"{settings.public_origin}{LOGIN_PATH}",
-            scopes=(*_PERSON_SCOPES, settings.speech_service_scope),
+            scopes=(*_PERSON_SCOPES, settings.realm.speech_scope),
             leeway_seconds=_CLOCK_LEEWAY_SECONDS,
         )
     except ValueError as refused:
