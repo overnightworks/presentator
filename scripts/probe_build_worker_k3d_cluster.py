@@ -23,7 +23,7 @@ from typing import Any
 from probe_build_worker_harness import refuse, say
 from ruamel.yaml import YAML
 
-PLATFORM_COMMIT = "357d3c34ec7407b357b612d792f72b384c721f88"
+PLATFORM_COMMIT = "39483e5abb1342b56e10c680f3920255944b50d1"
 TOOLS = ("k3d", "kubectl", "docker")
 NAMESPACE = "presentator"
 IN_NAMESPACE = ("--namespace", NAMESPACE)

@@ -213,43 +213,13 @@ def test_the_retired_client_id_key_in_the_process_environment_is_ignored(
     assert load_settings().realm == A_REALM
 
 
-@pytest.mark.parametrize(
-    ("realm_key", "retired_key"),
-    [
-        ("REALM_AI_GROUP", "PRESENTATOR_AGENT__API_GROUP"),
-        ("REALM_SPEECH_SCOPE", "PRESENTATOR_SPEECH_SERVICE_SCOPE"),
-    ],
-)
-def test_the_retired_key_alone_does_not_start_the_instance(
-    environment: pytest.MonkeyPatch, realm_key: str, retired_key: str
-) -> None:
-    environment.delenv(realm_key)
-    environment.setenv(retired_key, "/left-over/or-scope")
-
-    assert _refusal().variables == (realm_key,)
-
-
-def test_the_retired_agent_group_in_the_process_environment_is_ignored(
+def test_the_retired_speech_scope_alone_does_not_start_the_instance(
     environment: pytest.MonkeyPatch,
 ) -> None:
-    environment.setenv("PRESENTATOR_AGENT__API_GROUP", "/left-over-from-before")
+    environment.delenv("REALM_SPEECH_SCOPE")
+    environment.setenv("PRESENTATOR_SPEECH_SERVICE_SCOPE", "/left-over/or-scope")
 
-    settings = load_settings()
-
-    config = settings.agent.configured(settings.realm.ai_group)
-    assert config.api_group == str(A_REALM.ai_group)
-
-
-def test_the_retired_agent_group_in_a_dot_env_is_ignored(
-    environment: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    del environment
-    _write_a_dot_env(tmp_path, {"PRESENTATOR_AGENT__API_GROUP": "/left-over"})
-
-    settings = load_settings()
-
-    config = settings.agent.configured(settings.realm.ai_group)
-    assert config.api_group == str(A_REALM.ai_group)
+    assert _refusal().variables == ("REALM_SPEECH_SCOPE",)
 
 
 def test_the_retired_speech_scope_in_the_process_environment_is_ignored(
