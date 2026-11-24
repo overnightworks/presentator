@@ -1,8 +1,0 @@
-claim_id = "d18ae308afd940a6824848f19be544c1"
-agent = "Claude dcc219ab-da18-47d5-b7ac-f311ec73d19e"
-role = "builder"
-base = "13ea3a4726a634c560fcc2f729bfb5a4c4b71f98"
-branch = "claude/issue-1447-read-realm-ai-group-and-speech-scope"
-scope = ["docs/configuration.md", "docs/runbooks/configure-keycloak.md", "scripts/probe_build_worker_k3d_cluster.py", "scripts/probe_build_worker_k3d_manifests.py", "src/presentator/agent/backend.py", "src/presentator/agent/settings.py", "src/presentator/host/config.py", "src/presentator/host/copresenter_surface.py", "src/presentator/host/oidc.py", "tests/conftest.py", "tests/presentator/agent", "tests/presentator/api", "tests/presentator/host", "tests/scripts", "tests/support"]
-opened_commit = "2a9a04022f59f0c87ea52e119d4e0c7cf61d975a"
-whole_reason = "One settings contract moves two realm names onto RealmSettings and must land with its retired-key tolerance, docs, probe pin and test support in one change; split, it leaves two owners of the value or a start that refuses the platform's still-set old keys."
