@@ -3,6 +3,6 @@ agent = "Claude dcc219ab-da18-47d5-b7ac-f311ec73d19e"
 role = "builder"
 base = "6bf225327b2731e83f80a6e1591b71403ad43ffd"
 branch = "claude/issue-1448-presentator-stops-tolerating-the-retired"
-scope = ["src/presentator/agent/settings.py", "tests/presentator/host/test_config_agent.py", "tests/presentator/host/test_config_realm.py", "tests/support/vulture_allowlist.py"]
+scope = ["scripts/probe_build_worker_k3d_cluster.py", "src/presentator/agent/settings.py", "tests/presentator/host/test_config_agent.py", "tests/presentator/host/test_config_realm.py", "tests/support/vulture_allowlist.py"]
 opened_commit = "b0f298d8f2a7e137dc8a731c7de34aa97457ba12"
 whole_reason = "The validator, its dead-code allowlist entry and the tests that pin its tolerance must change together, or vulture or the tolerance tests fail."
