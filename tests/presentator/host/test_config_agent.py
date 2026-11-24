@@ -117,6 +117,18 @@ def test_an_unknown_presentator_key_in_a_dot_env_refuses_the_start(
         load_settings()
 
 
+@pytest.mark.usefixtures("environment")
+def test_the_retired_agent_group_in_a_dot_env_refuses_the_start(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".env").write_text(
+        "PRESENTATOR_AGENT__API_GROUP=a-stale-MARKER\n", encoding="utf-8"
+    )
+
+    with pytest.raises(ConfigurationError, match=re.escape("agent.api_group")):
+        load_settings()
+
+
 @pytest.mark.usefixtures("environment", "served_database")
 def test_the_lobby_starts_with_no_mcp_setting_and_serves_the_front() -> None:
     settings = load_settings()
