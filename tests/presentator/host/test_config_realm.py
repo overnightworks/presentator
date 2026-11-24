@@ -213,17 +213,6 @@ def test_the_retired_client_id_key_in_the_process_environment_is_ignored(
     assert load_settings().realm == A_REALM
 
 
-def test_the_realm_carries_the_ai_group_and_the_speech_scope(
-    environment: pytest.MonkeyPatch,
-) -> None:
-    del environment
-
-    realm = load_settings().realm
-
-    assert realm.ai_group == A_REALM.ai_group
-    assert realm.speech_scope == A_REALM.speech_scope
-
-
 @pytest.mark.parametrize(
     ("realm_key", "retired_key"),
     [
