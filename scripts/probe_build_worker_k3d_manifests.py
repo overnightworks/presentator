@@ -225,7 +225,8 @@ def web_documents(overlay: list[Document]) -> list[Document]:
     """The overlay's ConfigMaps and Deployment the web needs, as rendered.
 
     The web container's Redis URL names the probe's Redis instead of the
-    render's; no worker pod gets it.
+    render's; no worker pod gets it. The Deployment starts with one pod, as
+    cell 10 awaits one web with no worker; cell 11 scales it to the render's two.
     """
     documents = [
         copy.deepcopy(document)
@@ -235,6 +236,7 @@ def web_documents(overlay: list[Document]) -> list[Document]:
     for document in documents:
         if document["kind"] != "Deployment":
             continue
+        document["spec"]["replicas"] = 1
         for container in document["spec"]["template"]["spec"]["containers"]:
             if container["name"] == WEB_CONTAINER:
                 url = f"redis://{REDIS}.{NAMESPACE}.svc.cluster.local:{REDIS_PORT}/0"
