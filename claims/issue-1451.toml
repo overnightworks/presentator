@@ -1,0 +1,7 @@
+claim_id = "cd08e32a2c9c4f2da3ee984e8985decb"
+agent = "Claude dcc219ab-da18-47d5-b7ac-f311ec73d19e"
+role = "builder"
+base = "6bf225327b2731e83f80a6e1591b71403ad43ffd"
+branch = "claude/issue-1451-the-coverage-job-no-longer-fails-on-its"
+scope = [".github/workflows/ci.yml"]
+opened_commit = "fd0f4cfa6f37bbcb3b75bb53a2bedb661d4997a1"
