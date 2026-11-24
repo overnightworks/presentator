@@ -104,29 +104,32 @@ def test_a_dot_env_with_the_gateway_keys_starts_the_instance(
     assert load_settings().agent.gateway.origin == A_GATEWAY_ORIGIN
 
 
+@pytest.mark.parametrize(
+    ("line", "field"),
+    [
+        pytest.param(
+            "PRESENTATOR_UNKNOWN_KEY_FOR_TEST=1",
+            "unknown_key_for_test",
+            id="unknown-key",
+        ),
+        pytest.param(
+            "PRESENTATOR_AGENT__API_GROUP=a-stale-MARKER",
+            "agent.api_group",
+            id="retired-agent-group",
+        ),
+    ],
+)
 @pytest.mark.usefixtures("environment")
-def test_an_unknown_presentator_key_in_a_dot_env_refuses_the_start(
-    tmp_path: Path,
+def test_a_stale_presentator_key_in_a_dot_env_refuses_the_start_naming_the_key(
+    tmp_path: Path, line: str, field: str
 ) -> None:
     """A `PRESENTATOR_` key no setting owns is refused, not ignored."""
-    (tmp_path / ".env").write_text(
-        "PRESENTATOR_UNKNOWN_KEY_FOR_TEST=1\n", encoding="utf-8"
-    )
+    (tmp_path / ".env").write_text(f"{line}\n", encoding="utf-8")
 
-    with pytest.raises(ConfigurationError, match="unknown_key_for_test"):
+    with pytest.raises(ConfigurationError, match=re.escape(field)) as refused:
         load_settings()
 
-
-@pytest.mark.usefixtures("environment")
-def test_the_retired_agent_group_in_a_dot_env_refuses_the_start(
-    tmp_path: Path,
-) -> None:
-    (tmp_path / ".env").write_text(
-        "PRESENTATOR_AGENT__API_GROUP=a-stale-MARKER\n", encoding="utf-8"
-    )
-
-    with pytest.raises(ConfigurationError, match=re.escape("agent.api_group")):
-        load_settings()
+    assert "MARKER" not in str(refused.value)
 
 
 @pytest.mark.usefixtures("environment", "served_database")
