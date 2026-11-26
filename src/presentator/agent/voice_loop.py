@@ -171,6 +171,9 @@ class LeasedBackend:
             summary.note_stop(stopped)
             log_stopped(stopped)
             raise
+        except Exception as failure:
+            summary.note_failure(failure)
+            raise
         finally:
             summary.log()
 

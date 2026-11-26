@@ -145,12 +145,15 @@ class RunSummary:
 
     def __init__(self, clock: Callable[[], float]) -> None:
         """Start timing the run on this clock."""
+        # `move_ms` counts on the injected clock, `duration_ms` on the timer's own
+        # perf_counter: the two bases differ, only their own differences are read.
         self._clock = clock
         self._started = clock()
         self._step = StepTimer(_RUN_EVENT, _LOGGER)
         self._counts = dict.fromkeys(_EventCount, 0)
         self._first_move_ms: int | None = None
         self._ended = False
+        self._failure: Exception | None = None
 
     def note_move(self) -> None:
         """Mark the first finished slide move."""
@@ -174,12 +177,18 @@ class RunSummary:
             self._step.handled()
         self._ended = True
 
+    def note_failure(self, failure: Exception) -> None:
+        """Mark that the run ended by an unexpected exception."""
+        self._failure = failure
+
     def log(self) -> None:
         """Write the `gateway_run.ended` line of a run that showed an event."""
         if not any(self._counts.values()):
             return
         self._step.add(**self._counts, move_ms=self._first_move_ms)
-        if self._ended:
+        if self._failure is not None:
+            self._step.__exit__(type(self._failure), self._failure, None)
+        elif self._ended:
             self._step.end()
         else:
             self._step.end_cancelled()
@@ -307,6 +316,9 @@ async def _answered(
     except TurnStopped as stopped:
         summary.note_stop(stopped)
         _refuse(stopped)
+    except Exception as failure:
+        summary.note_failure(failure)
+        raise
 
 
 def _log_stop(

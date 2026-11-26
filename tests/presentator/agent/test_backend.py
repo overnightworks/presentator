@@ -71,7 +71,7 @@ from tests.support.lobby import (
 from tests.support.log_lines import LoggedText, LogLine, events_of, json_logged
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Awaitable, Callable
 
     from agents.agent_file import TurnRequest
     from agents.backend import TurnEvent, TurnPerson
@@ -333,7 +333,7 @@ class ScriptedBackend:
     """A backend that streams these events and then ends the turn with its stop."""
 
     def __init__(
-        self, events: tuple[TurnEvent, ...] = (), stop: TurnStopped | None = None
+        self, events: tuple[TurnEvent, ...] = (), stop: Exception | None = None
     ) -> None:
         """Stream `events`, then raise `stop` unless there is none."""
         self._events = events
@@ -575,14 +575,27 @@ async def test_a_talk_run_a_stop_ended_after_an_event_matches_the_stop_line(
     assert run["assistant_text_events"] == 1
 
 
+async def _answered_through(backend: ScriptedBackend) -> None:
+    await spoken(GatewayAnswerer(backend, a_relying_party(FrozenClock(instant=NOW))))
+
+
+@pytest.mark.parametrize(
+    "drive", [_answered_through, _talked_through], ids=["answer", "talk"]
+)
 @on_an_event_loop
-async def test_a_talk_run_whose_stream_ended_is_ok(
+async def test_a_run_ended_by_an_unexpected_exception_is_failed_with_its_class(
+    drive: Callable[[ScriptedBackend], Awaitable[None]],
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    with json_logged(capsys) as logged:
-        await _talked_through(ScriptedBackend((AssistantTextEvent(text="Hallo."),)))
+    """Neither the answer nor the talk loop calls such a run cancelled."""
+    backend = ScriptedBackend((AssistantTextEvent(text="Hallo."),), KeyError("Geheim"))
 
-    assert the_run_line(logged)["outcome"] == "ok"
+    with json_logged(capsys) as logged, pytest.raises(KeyError):
+        await drive(backend)
+
+    run = the_run_line(logged)
+    assert (run["outcome"], run["error_type"]) == ("failed", "KeyError")
+    assert "Geheim" not in logged.text
 
 
 @on_an_event_loop
