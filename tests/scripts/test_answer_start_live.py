@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from tests.scripts.conftest import SCRIPTS
 from tests.scripts.support.answer_start_lines import answer, speech_end
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-_COMMAND = SCRIPTS / "answer_start_live"
+_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+_COMMAND = _SCRIPTS / "answer_start_live"
 _ITEM = "944"
 
 _FAKE_K3S = """#!/bin/sh
@@ -45,7 +45,7 @@ def _joined_turn_logs() -> tuple[str, str]:
 def _figure(*lines: str) -> str:
     """What `answer_start.py` prints for the lines."""
     read = subprocess.run(  # noqa: S603 - the interpreter and this repository's own script
-        [sys.executable, str(SCRIPTS / "answer_start.py")],
+        [sys.executable, str(_SCRIPTS / "answer_start.py")],
         input="\n".join(lines),
         capture_output=True,
         text=True,
