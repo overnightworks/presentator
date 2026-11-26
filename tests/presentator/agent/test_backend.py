@@ -6,6 +6,7 @@ import asyncio
 import itertools
 import json
 import logging
+from contextlib import aclosing
 from typing import TYPE_CHECKING
 
 import httpx2
@@ -24,6 +25,8 @@ from agents.turn import (
     Principal,
     RejectionCode,
     StopOutcome,
+    TurnMessage,
+    TurnRole,
     person_fingerprint,
 )
 from agents.turn_events import (
@@ -31,6 +34,7 @@ from agents.turn_events import (
     ToolCallEvent,
     ToolResultEvent,
 )
+from logline import unit_trace
 
 from presentator.agent.backend import (
     COPRESENTER_AGENT_FILE,
@@ -38,7 +42,9 @@ from presentator.agent.backend import (
     GatewayAnswerer,
     GatewayBackend,
     gateway_answerer,
+    turn_person,
 )
+from presentator.agent.voice_loop import LeasedBackend, TalkLease
 from presentator.contracts.copresenter import (
     AskingPerson,
     BudgetSpentError,
@@ -50,6 +56,7 @@ from presentator.contracts.copresenter import (
 from presentator.contracts.models import Role
 from tests.presentator.agent.support.driving import on_an_event_loop
 from tests.presentator.agent.support.transports import RefusingTransport
+from tests.presentator.application.support.ask_leases import FakeAskLimiter
 from tests.presentator.application.support.fakes import FrozenClock
 from tests.support.leak_support import everything_shown
 from tests.support.lobby import (
@@ -61,20 +68,23 @@ from tests.support.lobby import (
     a_relying_party,
     an_agent_config,
 )
-from tests.support.log_lines import LoggedText, LogLine, json_logged
+from tests.support.log_lines import LoggedText, LogLine, events_of, json_logged
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Awaitable, Callable
 
     from agents.agent_file import TurnRequest
     from agents.backend import TurnEvent, TurnPerson
     from agents.tools import JsonObject
+
+    from presentator.contracts.copresenter import Audio
 
 LOGGER = "presentator.agent.backend"
 # The fixed vector of agents' docs/wire.md for this issuer and subject.
 WIRE_VECTOR = "fp-2db44d96ffdef38f9e1cbfe73e9cf248fb66955b894846b34843a2d3a849d764"
 AN_ISSUER_OF_THE_VECTOR = "https://issuer.example"
 THE_QUESTION = "Was steht auf Folie zwei?"
+A_TRACEPARENT = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 
 
 def a_person(*, groups: frozenset[str] = frozenset({AN_API_GROUP})) -> AskingPerson:
@@ -323,7 +333,7 @@ class ScriptedBackend:
     """A backend that streams these events and then ends the turn with its stop."""
 
     def __init__(
-        self, events: tuple[TurnEvent, ...] = (), stop: TurnStopped | None = None
+        self, events: tuple[TurnEvent, ...] = (), stop: Exception | None = None
     ) -> None:
         """Stream `events`, then raise `stop` unless there is none."""
         self._events = events
@@ -470,9 +480,142 @@ async def test_a_run_logs_one_literal_event_counting_its_event_types_and_no_text
         line["final_events"],
         line["move_ms"],
     ) == (1, 0, 0, 1, None)
-    assert isinstance(line["end_ms"], int)
+    assert isinstance(line["duration_ms"], int | float)
+    assert "end_ms" not in line
     assert "Geheime" not in logged.text
     assert THE_QUESTION not in logged.text
+
+
+@on_an_event_loop
+async def test_a_run_line_is_the_span_of_the_run_in_its_trace_and_ends_ok(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The line names the run's own span under the span it ran in."""
+    with json_logged(capsys) as logged, unit_trace(A_TRACEPARENT):
+        await spoken(answerer_over(FakeGateway(completion("Hallo."))))
+
+    line = the_run_line(logged)
+    assert line["outcome"] == "ok"
+    assert line["trace_id"] == A_TRACEPARENT.split("-")[1]
+    assert line["parent_span_id"] == A_TRACEPARENT.split("-")[2]
+    assert line["span_id"] not in (None, line["parent_span_id"])
+
+
+@pytest.mark.parametrize(("kind", "code"), ALL_STOPS)
+@on_an_event_loop
+async def test_a_run_a_stop_ended_after_an_event_says_the_stops_outcome_and_reason(
+    kind: TurnStopKind,
+    code: RejectionCode | FailureCode,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The run line matches the stop line and is never a second error."""
+    answerer = GatewayAnswerer(
+        ScriptedBackend((AssistantTextEvent(text="Hallo."),), TurnStopped(kind, code)),
+        a_relying_party(FrozenClock(instant=NOW)),
+    )
+
+    with json_logged(capsys) as logged, pytest.raises(CoPresenterUnavailableError):
+        await spoken(answerer)
+
+    run = the_run_line(logged)
+    (stop,) = events_of(logged, "gateway_turn.stopped")
+    assert (run["outcome"], run["reason"]) == (stop["outcome"], stop["reason"])
+    assert run["level"] != "error"
+    assert run["assistant_text_events"] == 1
+
+
+class _SilentBrowser:
+    """A talk's browser that plays nothing and shows nothing."""
+
+    async def play(self, audio: Audio) -> None:
+        del audio
+
+    def show_slide(self, number: int) -> None:
+        del number
+
+
+async def _talked_through(backend: ScriptedBackend) -> None:
+    lease = TalkLease(FakeAskLimiter(), "a-session")
+    leased = LeasedBackend(backend, lease, _SilentBrowser())
+    request = load_agent(COPRESENTER_AGENT_FILE, [SHOW_SLIDE.declaration]).request(
+        [TurnMessage(role=TurnRole.USER, text=THE_QUESTION)]
+    )
+    person = turn_person(
+        a_relying_party(FrozenClock(instant=NOW)),
+        subject="subject-1",
+        role=Role.USER,
+        groups=_no_groups,
+    )
+    async with aclosing(leased.run(request, person)) as events:
+        _ = [event async for event in events]
+
+
+async def _no_groups() -> frozenset[str]:
+    return frozenset()
+
+
+@pytest.mark.parametrize(("kind", "code"), ALL_STOPS)
+@on_an_event_loop
+async def test_a_talk_run_a_stop_ended_after_an_event_matches_the_stop_line(
+    kind: TurnStopKind,
+    code: RejectionCode | FailureCode,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The talk loop's run line matches its stop line."""
+    backend = ScriptedBackend(
+        (AssistantTextEvent(text="Hallo."),), TurnStopped(kind, code)
+    )
+
+    with json_logged(capsys) as logged, pytest.raises(TurnStopped):
+        await _talked_through(backend)
+
+    run = the_run_line(logged)
+    (stop,) = events_of(logged, "gateway_turn.stopped")
+    assert (run["outcome"], run["reason"]) == (stop["outcome"], stop["reason"])
+    assert run["assistant_text_events"] == 1
+
+
+async def _answered_through(backend: ScriptedBackend) -> None:
+    await spoken(GatewayAnswerer(backend, a_relying_party(FrozenClock(instant=NOW))))
+
+
+@pytest.mark.parametrize(
+    "drive", [_answered_through, _talked_through], ids=["answer", "talk"]
+)
+@on_an_event_loop
+async def test_a_run_ended_by_an_unexpected_exception_is_failed_with_its_class(
+    drive: Callable[[ScriptedBackend], Awaitable[None]],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Neither the answer nor the talk loop calls such a run cancelled."""
+    backend = ScriptedBackend((AssistantTextEvent(text="Hallo."),), KeyError("Geheim"))
+
+    with json_logged(capsys) as logged, pytest.raises(KeyError):
+        await drive(backend)
+
+    run = the_run_line(logged)
+    assert (run["outcome"], run["error_type"]) == ("failed", "KeyError")
+    assert "Geheim" not in logged.text
+
+
+@on_an_event_loop
+async def test_a_run_closed_before_its_stream_ended_is_cancelled(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Leaving the answer early still writes one line, as cancelled."""
+    answerer = GatewayAnswerer(
+        ScriptedBackend(
+            (AssistantTextEvent(text="Eins."), AssistantTextEvent(text="Zwei."))
+        ),
+        a_relying_party(FrozenClock(instant=NOW)),
+    )
+
+    with json_logged(capsys) as logged:
+        async with answerer.answer(message=THE_QUESTION, person=a_person()) as texts:
+            await anext(texts)
+
+    line = the_run_line(logged)
+    assert (line["outcome"], line["assistant_text_events"]) == ("cancelled", 1)
 
 
 @on_an_event_loop
