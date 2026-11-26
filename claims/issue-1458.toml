@@ -1,0 +1,7 @@
+claim_id = "0b493e5148ba4c57847578065c8f263d"
+agent = "Claude b7b7bfa1-64c6-4108-8e50-bddf79a825c3"
+role = "builder"
+base = "04d58a8cdedc919f20f40132084f9e0fa49dfc0c"
+branch = "claude/issue-1458-a-talk-refused-for-unreadable-deck-words"
+scope = ["tests/support/talk_drive.py"]
+opened_commit = "5db614aee481745603931d8188c54548419bf631"
