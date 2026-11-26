@@ -5,6 +5,18 @@
 "tests/presentator/adapters/test_decks.py" = 1212
 "tests/presentator/application/test_decks.py" = 1809
 
+[ccn."slidev/tests/overlay-render-pass.browser.test.ts"]
+inspectRoot = 19
+
+[ccn."slidev/tests/presenter-overlay-harness.ts"]
+createOverlayDeckServer = 17
+startServer = 41
+
+[function_lines."slidev/tests/presenter-overlay-harness.ts"]
+createOverlayDeckServer = 68
+installMediaFakes = 128
+startServer = 175
+
 [function_lines."src/presentator/application/decks.py"]
 "Decks.add_source" = 76
 

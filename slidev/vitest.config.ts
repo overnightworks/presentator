@@ -12,6 +12,7 @@ export default defineConfig({
     // The overlay browser tests each build the example deck from the shared
     // repository folder, and Slidev writes generated files into it.
     fileParallelism: false,
+    sequence: { shuffle: true },
     include: ['slidev/tests/**/*.test.ts'],
     coverage: {
       // Istanbul counts the same branches in the instrumented deck the browser
