@@ -310,10 +310,8 @@ def closed_at_open(
 
     The hearing stays open, so only the route's own refusal can end the talk.
     """
-    service = FakeSpeechService()
-    service.realtime = accept_and_stay_silent
     scenario = SpeechScenario(
-        service=service,
+        service=FakeSpeechService(realtime=accept_and_stay_silent),
         gateway=lambda: FakeGateway(completion(TWO_SENTENCES)),
         texts=texts or FakeDeckTexts(),
     )
