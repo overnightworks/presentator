@@ -1,7 +1,0 @@
-claim_id = "2137634ff78e4e399331345ebbacd12c"
-agent = "Claude b7b7bfa1-64c6-4108-8e50-bddf79a825c3"
-role = "builder"
-base = "8ee54afd73bc539464b28f2e71dbf80164b4e25b"
-branch = "claude/issue-1455-presentator-runs-logline-v1-11-0-and-its"
-scope = ["pyproject.toml", "uv.lock"]
-opened_commit = "d612c871e7d7c6ac94a9c401368cd53ea47aa6f9"
