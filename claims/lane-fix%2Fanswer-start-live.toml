@@ -1,0 +1,7 @@
+claim_id = "c6621555d8e443ccbacfce4d8de0ce8d"
+agent = "Claude b7b7bfa1-64c6-4108-8e50-bddf79a825c3"
+role = "builder"
+base = "8ee54afd73bc539464b28f2e71dbf80164b4e25b"
+branch = "fix/answer-start-live"
+scope = ["docs/co-presenter.md", "scripts/answer_start_live", "tests/scripts/test_answer_start_live.py"]
+opened_commit = "d9177d81954b94568d6abba31bce3b8ec37e20b1"
