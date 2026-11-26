@@ -166,7 +166,9 @@ class LeasedBackend:
                         summary.note_move()
                         self._browser.show_slide(number)
                     yield event
+            summary.note_end()
         except TurnStopped as stopped:
+            summary.note_stop(stopped)
             log_stopped(stopped)
             raise
         finally:

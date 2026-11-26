@@ -41,6 +41,7 @@ from agents.turn_events import (
     ToolCallEvent,
     ToolResultEvent,
 )
+from logline import StepTimer
 
 from presentator.contracts.copresenter import (
     AskingPerson,
@@ -146,8 +147,10 @@ class RunSummary:
         """Start timing the run on this clock."""
         self._clock = clock
         self._started = clock()
+        self._step = StepTimer(_RUN_EVENT, _LOGGER)
         self._counts = dict.fromkeys(_EventCount, 0)
         self._first_move_ms: int | None = None
+        self._ended = False
 
     def note_move(self) -> None:
         """Mark the first finished slide move."""
@@ -158,18 +161,28 @@ class RunSummary:
         """Count one event of the turn."""
         self._counts[_count_of(event)] += 1
 
+    def note_end(self) -> None:
+        """Mark that the stream ended by itself."""
+        self._ended = True
+
+    def note_stop(self, stopped: TurnStopped) -> None:
+        """Mark that the gateway stopped the run, as its stop line also reports."""
+        if stopped.kind is TurnStopKind.REFUSED:
+            self._step.refuse(stopped.code)
+        else:
+            self._step.fail(stopped.code)
+            self._step.handled()
+        self._ended = True
+
     def log(self) -> None:
         """Write the `gateway_run.ended` line of a run that showed an event."""
         if not any(self._counts.values()):
             return
-        _LOGGER.info(
-            _RUN_EVENT,
-            extra={
-                **self._counts,
-                "end_ms": self._elapsed_ms(),
-                "move_ms": self._first_move_ms,
-            },
-        )
+        self._step.add(**self._counts, move_ms=self._first_move_ms)
+        if self._ended:
+            self._step.end()
+        else:
+            self._step.end_cancelled()
 
     def _elapsed_ms(self) -> int:
         return round((self._clock() - self._started) * _MILLISECONDS)
@@ -285,12 +298,14 @@ async def _answered(
                 case AssistantTextEvent(text=text):
                     yield text
                 case FinalEvent():
-                    return
+                    break
                 case ToolCallEvent() | ToolResultEvent():
                     continue
                 case _:
                     assert_never(event)
+        summary.note_end()
     except TurnStopped as stopped:
+        summary.note_stop(stopped)
         _refuse(stopped)
 
 
