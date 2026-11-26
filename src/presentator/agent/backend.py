@@ -56,9 +56,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 
     import httpx2
+    from agents.config import AgentConfig
     from webauth.oidc import OidcRelyingParty
-
-    from presentator.agent.settings import AgentSettings
 
 _LOGGER = logging.getLogger(__name__)
 COPRESENTER_AGENT_FILE: Final = (
@@ -344,14 +343,14 @@ def _refuse(stopped: TurnStopped) -> NoReturn:
 
 
 def copresenter_gateway(
-    config: AgentSettings, *, transport: httpx2.AsyncBaseTransport | None = None
+    config: AgentConfig, *, transport: httpx2.AsyncBaseTransport | None = None
 ) -> GatewayBackend:
     """The backend over the gateway the configuration names, with the slide tool."""
     return GatewayBackend(config, tools=[SHOW_SLIDE], transport=transport)
 
 
 def gateway_answerer(
-    config: AgentSettings,
+    config: AgentConfig,
     relying_party: OidcRelyingParty,
     *,
     transport: httpx2.AsyncBaseTransport | None = None,

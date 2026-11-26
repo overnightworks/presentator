@@ -41,6 +41,8 @@ from tests.support.two_processes import HOST_PROCESS_SECONDS
 
 _SERVICE_RESTART = 1012
 _SECONDS = 60
+# Far longer than uvicorn takes to start closing its sockets after its signal.
+_UVICORN_STOPS_WITHIN_SECONDS = 2
 _BUILT_DECKS = "SELECT count(*) FROM decks WHERE built_commit IS NOT NULL"
 
 
@@ -131,3 +133,59 @@ def test_a_stopping_app_drains_and_the_other_app_hears_on(  # noqa: PLR0913 - th
         assert "event: done" in answers[0].text
         with a_hearing(other.port, **hearing_at, cookie=person.cookie_header) as again:
             assert again.hear_after_saying() != ""
+
+
+def test_a_stopping_app_lets_a_decision_on_the_talk_socket_end_before_it_closes_1012(  # noqa: PLR0913 - the store is one more part of the scene
+    environment: pytest.MonkeyPatch,
+    database_url: str,
+    tmp_path: Path,
+    engine: Engine,
+    remote: GitRemote,
+    *,
+    object_store: ObjectStore,
+) -> None:
+    with_the_toolchain(environment, tmp_path, A_TOOLCHAIN_THAT_BUILDS)
+    remote.commit_example_deck(at=AT)
+    gateway = HeldGateway()
+    with (
+        a_gateway_and_a_speech_service(gateway) as services,
+        serving_apps(
+            database_url, tmp_path, {**services, **object_store.environment}
+        ) as (stopping, _other),
+    ):
+        admin = admin_of(stopping)
+        added(admin, stopping, "talks", remote)
+        _wait_until_built(engine)
+        person = Browser(host=TALK_HOST)
+        person.sign_in(stopping, "admin", groups=[*ADMIN, AN_API_GROUP])
+
+        hearing_at = {"host": TALK_HOST, "origin": A_TALK_ADDRESS}
+        with (
+            a_hearing(
+                stopping.port, **hearing_at, cookie=person.cookie_header
+            ) as other_hearing,
+            a_hearing(
+                stopping.port,
+                **hearing_at,
+                cookie=person.cookie_header,
+                target=f"/copresenter/talk?deck={EXAMPLE_SLUG}&language=de",
+            ) as talk,
+        ):
+            assert other_hearing.hear_after_saying() != ""
+            assert talk.hear_after_saying() != ""
+            assert gateway.started.wait(_SECONDS)
+
+            stopping.process.send_signal(signal.SIGTERM)
+
+            # uvicorn closes every socket at once once its stop starts; the
+            # hearing is open only while the stop waits for the decision.
+            assert other_hearing.stays_open_for(_UVICORN_STOPS_WITHIN_SECONDS)
+            gateway.release.set()
+            sound = talk.next_frame("audio")
+            talk.send_json({"kind": "played", "id": sound["id"], "end": "ended"})
+            assert talk.close_code() == _SERVICE_RESTART
+            assert other_hearing.close_code() == _SERVICE_RESTART
+            assert stopping.process.wait(timeout=HOST_PROCESS_SECONDS) in {
+                0,
+                -signal.SIGTERM,
+            }

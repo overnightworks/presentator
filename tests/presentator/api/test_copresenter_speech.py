@@ -41,8 +41,6 @@ from tests.support.lobby import (
 )
 from tests.support.log_lines import LogLine, json_logged
 from tests.support.speech_drive import (
-    LEAK_ASKS,
-    LEAK_HEALTH,
     ORIGIN,
     THE_ASKED_DECK,
     WORKLOAD,
@@ -52,9 +50,13 @@ from tests.support.speech_drive import (
     ask_and_leave_at_the_first_speak,
     ask_over,
     assert_nothing_shows,
-    refusing_every_workload_grant,
     who_over,
     without_the_lines_sub,
+)
+from tests.support.speech_leaks import (
+    LEAK_ASKS,
+    LEAK_HEALTH,
+    refusing_every_workload_grant,
 )
 from tests.support.speech_service import (
     A_WAV,

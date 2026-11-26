@@ -14,7 +14,7 @@ from collections.abc import (
     Iterable,
 )
 from contextlib import AsyncExitStack, contextmanager, suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Final, Protocol, assert_never
@@ -34,6 +34,7 @@ from presentator.api.health import never_stopping
 from presentator.api.session_api import language_of
 from presentator.application.spoken_answer import spoken_language
 from presentator.contracts.copresenter import (
+    TALK_DRAIN_SECONDS,
     AccessRefusal,
     AnswerEvent,
     AnswerStopReason,
@@ -66,7 +67,7 @@ if TYPE_CHECKING:
     )
     from presentator.contracts.models import Role, User
 
-_CHECK_INTERVAL_SECONDS: Final = 0.5
+CHECK_INTERVAL_SECONDS: Final = 0.5
 POLICY_VIOLATION: Final = 1008
 INTERNAL_ERROR: Final = 1011
 SERVICE_RESTART: Final = 1012
@@ -74,6 +75,10 @@ GENERIC_ANSWER_FAILURE: Final = "the answer could not be spoken"
 MAX_SAID_LENGTH: Final = 2_000
 
 _log = logging.getLogger(__name__)
+
+
+# The `reason` of an `answer.ended` line that is ok because the model kept silent.
+SILENT_ANSWER: Final = "silent"
 
 
 class AnswerFailure(StrEnum):
@@ -87,6 +92,7 @@ class AnswerFailure(StrEnum):
     UNAVAILABLE = "unavailable"
     DEADLINE = "deadline"
     UNEXPECTED = "unexpected"
+    UNSPOKEN = "unspoken"
 
 
 class AnswerRefusal(StrEnum):
@@ -118,9 +124,36 @@ Admission = Callable[[HTTPConnection], SignedIn | None]
 Delay = Callable[[float], Awaitable[None]]
 
 
+class OpenTalks:
+    """The talks open on this pod; a stop waits here until each has closed."""
+
+    def __init__(self) -> None:
+        """Start with no talk open."""
+        self._open = set[asyncio.Event]()
+
+    @contextmanager
+    def open(self) -> Generator[None]:
+        """Count a talk as open for the block."""
+        closed = asyncio.Event()
+        self._open.add(closed)
+        try:
+            yield
+        finally:
+            self._open.discard(closed)
+            closed.set()
+
+    async def closed(self) -> None:
+        """Return once every talk open now has closed."""
+        await asyncio.gather(*(each.wait() for each in tuple(self._open)))
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CoPresenterSurface:
-    """The use case and browser origin installed on the talk host."""
+    """The use case and browser origin installed on the talk host.
+
+    A stopping pod lets each open talk's running decision end, for at most
+    `drain_seconds`, before its sockets close.
+    """
 
     use: CoPresenterUse
     limiter: AskLimiter
@@ -128,6 +161,8 @@ class CoPresenterSurface:
     deadline_seconds: float
     delay: Delay = asyncio.sleep
     stopping: Callable[[], bool] = never_stopping
+    open_talks: OpenTalks = field(default_factory=OpenTalks)
+    drain_seconds: float = TALK_DRAIN_SECONDS
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -144,7 +179,7 @@ class SessionGuard:
 
     async def wait(self) -> None:
         """Wait until the next check."""
-        await self.delay(_CHECK_INTERVAL_SECONDS)
+        await self.delay(CHECK_INTERVAL_SECONDS)
 
 
 class AskRequest(BaseModel, extra="forbid"):

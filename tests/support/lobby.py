@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Final, Self
 
 import pytest
-from agents.config import ChatGateway
+from agents.config import AgentConfig, ChatGateway
 from fastapi import FastAPI, Response
 from fastapi.testclient import TestClient
 from httpx2 import Request as BrowserRequest
@@ -172,6 +172,8 @@ A_REALM: Final = RealmSettings(
     mcp_scope="mcp-presentator-test",
     agent_group=GroupPath("/agents-test"),
     mcp_client_id="agents-test",
+    ai_group=GroupPath(AN_API_GROUP),
+    speech_scope=A_SPEECH_SCOPE,
 )
 
 
@@ -302,12 +304,16 @@ def _no_key_set(url: str) -> bytes:
     raise AssertionError(url)
 
 
-def an_agent_config() -> AgentSettings:
+def an_agent_settings() -> AgentSettings:
     """The `agent` section of an instance whose gateway key is a throwaway file."""
     return AgentSettings(
-        gateway=ChatGateway(origin=A_GATEWAY_ORIGIN, key_file=A_GATEWAY_KEY_FILE),
-        api_group=AN_API_GROUP,
+        gateway=ChatGateway(origin=A_GATEWAY_ORIGIN, key_file=A_GATEWAY_KEY_FILE)
     )
+
+
+def an_agent_config() -> AgentConfig:
+    """What the backend is built from: the gateway and the realm's AI group."""
+    return an_agent_settings().configured(A_REALM.ai_group)
 
 
 def a_settings() -> Settings:
@@ -320,12 +326,11 @@ def a_settings() -> Settings:
         s3_bucket="presentator",
         public_origin=A_BROWSERS_ADDRESS,
         talk_origin=A_TALK_ADDRESS,
-        agent=an_agent_config(),
+        agent=an_agent_settings(),
         oidc_issuer=AN_ISSUER,
         realm=A_REALM,
         oidc_client_secret_file=Path("/run/oidc-client-secret"),
         speech_service=A_SPEECH_SERVICE,
-        speech_service_scope=A_SPEECH_SCOPE,
         lobby_build=LOBBY_BUILD,
         build_runner=WhereBuildsRun.HOST,
     )
@@ -349,7 +354,10 @@ def a_client(
 ) -> OidcClientConfig:
     """The issuer's client of the instance, returning to `origin`."""
     settings = a_settings().model_copy(
-        update={"oidc_issuer": issuer, "speech_service_scope": speech_scope}
+        update={
+            "oidc_issuer": issuer,
+            "realm": A_REALM.model_copy(update={"speech_scope": speech_scope}),
+        }
     )
     return oidc_client_config(settings, SecretStr(A_CLIENT_CREDENTIAL), origin=origin)
 

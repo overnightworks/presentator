@@ -3,7 +3,7 @@
 import logging
 import os
 import socket
-from collections.abc import Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from contextlib import closing
 from functools import partial
 from pathlib import Path
@@ -25,9 +25,7 @@ from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_GATEWAY_KEY_FILE,
     A_GATEWAY_ORIGIN,
-    A_SPEECH_SCOPE,
     A_SPEECH_SERVICE,
-    AN_API_GROUP,
     INSTANCE_KEY,
     LOBBY_BUILD,
     configure_oidc,
@@ -78,9 +76,13 @@ def logged(json_logging: None, capsys: pytest.CaptureFixture[str]) -> LoggedText
 
 class _ServerThatOnlyReturns:
     def __init__(
-        self, config: uvicorn.Config, stopping: Stopping, stop_line: StopLine
+        self,
+        config: uvicorn.Config,
+        stopping: Stopping,
+        stop_line: StopLine,
+        talks_closed: Callable[[], Awaitable[None]],
     ) -> None:
-        del config, stopping, stop_line
+        del config, stopping, stop_line, talks_closed
 
     async def serve(self) -> None:
         return None
@@ -185,9 +187,7 @@ def bare_environment(
     configure_oidc(monkeypatch, tmp_path)
     monkeypatch.setenv("PRESENTATOR_AGENT__GATEWAY__ORIGIN", A_GATEWAY_ORIGIN)
     monkeypatch.setenv("PRESENTATOR_AGENT__GATEWAY__KEY_FILE", str(A_GATEWAY_KEY_FILE))
-    monkeypatch.setenv("PRESENTATOR_AGENT__API_GROUP", AN_API_GROUP)
     monkeypatch.setenv("PRESENTATOR_SPEECH_SERVICE", A_SPEECH_SERVICE)
-    monkeypatch.setenv("PRESENTATOR_SPEECH_SERVICE_SCOPE", A_SPEECH_SCOPE)
     # These tests are about the lobby this root composes, not about where a
     # deck's code runs; the development run is what asks nothing of the build
     # worker, whose default the tests about the sandbox say so themselves.

@@ -6,6 +6,7 @@ It also owns the process's JSON log lines.
 import logging
 import os
 import socket
+from collections.abc import Awaitable, Callable
 from types import FrameType
 from typing import Final, override
 
@@ -41,22 +42,28 @@ class StoppingServer(uvicorn.Server):
     """A server whose signal marks the stop as begun before uvicorn starts it.
 
     uvicorn closes each open WebSocket with 1012 and lets a running answer
-    finish; the mark makes `/health` unready and refuses new asks and hearings
-    from the signal on. It writes `process.ready` once its socket listens and
-    `process.stopped` once it has stopped, so a start that cannot bind writes
-    no ready line.
+    finish, once the talks that run a decision have closed; the mark makes
+    `/health` unready and refuses new asks and hearings from the signal on. It
+    writes `process.ready` once its socket listens and `process.stopped` once it
+    has stopped, so a start that cannot bind writes no ready line.
     """
 
     def __init__(
-        self, config: uvicorn.Config, stopping: Stopping, stop_line: StopLine
+        self,
+        config: uvicorn.Config,
+        stopping: Stopping,
+        stop_line: StopLine,
+        talks_closed: Callable[[], Awaitable[None]],
     ) -> None:
         """Serve `config`, marking `stopping` when a signal ends the server.
 
-        Once it has stopped, it writes `stop_line`.
+        Once the open talks are closed and it has stopped, it writes `stop_line`.
+        `talks_closed` returns once every talk that runs a decision has closed.
         """
         super().__init__(config)
         self._stopping = stopping
         self._stop_line = stop_line
+        self._talks_closed = talks_closed
 
     @override
     async def startup(self, sockets: list[socket.socket] | None = None) -> None:
@@ -66,13 +73,16 @@ class StoppingServer(uvicorn.Server):
 
     @override
     async def shutdown(self, sockets: list[socket.socket] | None = None) -> None:
-        """Stop serving, then say the process stopped.
+        """Wait for the open talks, stop serving, then say the process stopped.
 
+        The wait comes first because uvicorn's first act is to close every
+        WebSocket with 1012, which would cut a decision still running.
         uvicorn ends the app's lifespan inside this stop, so the line follows
         the chores' end and the instance's close. uvicorn re-raises the signal
         that stopped it once serving returns, so the process ends before any
         line after `serve`.
         """
+        await self._talks_closed()
         await super().shutdown(sockets)
         self._stop_line.write()
 

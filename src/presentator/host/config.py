@@ -30,6 +30,7 @@ from presentator.adapters.build_wire import (
 from presentator.adapters.postgres.engine import LONGEST_TIMEOUT
 from presentator.adapters.speech import VoiceId, voice_speaks
 from presentator.agent.settings import AgentSettings
+from presentator.contracts.copresenter import TALK_DRAIN_SECONDS
 from presentator.contracts.words import LANGUAGES, Language
 from presentator.host.environment import (
     ENVIRONMENT_PREFIX,
@@ -293,6 +294,8 @@ type StatementTimeoutSeconds = Annotated[
 ]
 _STATEMENT_TIMEOUT_SECONDS: Final = 10.0
 
+type DrainSeconds = Annotated[float, Field(gt=0, allow_inf_nan=False)]
+
 
 @dataclass(frozen=True, slots=True)
 class BuildWorkerLink:
@@ -345,6 +348,10 @@ class RealmSettings(BaseSettings):
     mcp_client_id: str = Field(min_length=1)
     # The group of the agents' own accounts, admitted from any client.
     agent_group: RealmGroup
+    # The group whose members the AI gateway's co-presenter answers, and the
+    # scope that names the speech service at the issuer.
+    ai_group: RealmGroup
+    speech_scope: Annotated[str, AfterValidator(_one_scope_token)]
 
     @model_validator(mode="after")
     def _admin_group_lies_below_the_login_group(self) -> Self:
@@ -431,20 +438,22 @@ class Settings(
     # The realm's names, which `load_settings` hands in.
     realm: RealmSettings
     # Which backend answers, where its gateway is, the file holding this app's
-    # key there and the group that may ask. They are deployment facts: no default.
+    # key there. They are deployment facts: no default; the group that may ask is
+    # the realm's.
     agent: AgentSettings
-    # Where the shared speech service answers and the scope that names it at the
-    # issuer are deployment facts: no default. The client reaches only a plain
-    # http origin on internal networks, so this is the one origin here that is
-    # not https.
+    # Where the shared speech service answers is a deployment fact: no default.
+    # The client reaches only a plain http origin on internal networks, so this
+    # is the one origin here that is not https.
     speech_service: Annotated[str, AfterValidator(_one_http_origin)]
-    speech_service_scope: Annotated[str, AfterValidator(_one_scope_token)]
     # The voice an answer is spoken in, by the offered language of the answer:
     # each a catalogue voice that speaks that language. An entry set here takes
     # the place of the shipped one; every offered language needs one.
     speech_voices: Annotated[
         Mapping[Language, VoiceId], BeforeValidator(_over_the_shipped_voices)
     ] = _SHIPPED_VOICES
+    # A stopping pod cuts a decision still running on the talk socket past this
+    # bound; the pod's grace period ends the process, so it stays below it.
+    talk_drain_seconds: DrainSeconds = TALK_DRAIN_SECONDS
     # Empty: the client address is the ASGI peer. A list is the peers whose
     # X-Forwarded-For this instance believes.
     trusted_proxies: Annotated[str, AfterValidator(_a_proxy_list)] = ""

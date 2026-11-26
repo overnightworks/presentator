@@ -148,7 +148,7 @@ def _unparsable_object_store_key(
             _an_issuer_the_sign_in_client_refuses,
             (
                 "PRESENTATOR_OIDC_ISSUER,REALM_CLIENT_ID,"
-                "PRESENTATOR_OIDC_CLIENT_SECRET_FILE,PRESENTATOR_SPEECH_SERVICE_SCOPE,"
+                "PRESENTATOR_OIDC_CLIENT_SECRET_FILE,REALM_SPEECH_SCOPE,"
                 "PRESENTATOR_PUBLIC_ORIGIN,PRESENTATOR_TALK_ORIGIN"
             ),
         ),

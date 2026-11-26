@@ -32,7 +32,6 @@ from tests.support.leak_support import everything_shown
 from tests.support.lobby import A_SPEECH_SCOPE, A_TALK_ADDRESS
 from tests.support.log_lines import LoggedText, LogLine, json_lines_among
 from tests.support.speech_drive import (
-    LEAK_HEARINGS,
     ORIGIN,
     THREAD_WAIT_SECONDS,
     SpeechInstance,
@@ -42,8 +41,8 @@ from tests.support.speech_drive import (
     hear_and_record,
     recorded_logs,
     recording_logs,
-    refusing_every_workload_grant,
 )
+from tests.support.speech_leaks import LEAK_HEARINGS, refusing_every_workload_grant
 from tests.support.speech_service import (
     MALFORMED_PEERS,
     PLANTED,

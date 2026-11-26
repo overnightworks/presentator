@@ -59,7 +59,11 @@ def test_the_agent_package_names_the_client_and_api_only_its_tools_module(
             names(module, f"{CLIENT}.{part}") for module in client for part in MCP_PARTS
         )
     if path == SETTINGS_MODULE:
-        assert client == {f"{CLIENT}.config", f"{CLIENT}.config.AgentConfig"}
+        assert client == {
+            f"{CLIENT}.config",
+            f"{CLIENT}.config.AgentConfig",
+            f"{CLIENT}.config.ChatGateway",
+        }
     elif path.is_relative_to(API):
         assert all(names(module, ROUTE_DECISIONS) for module in client)
     elif path not in {CONNECTOR, MCP_FRONT, VOICE_LOOP}:

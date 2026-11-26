@@ -22,6 +22,8 @@ if TYPE_CHECKING:
 
 _END_OF_SPEECH_EVENT: Final = "turn_end_wait.ended"
 _ANSWER_EVENT: Final = "answer.ended"
+# The `reason` of an ok answer line the model kept silent.
+_SILENT_REASON: Final = "silent"
 _JOINED_EVENTS: Final = frozenset({_END_OF_SPEECH_EVENT, _ANSWER_EVENT})
 _PERCENTILES: Final = (50, 95)
 _DESCRIPTION: Final = "End of speech to first audio per turn: p50, p95, turns."
@@ -32,6 +34,7 @@ class Unjoined(StrEnum):
 
     NO_END_OF_SPEECH = "no_end_of_speech"
     NO_ANSWER = "no_answer"
+    SILENT = "silent"
     NO_FIRST_AUDIO = "no_first_audio"
     REPEATED = "repeated"
     MALFORMED = "malformed"
@@ -71,7 +74,8 @@ def _answer_start_ms(lines: Sequence[Mapping[str, object]]) -> float | Unjoined:
     if not answers:
         return Unjoined.NO_ANSWER
     if answers[0].get("first_output_ms") is None:
-        return Unjoined.NO_FIRST_AUDIO
+        silent = answers[0].get("reason") == _SILENT_REASON
+        return Unjoined.SILENT if silent else Unjoined.NO_FIRST_AUDIO
     try:
         (answer,) = answers
         first_audio = _start_ms(answer) + _milliseconds(answer, "first_output_ms")
