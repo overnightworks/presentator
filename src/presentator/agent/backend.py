@@ -187,6 +187,8 @@ class RunSummary:
             return
         self._step.add(**self._counts, move_ms=self._first_move_ms)
         if self._failure is not None:
+            # StepTimer has no public end for an exception outside a block;
+            # __exit__ writes the line a block would write for that exception.
             self._step.__exit__(type(self._failure), self._failure, None)
         elif self._ended:
             self._step.end()

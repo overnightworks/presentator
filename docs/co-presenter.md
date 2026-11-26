@@ -144,7 +144,8 @@ writes one `gateway_run.ended` with a count per event type, its `duration_ms`,
 its `outcome` and the run's span, and the `move_ms` of its first slide move
 (null when nothing moved). The `outcome` is `ok` when the stream ended, the
 stop's `refused` or `failed` with its `reason` when the gateway stopped the run
-after an event, and `cancelled` when the stream was closed before its end. Every
+after an event, `cancelled` when the stream was closed before its end, and
+`failed` with its `error_type` when another exception ended it. Every
 turn that stops short of its answer writes one `gateway_turn.stopped` with the
 same fields whatever its reason: `outcome` (`refused` or `failed`), `reason` (the
 gateway's code, or `request_invalid` for an ask whose message never became a
