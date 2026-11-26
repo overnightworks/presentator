@@ -1,0 +1,8 @@
+claim_id = "742b45f4a66b4accb843f085fb3d2e5e"
+agent = "Claude b7b7bfa1-64c6-4108-8e50-bddf79a825c3"
+role = "builder"
+base = "04d58a8cdedc919f20f40132084f9e0fa49dfc0c"
+branch = "claude/issue-1467-presentator-s-code-passes-logline-s-chec"
+scope = ["docs/co-presenter.md", "src/presentator/agent/backend.py", "src/presentator/agent/voice_loop.py", "tests/presentator/agent/test_backend.py", "tests/presentator/api/test_copresenter_talk_route.py"]
+opened_commit = "05ef7b6e64d34fb664cebff7d4e1d21d5646b486"
+whole_reason = "The run line has one owner shared by both gateway runs, its tests and its documented fields; splitting them would land a line whose doc and tests disagree."
