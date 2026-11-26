@@ -2,33 +2,35 @@
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
 from tests.scripts.conftest import SCRIPTS
+from tests.scripts.support.answer_start_lines import answer, speech_end
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 _COMMAND = SCRIPTS / "answer_start_live"
 _ITEM = "944"
-_NOON = datetime(2026, 11, 19, 12, tzinfo=UTC)
 
 _FAKE_K3S = """#!/bin/sh
-[ -z "$FAKE_K3S_FAILS" ] || exit 7
+echo k3s >> "$FAKE_LOGS_DIR/calls"
+case "$*" in
+  *presentator*) [ "$FAKE_K3S_FAILS" != web ] || exit 7;;
+esac
 case "$*" in
   *presentator*) cat "$FAKE_LOGS_DIR/web" ;;
-  *) cat "$FAKE_LOGS_DIR/speech" ;;
+  *) [ "$FAKE_K3S_FAILS" != speech ] || exit 7; cat "$FAKE_LOGS_DIR/speech" ;;
 esac
 """
 _FAKE_GH = """#!/bin/sh
+echo gh >> "$FAKE_LOGS_DIR/calls"
 printf '%s %s %s %s' "$1" "$2" "$3" "$4" > "$FAKE_LOGS_DIR/gh_arguments"
 printf '%s' "$5" > "$FAKE_LOGS_DIR/gh_body"
 echo "https://example.invalid/comment"
@@ -36,22 +38,8 @@ echo "https://example.invalid/comment"
 
 
 def _joined_turn_logs() -> tuple[str, str]:
-    """The speech service's and the app's line of one turn, joined by trace."""
-    speech = {
-        "ts": (_NOON + timedelta(milliseconds=500)).isoformat(),
-        "event": "turn_end_wait.ended",
-        "trace_id": "a",
-        "duration_ms": 500.0,
-    }
-    web = {
-        "ts": (_NOON + timedelta(milliseconds=4200)).isoformat(),
-        "event": "answer.ended",
-        "trace_id": "a",
-        "duration_ms": 3000.0,
-        "outcome": "ok",
-        "first_output_ms": 900.0,
-    }
-    return json.dumps(web), json.dumps(speech)
+    """The app's and the speech service's line of one turn, joined by trace."""
+    return answer("a", asked_at_ms=1200), speech_end("a", at_ms=0)
 
 
 def _figure(*lines: str) -> str:
@@ -80,19 +68,29 @@ def run_live(
     monkeypatch.setenv("FAKE_LOGS_DIR", str(tmp_path))
 
     def run(
-        web: str, speech: str, *, k3s_fails: bool = False
+        web: str,
+        speech: str,
+        *,
+        k3s_fails: str = "",
+        arguments: tuple[str, ...] = (_ITEM,),
     ) -> subprocess.CompletedProcess[str]:
         (tmp_path / "web").write_text(web)
         (tmp_path / "speech").write_text(speech)
-        monkeypatch.setenv("FAKE_K3S_FAILS", "1" if k3s_fails else "")
+        monkeypatch.setenv("FAKE_K3S_FAILS", k3s_fails)
         return subprocess.run(  # noqa: S603 - this repository's own script
-            [str(_COMMAND), _ITEM],
+            [str(_COMMAND), *arguments],
             capture_output=True,
             text=True,
             check=False,
         )
 
     return run
+
+
+def _calls(tmp_path: Path) -> str:
+    """Which fake tools the command called."""
+    calls = tmp_path / "calls"
+    return calls.read_text() if calls.exists() else ""
 
 
 def _posted_body(tmp_path: Path) -> str:
@@ -124,23 +122,28 @@ def test_no_log_lines_post_what_the_read_prints_for_no_turn(
     assert _posted_body(tmp_path) == _figure("")
 
 
+@pytest.mark.parametrize("failing_read", ["web", "speech"])
 def test_a_failing_cluster_read_fails_the_command_and_posts_nothing(
-    run_live: Callable[..., subprocess.CompletedProcess[str]], tmp_path: Path
+    run_live: Callable[..., subprocess.CompletedProcess[str]],
+    tmp_path: Path,
+    failing_read: str,
 ) -> None:
     web, speech = _joined_turn_logs()
 
-    done = run_live(web, speech, k3s_fails=True)
+    done = run_live(web, speech, k3s_fails=failing_read)
 
     assert done.returncode != 0
     assert not (tmp_path / "gh_body").exists()
 
 
 @pytest.mark.parametrize(
-    "arguments", [[], ["a"], ["1", "2"]], ids=["none", "not-a-number", "two"]
+    "arguments", [(), ("a",), ("1", "2")], ids=["none", "not-a-number", "two"]
 )
-def test_the_command_refuses_anything_but_one_item_number(arguments: list[str]) -> None:
-    done = subprocess.run(  # noqa: S603 - this repository's own script
-        [str(_COMMAND), *arguments], capture_output=True, text=True, check=False
-    )
+def test_the_command_refuses_anything_but_one_item_number_and_calls_nothing(
+    run_live: Callable[..., subprocess.CompletedProcess[str]],
+    tmp_path: Path,
+    arguments: tuple[str, ...],
+) -> None:
+    done = run_live("", "", arguments=arguments)
 
-    assert done.returncode != 0
+    assert (done.returncode, "usage" in done.stderr, _calls(tmp_path)) == (2, True, "")

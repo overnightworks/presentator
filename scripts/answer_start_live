@@ -8,7 +8,7 @@ if [[ $# -ne 1 || ! $1 =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
-cd "${BASH_SOURCE[0]%/*}/.."
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 
 # Separate assignments, so a failing kubectl stops the command before anything is read or posted.
 web_logs=$(k3s kubectl logs -n presentator -l app.kubernetes.io/name=web --since=24h --tail=-1)

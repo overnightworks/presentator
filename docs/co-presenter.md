@@ -174,4 +174,7 @@ refused did send audio and joins as a figure), `repeated` or `malformed`. It
 exits 1 when no turn joins. The two instants come from two processes' wall
 clocks, so the figure carries their offset, and it ends where the server sends
 the first audio, before the network and the browser's playback.
-`scripts/answer_start_live <item number>` reads the last 24 hours of both services' logs from the cluster, passes them to that command and posts its output as a comment on the item.
+
+`scripts/answer_start_live <item number>` reads the last 24 hours of both
+services' logs from the cluster, passes them to `scripts/answer_start.py` and
+posts its output as a comment on the item whose number it takes.
