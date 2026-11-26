@@ -34,7 +34,12 @@ from tests.support.speech_drive import (
     SpeechScenario,
     a_speech_instance,
 )
-from tests.support.speech_service import Cues, FakeSpeechService, a_completed
+from tests.support.speech_service import (
+    Cues,
+    FakeSpeechService,
+    a_completed,
+    accept_and_stay_silent,
+)
 from tests.support.talk_support import A_DECK
 
 if TYPE_CHECKING:
@@ -301,8 +306,12 @@ def lines_in(body: dict[str, Any]) -> list[dict[str, Any]]:
 def closed_at_open(
     engine: Engine, url: str, *, texts: FakeDeckTexts | None = None
 ) -> tuple[int, int]:
-    """The close code of a talk refused at open, and the gateway's request count."""
+    """The close code of a talk refused at open, and the gateway's request count.
+
+    The hearing stays open, so only the route's own refusal can end the talk.
+    """
     scenario = SpeechScenario(
+        service=FakeSpeechService(realtime=accept_and_stay_silent),
         gateway=lambda: FakeGateway(completion(TWO_SENTENCES)),
         texts=texts or FakeDeckTexts(),
     )
