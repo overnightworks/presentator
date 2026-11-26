@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Post the last day's answer start figure as a comment on one item.
+# `docs/co-presenter.md` (How soon an answer begins) owns what the figure means.
+set -euo pipefail
+
+if [[ $# -ne 1 || ! $1 =~ ^[0-9]+$ ]]; then
+  echo "usage: scripts/answer_start_live <item number>" >&2
+  exit 2
+fi
+
+cd "${BASH_SOURCE[0]%/*}/.."
+
+# Separate assignments, so a failing kubectl stops the command before anything is read or posted.
+web_logs=$(k3s kubectl logs -n presentator -l app.kubernetes.io/name=web --since=24h --tail=-1)
+speech_logs=$(k3s kubectl logs -n speech-runtime -l app.kubernetes.io/part-of=speech-runtime --since=24h --tail=-1)
+
+# The read exits 1 when no turn joins; its output is still the comment.
+status=0
+report=$(printf '%s\n%s\n' "$web_logs" "$speech_logs" | sed '/^$/d' | uv run --locked python scripts/answer_start.py 2>&1) || status=$?
+if [[ $status -gt 1 ]]; then
+  echo "$report" >&2
+  exit "$status"
+fi
+
+gh issue comment "$1" --body "${report:-keine Ausgabe}"
