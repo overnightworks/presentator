@@ -390,7 +390,7 @@ def test_a_decision_writes_one_answer_line_in_the_trace_of_the_line_that_woke_it
     (run,) = events_of(logged, "gateway_run.ended")
     assert (answer["outcome"], answer["trace_id"]) == ("ok", _A_TRACE)
     assert isinstance(answer["first_output_ms"], float | int)
-    assert run["trace_id"] == _A_TRACE
+    assert (run["trace_id"], run["outcome"]) == (_A_TRACE, "ok")
     assert events_of(logged, "gateway_turn.stopped") == []
 
 

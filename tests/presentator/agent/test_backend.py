@@ -6,6 +6,7 @@ import asyncio
 import itertools
 import json
 import logging
+from contextlib import aclosing
 from typing import TYPE_CHECKING
 
 import httpx2
@@ -24,6 +25,8 @@ from agents.turn import (
     Principal,
     RejectionCode,
     StopOutcome,
+    TurnMessage,
+    TurnRole,
     person_fingerprint,
 )
 from agents.turn_events import (
@@ -39,7 +42,9 @@ from presentator.agent.backend import (
     GatewayAnswerer,
     GatewayBackend,
     gateway_answerer,
+    turn_person,
 )
+from presentator.agent.voice_loop import LeasedBackend, TalkLease
 from presentator.contracts.copresenter import (
     AskingPerson,
     BudgetSpentError,
@@ -51,6 +56,7 @@ from presentator.contracts.copresenter import (
 from presentator.contracts.models import Role
 from tests.presentator.agent.support.driving import on_an_event_loop
 from tests.presentator.agent.support.transports import RefusingTransport
+from tests.presentator.application.support.ask_leases import FakeAskLimiter
 from tests.presentator.application.support.fakes import FrozenClock
 from tests.support.leak_support import everything_shown
 from tests.support.lobby import (
@@ -70,6 +76,8 @@ if TYPE_CHECKING:
     from agents.agent_file import TurnRequest
     from agents.backend import TurnEvent, TurnPerson
     from agents.tools import JsonObject
+
+    from presentator.contracts.copresenter import Audio
 
 LOGGER = "presentator.agent.backend"
 # The fixed vector of agents' docs/wire.md for this issuer and subject.
@@ -506,7 +514,7 @@ async def test_a_run_a_stop_ended_after_an_event_says_the_stops_outcome_and_reas
         a_relying_party(FrozenClock(instant=NOW)),
     )
 
-    with json_logged(capsys) as logged, pytest.raises(Exception):  # noqa: B017, PT011 - any worded stop
+    with json_logged(capsys) as logged, pytest.raises(CoPresenterUnavailableError):
         await spoken(answerer)
 
     run = the_run_line(logged)
@@ -514,6 +522,67 @@ async def test_a_run_a_stop_ended_after_an_event_says_the_stops_outcome_and_reas
     assert (run["outcome"], run["reason"]) == (stop["outcome"], stop["reason"])
     assert run["level"] != "error"
     assert run["assistant_text_events"] == 1
+
+
+class _SilentBrowser:
+    """A talk's browser that plays nothing and shows nothing."""
+
+    async def play(self, audio: Audio) -> None:
+        del audio
+
+    def show_slide(self, number: int) -> None:
+        del number
+
+
+async def _talked_through(backend: ScriptedBackend) -> None:
+    lease = TalkLease(FakeAskLimiter(), "a-session")
+    leased = LeasedBackend(backend, lease, _SilentBrowser())
+    request = load_agent(COPRESENTER_AGENT_FILE, [SHOW_SLIDE.declaration]).request(
+        [TurnMessage(role=TurnRole.USER, text=THE_QUESTION)]
+    )
+    person = turn_person(
+        a_relying_party(FrozenClock(instant=NOW)),
+        subject="subject-1",
+        role=Role.USER,
+        groups=_no_groups,
+    )
+    async with aclosing(leased.run(request, person)) as events:
+        _ = [event async for event in events]
+
+
+async def _no_groups() -> frozenset[str]:
+    return frozenset()
+
+
+@pytest.mark.parametrize(("kind", "code"), ALL_STOPS)
+@on_an_event_loop
+async def test_a_talk_run_a_stop_ended_after_an_event_matches_the_stop_line(
+    kind: TurnStopKind,
+    code: RejectionCode | FailureCode,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The talk loop's run line matches its stop line."""
+    backend = ScriptedBackend(
+        (AssistantTextEvent(text="Hallo."),), TurnStopped(kind, code)
+    )
+
+    with json_logged(capsys) as logged, pytest.raises(TurnStopped):
+        await _talked_through(backend)
+
+    run = the_run_line(logged)
+    (stop,) = events_of(logged, "gateway_turn.stopped")
+    assert (run["outcome"], run["reason"]) == (stop["outcome"], stop["reason"])
+    assert run["assistant_text_events"] == 1
+
+
+@on_an_event_loop
+async def test_a_talk_run_whose_stream_ended_is_ok(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with json_logged(capsys) as logged:
+        await _talked_through(ScriptedBackend((AssistantTextEvent(text="Hallo."),)))
+
+    assert the_run_line(logged)["outcome"] == "ok"
 
 
 @on_an_event_loop
