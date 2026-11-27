@@ -9,10 +9,10 @@ requires-python = ">=3.14"
 license = "MIT"
 dependencies = [
     "alembic==1.20.1",
-    "boto3==1.44.5",
+    "boto3==1.44.7",
     "cryptography==50.0.2",
-    "fastapi==0.162.7",
-    "httpx2==2.16.0",
+    "fastapi==0.165.0",
+    "httpx2==2.16.2",
     "overnightworks-agents[backend,mcp-server,voice] @ git+https://github.com/overnightworks/agents@v0.79.0",
     "overnightworks-logline @ git+https://github.com/overnightworks/logline@v1.11.0",
     "overnightworks-speech-client @ git+https://github.com/overnightworks/speech@v0.24.0#subdirectory=packages/client",
@@ -20,7 +20,7 @@ dependencies = [
     "overnightworks-webauth[postgres,redis] @ git+https://github.com/overnightworks/webauth@v0.46.0",
     "psycopg[binary]==3.3.9",
     "pydantic-settings==2.16.3",
-    "sqlalchemy==2.1.8",
+    "sqlalchemy==2.1.9",
     "syntok==1.4.4",
     "uvicorn==0.54.0",
     "wsproto==1.3.2",
@@ -34,15 +34,15 @@ presentator-worker = "presentator.host.console:presentator_worker"
 dev = [
     "coverage==7.17.3",
     "overnightworks-design[catalogs] @ git+https://github.com/overnightworks/design@v0.41.0",
-    "pypdf==7.1.0",
+    "pypdf==7.1.1",
     "pytest==9.2.0",
     "pytest-cov==7.1.0",
     "pytest-randomly==5.1.0",
     "pytest-xdist==3.8.0",
     "pyright==1.1.414",
     "ruamel-yaml==0.19.1",
-    "ruff==0.17.5",
-    "types-boto3-lite[s3]==1.44.3",
+    "ruff==0.17.6",
+    "types-boto3-lite[s3]==1.44.7",
     "vulture==2.16",
 ]
 
