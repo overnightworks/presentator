@@ -1,0 +1,8 @@
+claim_id = "8a5696fa4c1a4fef8844f7b066f80a4b"
+agent = "Claude 3b819897-983d-4532-bec7-aeb676b027da"
+role = "builder"
+base = "04d58a8cdedc919f20f40132084f9e0fa49dfc0c"
+branch = "claude/issue-1479-an-admin-can-create-a-source-that-a-name"
+scope = ["docs/decks.md", "docs/runbooks/add-a-source.md", "frontend/e2e", "frontend/src/lib/api", "frontend/src/lib/catalogs", "frontend/src/lib/source.test.ts", "frontend/src/lib/source.ts", "frontend/src/lib/words", "frontend/src/routes/(lobby)/settings/sources/new", "src/presentator/adapters/postgres/accounts.py", "src/presentator/adapters/postgres/sign_in.py", "src/presentator/adapters/postgres/sources.py", "src/presentator/api/source_api.py", "src/presentator/application/decks.py", "src/presentator/contracts/words.py", "src/presentator/host/main.py", "src/presentator/ports", "tests/presentator/adapters", "tests/presentator/api", "tests/presentator/application"]
+opened_commit = "a9cc8bb347f0dabc4423313343dc506f22dec8fe"
+whole_reason = "One optional field through form, API, application call, words and the ruled DK9 line is one coherent change; none stands alone."
