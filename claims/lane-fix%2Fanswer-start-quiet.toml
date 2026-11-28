@@ -3,5 +3,5 @@ agent = "Claude 3b819897-983d-4532-bec7-aeb676b027da"
 role = "builder"
 base = "04d58a8cdedc919f20f40132084f9e0fa49dfc0c"
 branch = "fix/answer-start-quiet"
-scope = ["scripts/answer_start_live"]
+scope = ["scripts/answer_start_live", "tests/scripts/test_answer_start_live.py"]
 opened_commit = "6f9546cd828bae51c0b2f1540121fede875c0bbc"
