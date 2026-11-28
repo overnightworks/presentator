@@ -757,9 +757,7 @@ def test_promoting_a_draft_encrypts_its_private_half_and_consumes_it(
     minted = drafts.mint(OWNER.id, at=PUSHED_AT)
 
     promoted = a_source_store(database).add_from_draft(
-        a_write(public_key=None),
-        draft_id=minted.id,
-        prover_id=OWNER.id,
+        a_write(public_key=None), draft_id=minted.id, prover_id=OWNER.id
     )
 
     assert promoted is not None
