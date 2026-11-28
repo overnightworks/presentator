@@ -28,9 +28,10 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 def pytest_collection_finish(session: pytest.Session) -> None:
     """End a run that selects a journey but has no readable storage state or origin.
 
-    This runs before any round; CI deselects the journeys and never gets here.
+    This runs before any round; a run that deselects the journeys, CI's included,
+    has no live item and never checks.
     """
-    if not session.items:
+    if not any(item.get_closest_marker("live") for item in session.items):
         return
     config = session.config
     storage_state = config.getoption("storage_state")

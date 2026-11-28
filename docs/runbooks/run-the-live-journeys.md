@@ -14,8 +14,9 @@ is a success and the session survives. The journey is a `live`-marked test under
 ## Check
 
 The task `live:journeys` ends with exit 0 when every round held, 1 when a round
-failed, and a non-zero exit with no round run when `--storage-state` names no
-readable file. Its output is codes and counts only, such as
+failed, and a non-zero exit with no round run when `--origin` or
+`--storage-state` is missing (mise's exit 1) or the state names no readable file
+(exit 4). Its output is codes and counts only, such as
 `rounds=32 failed=0`, or the failing steps as `step=status` counts. The JUnit
 report lands in the git-ignored `reports/`.
 
