@@ -447,11 +447,12 @@ class Decks:
         return self.members.person_id_named(username)
 
     def add_source(
-        self, draft: NewSourceDraft, *, prover_id: str, owner_id: str | None = None
+        self, draft: NewSourceDraft, *, owner_id: str, prover_id: str
     ) -> AddedSource | SourceRefusal:
         """Store a source with its secrets, fetch it once, return the webhook secret.
 
-        The prover is the admin who checked the connection; the owner defaults to them.
+        The prover is the admin who checked the connection; the owner is the
+        account the source and its decks belong to, the prover or a member.
 
         The webhook secret is generated here and returned in the clear so the
         Add page's created view can show it once; only its hash is stored. The access
@@ -506,7 +507,7 @@ class Decks:
             name=named,
             url=address,
             ref=_ADDED_REF,
-            owner_id=owner_id or prover_id,
+            owner_id=owner_id,
             access_secret=credential,
             hook_secret_hash=hash_webhook_secret(webhook_secret),
             folder=folder,
