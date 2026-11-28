@@ -1,0 +1,21 @@
+# Platform's live-check runs `live:journeys` with only HOME, a PATH of
+# /usr/bin:/bin and LANG, so every tool the task needs is pinned here.
+[tools]
+uv = "0.10.9"
+
+# The checkout is the caller's to prepare (the locked sync and the Chromium
+# install, docs/runbooks/run-the-live-journeys.md), so the task syncs nothing.
+[tasks."live:journeys"]
+description = "Run the lobby journey against a live origin as a signed-in person"
+usage = '''
+flag "--origin <origin>" help="the lobby's origin, without a trailing slash"
+flag "--storage-state <file>" help="a Playwright storage state holding the person's cookies"
+flag "--loop-span <seconds>" help="seconds the journey keeps starting rounds"
+'''
+run = '''
+uv run --no-sync pytest tests/e2e/live -m live -p no:randomly -p no:cacheprovider \
+  -s -q --tb=no -rf --no-header \
+  --junitxml=reports/live-journeys.xml --output=reports/live-journeys \
+  --origin "${usage_origin?}" --storage-state "${usage_storage_state?}" \
+  ${usage_loop_span:+--loop-span "$usage_loop_span"}
+'''
