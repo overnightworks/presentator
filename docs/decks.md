@@ -37,8 +37,9 @@ Authors outside this repository rely on these rules. Local assets,
   source's removal names, and DK12.
 - **DK8** An admin without decks sees an empty list, and its hint names no other
   admin's Git address.
-- **DK9** A member without the admin role owns no source and so never sees a
-  deck.
+- **DK9** A member without the admin role owns only the sources an admin
+  created for them, by naming their username on Add source, and sees only
+  those decks.
 - **DK10** A deck always belongs to the owner of its source and never changes
   hands. Removing the source removes its decks for everyone, and a new owner
   arises only by creating the same address again.

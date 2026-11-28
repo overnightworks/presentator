@@ -26,6 +26,7 @@
 	let url = $state('');
 	let secret = $state('');
 	let folder = $state('');
+	let owner = $state('');
 	let draft = $state(untrack(() => data.draft));
 	// What the server said the typed address needs. Only the latest lookup may write it.
 	type Lookup =
@@ -162,6 +163,7 @@
 				...probe(),
 				name,
 				folder: offersFolder ? folder : '',
+				owner,
 				fingerprint: fingerprint as string
 			});
 			secret = '';
@@ -187,6 +189,7 @@
 		lookup = { state: 'idle' };
 		secret = '';
 		folder = '';
+		owner = '';
 		banner = null;
 		fingerprint = null;
 		refusal = null;
@@ -254,6 +257,19 @@
 				/>
 			</div>
 		{/if}
+		<div class="fld">
+			<label for="source-owner">{words['sourceNew.owner']}</label>
+			<input
+				class="control"
+				id="source-owner"
+				name="owner"
+				autocomplete="off"
+				spellcheck="false"
+				aria-describedby="source-owner-hint"
+				bind:value={owner}
+			/>
+			<span id="source-owner-hint" class="muted">{words['sourceNew.ownerHint']}</span>
+		</div>
 		{#if known === 'https-token'}
 			<div class="fld">
 				<span class="lb">

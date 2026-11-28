@@ -26,7 +26,8 @@ describe('refusalWords', () => {
 		{ reason: 'unknown-access', worded: words['source.refusedUnknownAccess'] },
 		{ reason: 'not-checked', worded: words['source.refusedNotChecked'] },
 		{ reason: 'credential-not-allowed', worded: words['source.refusedSecretNotAllowed'] },
-		{ reason: 'deploy-key-unavailable', worded: words['source.refusedDeployKey'] }
+		{ reason: 'deploy-key-unavailable', worded: words['source.refusedDeployKey'] },
+		{ reason: 'unknown-owner', worded: words['source.refusedOwner'] }
 	])('words $reason by its sentence', ({ reason, worded }) => {
 		expect(refusalWords(reason, words)).toBe(worded);
 	});

@@ -32,6 +32,12 @@ on the source's page.
    HTTPS and SSH also show an optional Folder field: enter the part of the
    repository the decks live in, for example `examples`. It is set at Create and
    cannot be changed later.
+
+   Every address also shows an optional Owner field: enter the username of an
+   existing member to give them the source and its decks, or leave it empty to
+   own the source yourself. An unknown username is refused and creates no
+   account; the owner is set at Create and cannot be changed later
+   ([DK9](../decks.md)).
 4. Choose *Check connection*. It probes that exact token (or none) or draft before
    anything is stored, and *Create* stays disabled until it answers reachable.
    Rollback: none needed, nothing is stored.

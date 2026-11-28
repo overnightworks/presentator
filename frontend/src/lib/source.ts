@@ -19,7 +19,8 @@ export function refusalWords(reason: SourceRefusalReason, words: Words): string 
 		'unknown-access': words['source.refusedUnknownAccess'],
 		'not-checked': words['source.refusedNotChecked'],
 		'credential-not-allowed': words['source.refusedSecretNotAllowed'],
-		'deploy-key-unavailable': words['source.refusedDeployKey']
+		'deploy-key-unavailable': words['source.refusedDeployKey'],
+		'unknown-owner': words['source.refusedOwner']
 	};
 	return sentences[reason];
 }

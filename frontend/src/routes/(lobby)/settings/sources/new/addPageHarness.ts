@@ -94,6 +94,8 @@ export const secretField = (): HTMLInputElement | null =>
 	document.querySelector<HTMLInputElement>('#source-secret');
 export const folderField = (): HTMLInputElement | null =>
 	document.querySelector<HTMLInputElement>('#source-folder');
+export const ownerField = (): HTMLInputElement | null =>
+	document.querySelector<HTMLInputElement>('#source-owner');
 export const keyBlock = (): Element | null => document.getElementById('deploy-key-label');
 // Found by role and place: a busy button carries another word than its idle one.
 export const checkButton = (): HTMLButtonElement | null =>

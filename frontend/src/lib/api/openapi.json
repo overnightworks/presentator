@@ -529,6 +529,11 @@
             "title": "Name",
             "type": "string"
           },
+          "owner": {
+            "default": "",
+            "title": "Owner",
+            "type": "string"
+          },
           "secret": {
             "anyOf": [
               {
@@ -1770,7 +1775,8 @@
                         "unknown-access",
                         "not-checked",
                         "credential-not-allowed",
-                        "deploy-key-unavailable"
+                        "deploy-key-unavailable",
+                        "unknown-owner"
                       ],
                       "type": "string"
                     },
@@ -1907,7 +1913,8 @@
                         "unknown-access",
                         "not-checked",
                         "credential-not-allowed",
-                        "deploy-key-unavailable"
+                        "deploy-key-unavailable",
+                        "unknown-owner"
                       ],
                       "type": "string"
                     },
