@@ -1,0 +1,8 @@
+claim_id = "92da1b040ea3482684e77a14208ebc26"
+agent = "Claude 3b819897-983d-4532-bec7-aeb676b027da"
+role = "builder"
+base = "04d58a8cdedc919f20f40132084f9e0fa49dfc0c"
+branch = "claude/issue-1428-a-live-journey-of-the-lobby-holds-across"
+scope = [".github/workflows/ci.yml", "AGENTS.md", "docs/runbooks", "mise.toml", "pyproject.toml", "tests/e2e/live", "uv.lock"]
+opened_commit = "316d35b1ba3108520b6311de32a14c377b16fa34"
+whole_reason = "One task, its journey, the marker that keeps CI off it and the runbook that names the run are one coherent change; none stands alone."
