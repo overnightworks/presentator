@@ -944,7 +944,6 @@ def _add(
             secret=secret,
             fingerprint=fingerprint,
         ),
-        owner_id=OWNER,
         prover_id=OWNER,
     )
 
@@ -1025,7 +1024,6 @@ def test_an_ssh_create_binds_the_shown_draft_and_deletes_it() -> None:
             fingerprint=checked.fingerprint or "",
             key_draft_id=draft.id,
         ),
-        owner_id=OWNER,
         prover_id=OWNER,
     )
 
@@ -1046,7 +1044,6 @@ def test_an_ssh_create_without_its_own_check_proof_is_refused() -> None:
             fingerprint="",
             key_draft_id=draft.id,
         ),
-        owner_id=OWNER,
         prover_id=OWNER,
     )
 
@@ -1069,7 +1066,6 @@ def test_an_ssh_check_proof_cannot_be_used_by_another_admin() -> None:
             fingerprint=checked.fingerprint or "",
             key_draft_id=other_draft.id,
         ),
-        owner_id=another_owner,
         prover_id=another_owner,
     )
 
@@ -1088,7 +1084,6 @@ def test_a_foreign_or_missing_draft_id_is_refused_and_mints_a_fresh_one() -> Non
             fingerprint="",
             key_draft_id=someone_elses_draft.id,
         ),
-        owner_id=OWNER,
         prover_id=OWNER,
     )
 
@@ -1278,7 +1273,6 @@ def test_a_source_never_checked_for_these_values_is_refused() -> None:
             secret=_READ_ONLY,
             fingerprint="",
         ),
-        owner_id=OWNER,
         prover_id=OWNER,
     )
 
@@ -1299,7 +1293,6 @@ def test_a_fingerprint_from_a_different_secret_is_refused() -> None:
             secret=_A_DIFFERENT_SECRET,
             fingerprint=checked.fingerprint,
         ),
-        owner_id=OWNER,
         prover_id=OWNER,
     )
 
@@ -1807,7 +1800,6 @@ def test_an_address_naming_no_access_is_refused_whatever_an_earlier_check_proved
             secret=_READ_ONLY,
             fingerprint=earlier_fingerprint or "",
         ),
-        owner_id=OWNER,
         prover_id=OWNER,
     )
 

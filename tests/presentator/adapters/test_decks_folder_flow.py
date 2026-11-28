@@ -136,7 +136,6 @@ def added_with_folder(
             fingerprint=checked.fingerprint or "",
             folder=folder,
         ),
-        owner_id=owner_id,
         prover_id=owner_id,
     )
 

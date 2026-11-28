@@ -195,7 +195,6 @@ class Decks:
 
     sources: SourceStore
     key_drafts: DeployKeyDrafts
-    # Names the members an admin can give a source to.
     members: PersonDirectory
     folders: DeckFolders
     store: DeckStore
@@ -448,16 +447,11 @@ class Decks:
         return self.members.person_id_named(username)
 
     def add_source(
-        self,
-        draft: NewSourceDraft,
-        *,
-        owner_id: str,
-        prover_id: str,
+        self, draft: NewSourceDraft, *, prover_id: str, owner_id: str | None = None
     ) -> AddedSource | SourceRefusal:
         """Store a source with its secrets, fetch it once, return the webhook secret.
 
-        The prover is the admin who checked the connection; the owner is the
-        account the source and its decks belong to, the prover or a member.
+        The prover is the admin who checked the connection; the owner defaults to them.
 
         The webhook secret is generated here and returned in the clear so the
         Add page's created view can show it once; only its hash is stored. The access
@@ -512,23 +506,31 @@ class Decks:
             name=named,
             url=address,
             ref=_ADDED_REF,
-            owner_id=owner_id,
+            owner_id=owner_id or prover_id,
             access_secret=credential,
             hook_secret_hash=hash_webhook_secret(webhook_secret),
             folder=folder,
             public_key=None if deploy_key is None else deploy_key.public_key,
         )
-        stored = (
-            self.sources.add_from_draft(
-                write, draft_id=draft.key_draft_id, prover_id=prover_id
-            )
-            if deploy_key is not None
-            else self.sources.add(write)
-        )
+        stored = self._stored(write, deploy_key, draft.key_draft_id, prover_id)
         if stored is None:
             return SourceRefusal.DUPLICATE_NAME
         self.refresh_named(stored.name)
         return AddedSource(source=stored, webhook_secret=webhook_secret)
+
+    def _stored(
+        self,
+        write: SourceWrite,
+        deploy_key: DeployKeyDraft | None,
+        key_draft_id: str,
+        prover_id: str,
+    ) -> Source | None:
+        """The stored source, or None for a taken name; SSH consumes its draft."""
+        if deploy_key is None:
+            return self.sources.add(write)
+        return self.sources.add_from_draft(
+            write, draft_id=key_draft_id, prover_id=prover_id
+        )
 
     def _deploy_key_for(
         self,
