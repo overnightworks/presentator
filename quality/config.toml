@@ -102,6 +102,10 @@ entry = "frontend/"
 reason = "the lobby's SvelteKit app and its pnpm toolchain, built apart from the Python package and from the Slidev addon"
 
 [[root.allow]]
+entry = "mise.toml"
+reason = "platform's live-check runs the live journey as a mise task and finds the task file at the checkout root"
+
+[[root.allow]]
 entry = "legal/"
 reason = "the privacy section of this app: platform's legal:check reads it from this path under its section contract (docs/legal-sections.md in platform), and hal legal reads it here too"
 
