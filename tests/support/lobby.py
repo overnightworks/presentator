@@ -138,7 +138,14 @@ _BUILT_DECK_COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 _FINGERPRINT_KEY: Final = b"what only this test's lobby signs a fingerprint with"
 USERNAME: Final = "felix"
 NEIGHBOUR: Final = "anna"
-ADMIN: Final = f"id-of-{USERNAME}"
+
+
+def account_id_of(username: str) -> str:
+    """The id `Browser.sign_in` gives the account this username signs in as."""
+    return f"id-of-{username}"
+
+
+ADMIN: Final = account_id_of(USERNAME)
 SOURCE_ID: Final = "the-source-the-instance-carries"
 # A real browser always sends both: navigation prefers text/html, and a
 # same-site request carries Sec-Fetch-Site since Chrome 76 and Firefox 90. A
@@ -220,7 +227,7 @@ class Lobby:
         the issuer gave at sign-in, or none.
         """
         person = User(
-            id=f"id-of-{username}",
+            id=account_id_of(username),
             username=username,
             role=role or (Role.ADMIN if username == USERNAME else Role.USER),
         )

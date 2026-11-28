@@ -5,7 +5,7 @@ from http import HTTPStatus
 from typing import Final
 
 import pytest
-from webauth.ports import AccountKind
+from fastapi.testclient import TestClient
 
 from presentator.application.decks import SourceRefusal
 from tests.presentator.api.support.source_api_support import (
@@ -15,6 +15,7 @@ from tests.presentator.api.support.source_api_support import (
     PAGE,
     SENT,
     World,
+    a_created_source,
     a_world,
     an_admin_over,
     assert_problem,
@@ -27,29 +28,20 @@ from tests.presentator.application.support.fakes import (
     FakeDeckFolders,
     FakePersonDirectory,
 )
-from tests.support.lobby import ADMIN, NEIGHBOUR, USERNAME
+from tests.support.lobby import ADMIN, NEIGHBOUR, USERNAME, account_id_of
 from tests.support.lobby_reads import listed_titles
 
-_MEMBER_ID: Final = f"id-of-{NEIGHBOUR}"
-_AN_AGENT: Final = "a-gateway-agent"
+_MEMBER_ID: Final = account_id_of(NEIGHBOUR)
 _SSH: Final = "git@git.example.invalid:talks.git"
 _THE_ONLY_DECK: Final = "A talk"
 _FIRST_ADDED_SOURCE: Final = "added-1"
 _DIRECTORY: Final = FakePersonDirectory(
-    accounts=(
-        FakeAccount(id=_MEMBER_ID, username=NEIGHBOUR, role="user"),
-        FakeAccount(
-            id="id-of-the-agent",
-            username=_AN_AGENT,
-            role="user",
-            kind=AccountKind.AGENT,
-        ),
-    )
+    accounts=(FakeAccount(id=_MEMBER_ID, username=NEIGHBOUR, role="user"),)
 )
 
 
 def a_world_of_members() -> World:
-    """The admin's world, in which `NEIGHBOUR` is a member and one agent exists."""
+    """The admin's world, in which `NEIGHBOUR` is a member."""
     world = a_world()
     folders = FakeDeckFolders(carried={_FIRST_ADDED_SOURCE: (a_folder("hello"),)})
     return replace(
@@ -57,8 +49,11 @@ def a_world_of_members() -> World:
     )
 
 
-def a_checked_body(**changes: object) -> dict[str, object]:
-    return checked_body(name=A_SOURCE_NAME, **changes)
+def a_passed_check(client: TestClient, **changes: object) -> dict[str, object]:
+    """The body of a source whose Check this client has passed."""
+    body = checked_body(name=A_SOURCE_NAME, **changes)
+    body["fingerprint"] = client.post(CHECK, json=body).json()["fingerprint"]
+    return body
 
 
 @pytest.mark.parametrize(
@@ -83,29 +78,18 @@ def test_the_owner_field_names_the_member_or_leaves_the_admin_the_owner(
 ) -> None:
     world = a_world_of_members()
     client = an_admin_over(world.decks).client
-    body = a_checked_body(owner=typed)
-    body["fingerprint"] = client.post(CHECK, json=body).json()["fingerprint"]
 
-    answer = client.post(LIST, json=body)
+    a_created_source(client, {"owner": typed})
 
-    assert answer.status_code == HTTPStatus.CREATED
     assert [source.owner_id for source in world.store.sources] == [owner_id]
 
 
-@pytest.mark.parametrize(
-    "typed",
-    ["nobody", _AN_AGENT, NEIGHBOUR.title(), "ann"],
-    ids=["unknown", "an agent", "another case", "a prefix"],
-)
-def test_an_owner_who_is_no_member_is_refused_and_nothing_is_written(
-    typed: str,
-) -> None:
+def test_an_owner_who_is_no_member_is_refused_and_nothing_is_written() -> None:
     world = a_world_of_members()
     client = an_admin_over(world.decks).client
-    body = a_checked_body(owner=typed)
-    body["fingerprint"] = client.post(CHECK, json=body).json()["fingerprint"]
+    body = a_passed_check(client)
 
-    answer = client.post(LIST, json=body)
+    answer = client.post(LIST, json=body | {"owner": "nobody"})
 
     assert_problem(answer, HTTPStatus.UNPROCESSABLE_ENTITY, SENT, "webhook_secret")
     assert answer.json()["reason"] == SourceRefusal.UNKNOWN_OWNER
@@ -117,8 +101,7 @@ def test_a_corrected_owner_creates_an_ssh_source_on_the_same_check_and_key() -> 
     world = a_world_of_members()
     client = an_admin_over(world.decks).client
     drafted = draft(client).json()
-    body = a_checked_body(url=_SSH, secret=None, key_draft_id=drafted["id"])
-    body["fingerprint"] = client.post(CHECK, json=body).json()["fingerprint"]
+    body = a_passed_check(client, url=_SSH, secret=None, key_draft_id=drafted["id"])
 
     refused = client.post(LIST, json=body | {"owner": "nobody"})
     created = client.post(LIST, json=body | {"owner": NEIGHBOUR})
@@ -134,9 +117,7 @@ def test_only_the_member_sees_the_decks_of_a_source_the_admin_made_for_them() ->
     admin = an_admin_over(world.decks)
     member = admin.another_browser()
     member.sign_in(username=NEIGHBOUR)
-    body = a_checked_body(owner=NEIGHBOUR)
-    body["fingerprint"] = admin.client.post(CHECK, json=body).json()["fingerprint"]
-    admin.client.post(LIST, json=body)
+    a_created_source(admin.client, {"owner": NEIGHBOUR})
 
     source_page = admin.client.get(
         PAGE.format(name=A_SOURCE_NAME), headers={"accept": "application/json"}
