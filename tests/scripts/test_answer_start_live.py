@@ -36,18 +36,18 @@ printf '%s' "$5" > "$FAKE_LOGS_DIR/gh_body"
 echo "https://example.invalid/comment"
 """
 
-# Like uv, it reports a build on stderr unless run with --quiet, then runs `python`.
-_FAKE_UV = """#!/bin/sh
+_UV_BUILD_LINE = "Building the project"
+# Like uv, it reports a build on stderr unless quiet (-q or --quiet), then runs python.
+_FAKE_UV = f"""#!/bin/sh
 quiet=no
 for argument in "$@"; do
-  [ "$argument" != --quiet ] || quiet=yes
+  case "$argument" in --quiet|-q) quiet=yes ;; esac
 done
-[ "$quiet" = yes ] || echo "Building the project" >&2
+[ "$quiet" = yes ] || echo "{_UV_BUILD_LINE}" >&2
 while [ "$1" != python ]; do shift; done
 shift
 exec "$FAKE_UV_PYTHON" "$@" $FAKE_UV_EXTRA_ARGUMENTS
 """
-_UV_BUILD_LINE = "Building the project"
 
 
 def _joined_turn_logs() -> tuple[str, str]:
