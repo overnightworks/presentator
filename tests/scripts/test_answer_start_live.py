@@ -36,6 +36,19 @@ printf '%s' "$5" > "$FAKE_LOGS_DIR/gh_body"
 echo "https://example.invalid/comment"
 """
 
+# Like uv, it reports a build on stderr unless run with --quiet, then runs `python`.
+_FAKE_UV = """#!/bin/sh
+quiet=no
+for argument in "$@"; do
+  [ "$argument" != --quiet ] || quiet=yes
+done
+[ "$quiet" = yes ] || echo "Building the project" >&2
+while [ "$1" != python ]; do shift; done
+shift
+exec "$FAKE_UV_PYTHON" "$@" $FAKE_UV_EXTRA_ARGUMENTS
+"""
+_UV_BUILD_LINE = "Building the project"
+
 
 def _joined_turn_logs() -> tuple[str, str]:
     """The app's and the speech service's line of one turn, joined by trace."""
@@ -61,11 +74,12 @@ def run_live(
     """Run the command with fake `k3s` and `gh` first on PATH."""
     fakes = tmp_path / "bin"
     fakes.mkdir()
-    for name, body in (("k3s", _FAKE_K3S), ("gh", _FAKE_GH)):
+    for name, body in (("k3s", _FAKE_K3S), ("gh", _FAKE_GH), ("uv", _FAKE_UV)):
         (fakes / name).write_text(body)
         (fakes / name).chmod(0o755)
     monkeypatch.setenv("PATH", f"{fakes}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("FAKE_LOGS_DIR", str(tmp_path))
+    monkeypatch.setenv("FAKE_UV_PYTHON", sys.executable)
 
     def run(
         web: str,
@@ -73,10 +87,12 @@ def run_live(
         *,
         k3s_fails: str = "",
         arguments: tuple[str, ...] = (_ITEM,),
+        read_arguments: str = "",
     ) -> subprocess.CompletedProcess[str]:
         (tmp_path / "web").write_text(web)
         (tmp_path / "speech").write_text(speech)
         monkeypatch.setenv("FAKE_K3S_FAILS", k3s_fails)
+        monkeypatch.setenv("FAKE_UV_EXTRA_ARGUMENTS", read_arguments)
         return subprocess.run(  # noqa: S603 - this repository's own script
             [str(_COMMAND), *arguments],
             capture_output=True,
@@ -120,6 +136,29 @@ def test_no_log_lines_post_what_the_read_prints_for_no_turn(
 
     assert done.returncode == 0
     assert _posted_body(tmp_path) == _figure("")
+
+
+def test_the_posted_figure_carries_no_line_of_uv(
+    run_live: Callable[..., subprocess.CompletedProcess[str]], tmp_path: Path
+) -> None:
+    web, speech = _joined_turn_logs()
+
+    run_live(web, speech)
+
+    assert _UV_BUILD_LINE not in _posted_body(tmp_path)
+
+
+def test_a_failing_read_reports_its_own_error_and_no_line_of_uv(
+    run_live: Callable[..., subprocess.CompletedProcess[str]], tmp_path: Path
+) -> None:
+    web, speech = _joined_turn_logs()
+
+    done = run_live(web, speech, read_arguments="--unknown-option")
+
+    assert done.returncode != 0
+    assert "unrecognized arguments" in done.stderr
+    assert _UV_BUILD_LINE not in done.stderr
+    assert not (tmp_path / "gh_body").exists()
 
 
 @pytest.mark.parametrize("failing_read", ["web", "speech"])

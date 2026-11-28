@@ -16,7 +16,7 @@ speech_logs=$(k3s kubectl logs -n speech-runtime -l app.kubernetes.io/part-of=sp
 
 # The read exits 1 when no turn joins; its output is still the comment.
 status=0
-report=$(printf '%s\n%s\n' "$web_logs" "$speech_logs" | sed '/^$/d' | uv run --locked python scripts/answer_start.py 2>&1) || status=$?
+report=$(printf '%s\n%s\n' "$web_logs" "$speech_logs" | sed '/^$/d' | uv run --quiet --locked python scripts/answer_start.py 2>&1) || status=$?
 if [[ $status -gt 1 ]]; then
   echo "$report" >&2
   exit "$status"
