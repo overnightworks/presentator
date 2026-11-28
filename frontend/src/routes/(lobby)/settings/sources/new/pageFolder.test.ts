@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
 	addresses,
+	alert,
+	checked,
 	checkButton,
 	close,
 	createButton,
@@ -19,16 +21,7 @@ afterEach(close);
 const URL_FIELD = 'source-url';
 const CHECK = '/api/sources/new/check';
 const CREATE = '/api/sources';
-const alert = (): Element | null => document.querySelector('[role="alert"]');
 const status = (): Element | null => document.querySelector('[role="status"]');
-
-async function checked(which: keyof typeof addresses, fetched = open()) {
-	type(URL_FIELD, addresses[which].url);
-	await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
-	checkButton()?.click();
-	await vi.waitFor(() => expect(createButton()?.disabled).toBe(false));
-	return fetched;
-}
 
 describe('what the address shows of the folder', () => {
 	it('shows no folder field on an empty form', () => {
