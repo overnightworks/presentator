@@ -10,7 +10,10 @@ from webauth.ports import AuditSink, SignInStores
 from webauth.postgres import database_errors_as_store_errors, sign_in_entry
 
 from presentator.adapters.identity import lobby_user
-from presentator.adapters.postgres.accounts import PostgresSubjectUserStore
+from presentator.adapters.postgres.accounts import (
+    PostgresSubjectUserStore,
+    read_person_id_named,
+)
 from presentator.adapters.postgres.locks import SIGN_IN_ENTRY_KEY
 from presentator.adapters.postgres.session_schema import SESSIONS
 from presentator.contracts.models import User
@@ -57,6 +60,11 @@ class PostgresIdentityWrites:
         """The account of that id; a read needs no entry."""
         with database_errors_as_store_errors():
             return lobby_user(PostgresSubjectUserStore(self.engine).get(user_id))
+
+    def person_id_named(self, username: str) -> str | None:
+        """The id of the person account with exactly this username; a read."""
+        with database_errors_as_store_errors(), self.engine.connect() as connection:
+            return read_person_id_named(connection, username)
 
     def delete_account(self, user_id: str) -> None:
         """Delete the account; its sessions end with it."""

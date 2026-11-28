@@ -88,6 +88,7 @@ from tests.presentator.application.support.fakes import (
     FakeDeployKeyDrafts,
     FakeInstanceSettingsStore,
     FakePeople,
+    FakePersonDirectory,
     FakePersonPreferencesStore,
     FakeSessionRecordStore,
     FakeSourceRunStore,
@@ -527,6 +528,7 @@ class GivenDecks:
     # names `themes` and gets the fake above instead.
     toolchain_project: Path | None = None
     key_drafts: FakeDeployKeyDrafts = field(default_factory=FakeDeployKeyDrafts)
+    members: FakePersonDirectory = field(default_factory=FakePersonDirectory)
     # Set only by a test proving what the real adapter lets a request read.
     builder: BuildRunner | None = None
 
@@ -603,6 +605,7 @@ def a_decks(given: GivenDecks, clock: FrozenClock) -> Decks:
             key_drafts=key_drafts,
         ),
         key_drafts=key_drafts,
+        members=given.members,
         folders=FakeDeckFolders(
             carried=_carried_by(given),
             failures={} if given.failures is None else given.failures,

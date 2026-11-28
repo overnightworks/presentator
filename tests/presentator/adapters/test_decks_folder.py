@@ -140,6 +140,7 @@ def test_the_insert_that_promotes_a_key_draft_stores_and_returns_the_folder(
     added = store.add_from_draft(
         a_source_write("ssh://git@example.invalid/a.git", folder="talks/2026"),
         draft_id=drafted.id,
+        prover_id=OWNER.id,
     )
 
     assert added is not None

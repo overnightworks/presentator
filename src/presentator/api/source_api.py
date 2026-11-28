@@ -201,6 +201,7 @@ class NewSource(SourceProbe):
     name: str
     fingerprint: str
     folder: str = ""
+    owner: str = ""
 
 
 class CreatedSourceView(BaseModel):
@@ -412,6 +413,13 @@ class _SourceData:
             raise ProblemError(_REFUSED, SourceRefusedProblem(reason=checked))
         return ConnectionCheckView.of(checked)
 
+    def _owner_of(self, typed: str, admin: User) -> str | None:
+        """The id the typed username names; the creating admin's when it is empty."""
+        named = typed.strip(" ")
+        if named in {"", admin.username}:
+            return admin.id
+        return self.decks.member_id_named(named)
+
     def create(
         self,
         request: Request,
@@ -419,6 +427,11 @@ class _SourceData:
         response: Response,
         admin: Annotated[User, Depends(gated_admin)],
     ) -> CreatedSourceView:
+        owner_id = self._owner_of(new.owner, admin)
+        if owner_id is None:
+            raise ProblemError(
+                _REFUSED, SourceRefusedProblem(reason=SourceRefusal.UNKNOWN_OWNER)
+            )
         secret, key_draft_id = new.in_the_owners_form()
         added = self.decks.add_source(
             NewSourceDraft(
@@ -429,7 +442,8 @@ class _SourceData:
                 key_draft_id=key_draft_id,
                 folder=new.folder,
             ),
-            owner_id=admin.id,
+            owner_id=owner_id,
+            prover_id=admin.id,
         )
         if isinstance(added, SourceRefusal):
             raise ProblemError(_REFUSED, SourceRefusedProblem(reason=added))

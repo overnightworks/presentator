@@ -46,6 +46,7 @@ from tests.presentator.adapters.support.key_draft_support import (
 from tests.presentator.application.support.fakes import (
     THE_TOOLCHAIN,
     FakeConnectionChecker,
+    FakePersonDirectory,
     FakeToolchainThemes,
     FrozenClock,
 )
@@ -192,6 +193,7 @@ def _decks_application(
     return Decks(
         sources=stores.sources,
         key_drafts=stores.key_drafts,
+        members=FakePersonDirectory(),
         folders=MirroredDeckFolders(mirrors=mirrors),
         store=stores.decks,
         builder=SlidevBuilds(

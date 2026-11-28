@@ -85,6 +85,23 @@ class FakeAccount:
         return cls(id=user.id, username=user.username, role=user.role.value)
 
 
+@dataclass(frozen=True, slots=True)
+class FakePersonDirectory:
+    """Accounts found by username; only a person's answers, as the real table does."""
+
+    accounts: tuple[FakeAccount, ...] = ()
+
+    def person_id_named(self, username: str) -> str | None:
+        return next(
+            (
+                account.id
+                for account in self.accounts
+                if account.username == username and account.kind is AccountKind.PERSON
+            ),
+            None,
+        )
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class FakeSession:
     """One session row, as the fake store keeps it."""
@@ -306,15 +323,17 @@ class FakeSourceStore:
         self.secrets[stored.id] = write.access_secret
         return stored
 
-    def add_from_draft(self, write: SourceWrite, *, draft_id: str) -> Source | None:
+    def add_from_draft(
+        self, write: SourceWrite, *, draft_id: str, prover_id: str
+    ) -> Source | None:
         if self.key_drafts is None:
             return None
-        draft = self.key_drafts.drafts.get(write.owner_id)
+        draft = self.key_drafts.drafts.get(prover_id)
         if draft is None or draft.id != draft_id:
             return None
         stored = self.add(write)
         if stored is not None:
-            self.key_drafts.bind(draft_id, owner_id=write.owner_id)
+            self.key_drafts.bind(draft_id, owner_id=prover_id)
         return stored
 
     def hook_secret_hash(self, name: str) -> bytes | None:

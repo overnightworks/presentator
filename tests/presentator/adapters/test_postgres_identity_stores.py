@@ -125,6 +125,29 @@ def test_a_taken_username_is_refused_and_the_entry_stays_usable(
     assert stores.writes.get("holder") is not None
 
 
+@pytest.mark.parametrize(
+    ("asked", "answered"),
+    [
+        ("anna", "id-of-anna"),
+        ("Anna", None),
+        ("nobody", None),
+        ("a-gateway-agent", None),
+    ],
+    ids=["a person", "another case", "an unknown name", "an agent"],
+)
+def test_only_a_person_answers_to_the_username_it_signs_in_under(
+    stores: _Stores, asked: str, answered: str | None
+) -> None:
+    stores.accounts.create_for_subject(
+        "id-of-anna", "anna", Role.USER.value, AccountKind.PERSON
+    )
+    stores.accounts.create_for_subject(
+        "id-of-agent", "a-gateway-agent", Role.USER.value, AccountKind.AGENT
+    )
+
+    assert stores.writes.person_id_named(asked) == answered
+
+
 def test_a_subject_that_exists_is_not_reported_as_a_taken_username(
     stores: _Stores,
 ) -> None:

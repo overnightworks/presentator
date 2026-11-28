@@ -759,6 +759,7 @@ def test_promoting_a_draft_encrypts_its_private_half_and_consumes_it(
     promoted = a_source_store(database).add_from_draft(
         a_write(public_key=None),
         draft_id=minted.id,
+        prover_id=OWNER.id,
     )
 
     assert promoted is not None
@@ -793,6 +794,7 @@ def test_promoting_a_missing_or_foreign_draft_creates_no_source(
     promoted = sources.add_from_draft(
         a_write(),
         draft_id="a-draft-that-does-not-exist" if minted is None else minted.id,
+        prover_id=OWNER.id,
     )
 
     assert promoted is None
@@ -815,7 +817,7 @@ def test_promoting_an_undecryptable_draft_keeps_it_and_creates_no_source(
             (corrupted, minted.id),
         )
 
-    promoted = sources.add_from_draft(a_write(), draft_id=minted.id)
+    promoted = sources.add_from_draft(a_write(), draft_id=minted.id, prover_id=OWNER.id)
 
     assert promoted is None
     assert sources.all() == ()
@@ -836,7 +838,7 @@ def test_a_failed_draft_promotion_keeps_the_draft_and_creates_no_source(
     drafts = a_key_drafts_store(database)
     minted = drafts.mint(OWNER.id, at=PUSHED_AT)
 
-    promoted = sources.add_from_draft(a_write(), draft_id=minted.id)
+    promoted = sources.add_from_draft(a_write(), draft_id=minted.id, prover_id=OWNER.id)
 
     assert promoted is None
     assert drafts.bind(minted.id, owner_id=OWNER.id) == minted

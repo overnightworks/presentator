@@ -945,6 +945,7 @@ def _add(
             fingerprint=fingerprint,
         ),
         owner_id=OWNER,
+        prover_id=OWNER,
     )
 
 
@@ -1025,6 +1026,7 @@ def test_an_ssh_create_binds_the_shown_draft_and_deletes_it() -> None:
             key_draft_id=draft.id,
         ),
         owner_id=OWNER,
+        prover_id=OWNER,
     )
 
     assert isinstance(added, AddedSource)
@@ -1045,6 +1047,7 @@ def test_an_ssh_create_without_its_own_check_proof_is_refused() -> None:
             key_draft_id=draft.id,
         ),
         owner_id=OWNER,
+        prover_id=OWNER,
     )
 
     assert refused is SourceRefusal.NOT_CHECKED
@@ -1067,6 +1070,7 @@ def test_an_ssh_check_proof_cannot_create_for_another_account() -> None:
             key_draft_id=other_draft.id,
         ),
         owner_id=another_owner,
+        prover_id=another_owner,
     )
 
     assert refused is SourceRefusal.NOT_CHECKED
@@ -1085,6 +1089,7 @@ def test_a_foreign_or_missing_draft_id_is_refused_and_mints_a_fresh_one() -> Non
             key_draft_id=someone_elses_draft.id,
         ),
         owner_id=OWNER,
+        prover_id=OWNER,
     )
 
     assert refused is SourceRefusal.DEPLOY_KEY_UNAVAILABLE
@@ -1274,6 +1279,7 @@ def test_a_source_never_checked_for_these_values_is_refused() -> None:
             fingerprint="",
         ),
         owner_id=OWNER,
+        prover_id=OWNER,
     )
 
     assert refused is SourceRefusal.NOT_CHECKED
@@ -1294,6 +1300,7 @@ def test_a_fingerprint_from_a_different_secret_is_refused() -> None:
             fingerprint=checked.fingerprint,
         ),
         owner_id=OWNER,
+        prover_id=OWNER,
     )
 
     assert refused is SourceRefusal.NOT_CHECKED
@@ -1801,6 +1808,7 @@ def test_an_address_naming_no_access_is_refused_whatever_an_earlier_check_proved
             fingerprint=earlier_fingerprint or "",
         ),
         owner_id=OWNER,
+        prover_id=OWNER,
     )
 
     assert earlier_fingerprint is not None

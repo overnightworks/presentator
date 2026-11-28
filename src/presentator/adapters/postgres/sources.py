@@ -90,13 +90,15 @@ class PostgresSourceStore:
             return None
         return written_source(identifier, write, public_key=write.public_key)
 
-    def add_from_draft(self, write: SourceWrite, *, draft_id: str) -> Source | None:
-        """Promote an owned draft only if its source row can be written too."""
+    def add_from_draft(
+        self, write: SourceWrite, *, draft_id: str, prover_id: str
+    ) -> Source | None:
+        """Promote the prover's draft only if its source row can be written too."""
         identifier = self.identifiers.new_id()
         try:
             with self.engine.begin() as connection:
                 draft = locked_owned_draft(
-                    connection, draft_id, owner_id=write.owner_id, box=self.box
+                    connection, draft_id, owner_id=prover_id, box=self.box
                 )
                 if draft is None:
                     return None
