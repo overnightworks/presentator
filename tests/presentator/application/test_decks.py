@@ -937,30 +937,22 @@ def _add(
     fingerprint = (
         "" if isinstance(checked, SourceRefusal) else checked.fingerprint or ""
     )
-    return decks.add_source(
-        NewSourceDraft(
-            name=name,
-            url=url,
-            secret=secret,
-            fingerprint=fingerprint,
-        ),
-        owner_id=OWNER,
-        prover_id=OWNER,
-    )
+    return _add_on_proof(decks, fingerprint, url=url, secret=secret, name=name)
 
 
-def _add_on_proof(
+def _add_on_proof(  # noqa: PLR0913 - each argument is one field of the draft a test varies
     decks: Decks,
     fingerprint: str,
     *,
     url: str = _HTTPS_URL,
     secret: str = _READ_ONLY,
     key_draft_id: str = "",
+    name: str = "talks",
 ) -> AddedSource | SourceRefusal:
     """Add as the owner on the fingerprint given, whatever a check would issue."""
     return decks.add_source(
         NewSourceDraft(
-            name="talks",
+            name=name,
             url=url,
             secret=secret,
             fingerprint=fingerprint,
