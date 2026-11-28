@@ -451,8 +451,7 @@ class Decks:
     ) -> AddedSource | SourceRefusal:
         """Store a source with its secrets, fetch it once, return the webhook secret.
 
-        The prover is the admin who checked the connection; the owner is the
-        account the source and its decks belong to, the prover or a member.
+        The prover is the admin who checked the connection; the owner holds the decks.
 
         The webhook secret is generated here and returned in the clear so the
         Add page's created view can show it once; only its hash is stored. The access
