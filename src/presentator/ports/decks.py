@@ -42,8 +42,14 @@ class SourceStore(Protocol):
         """
 
     @abstractmethod
-    def add_from_draft(self, write: SourceWrite, *, draft_id: str) -> Source | None:
-        """Promote this owner's deploy-key draft into a new source atomically."""
+    def add_from_draft(
+        self, write: SourceWrite, *, draft_id: str, prover_id: str
+    ) -> Source | None:
+        """Promote the prover's deploy-key draft into a new source atomically.
+
+        The draft is locked by the account that proved it, which need not be
+        the source's owner.
+        """
 
     @abstractmethod
     def hook_secret_hash(self, name: str) -> bytes | None:

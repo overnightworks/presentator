@@ -19,6 +19,7 @@ from tests.presentator.application.support.fakes import (
     FakeBuildRunner,
     FakeConnectionChecker,
     FakeDeckFolders,
+    FakePersonDirectory,
     FakeToolchainThemes,
     FakeWebhookSecrets,
     FrozenClock,
@@ -180,6 +181,7 @@ def test_a_refresh_over_the_tables_deletes_a_deck_missed_for_the_kept_period(
     decks = Decks(
         sources=sources,
         key_drafts=a_key_drafts_store(database),
+        members=FakePersonDirectory(),
         folders=folders,
         store=store,
         builder=builder,

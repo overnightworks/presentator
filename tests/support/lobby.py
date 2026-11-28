@@ -88,6 +88,7 @@ from tests.presentator.application.support.fakes import (
     FakeDeployKeyDrafts,
     FakeInstanceSettingsStore,
     FakePeople,
+    FakePersonDirectory,
     FakePersonPreferencesStore,
     FakeSessionRecordStore,
     FakeSourceRunStore,
@@ -137,7 +138,14 @@ _BUILT_DECK_COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 _FINGERPRINT_KEY: Final = b"what only this test's lobby signs a fingerprint with"
 USERNAME: Final = "felix"
 NEIGHBOUR: Final = "anna"
-ADMIN: Final = f"id-of-{USERNAME}"
+
+
+def account_id_of(username: str) -> str:
+    """The id `Browser.sign_in` gives the account this username signs in as."""
+    return f"id-of-{username}"
+
+
+ADMIN: Final = account_id_of(USERNAME)
 SOURCE_ID: Final = "the-source-the-instance-carries"
 # A real browser always sends both: navigation prefers text/html, and a
 # same-site request carries Sec-Fetch-Site since Chrome 76 and Firefox 90. A
@@ -219,7 +227,7 @@ class Lobby:
         the issuer gave at sign-in, or none.
         """
         person = User(
-            id=f"id-of-{username}",
+            id=account_id_of(username),
             username=username,
             role=role or (Role.ADMIN if username == USERNAME else Role.USER),
         )
@@ -527,6 +535,7 @@ class GivenDecks:
     # names `themes` and gets the fake above instead.
     toolchain_project: Path | None = None
     key_drafts: FakeDeployKeyDrafts = field(default_factory=FakeDeployKeyDrafts)
+    members: FakePersonDirectory = field(default_factory=FakePersonDirectory)
     # Set only by a test proving what the real adapter lets a request read.
     builder: BuildRunner | None = None
 
@@ -603,6 +612,7 @@ def a_decks(given: GivenDecks, clock: FrozenClock) -> Decks:
             key_drafts=key_drafts,
         ),
         key_drafts=key_drafts,
+        members=given.members,
         folders=FakeDeckFolders(
             carried=_carried_by(given),
             failures={} if given.failures is None else given.failures,

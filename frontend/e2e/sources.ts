@@ -77,6 +77,9 @@ export async function typesTheAddress(page: Page, words: Words, url: string): Pr
 export const folderField = (page: Page, words: Words) =>
 	page.getByLabel(words['sourceNew.folderOptional'], { exact: true });
 
+export const ownerField = (page: Page, words: Words) =>
+	page.getByLabel(words['sourceNew.owner'], { exact: true });
+
 // A token is typed only when asked for, and only an https address has its field;
 // a folder likewise only for a key or web address.
 export async function fillsTheForm(

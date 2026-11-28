@@ -27,6 +27,18 @@ class PersonAccounts(Protocol):
         """Delete the account; its remaining sessions end with it by cascade."""
 
 
+class PersonDirectory(Protocol):
+    """The accounts of people, found by the username they sign in under."""
+
+    @abstractmethod
+    def person_id_named(self, username: str) -> str | None:
+        """The id of the person account with exactly this username, or None.
+
+        An account that is no person's, an agent's for one, answers None like a
+        username nobody holds.
+        """
+
+
 class PersonSessions(Protocol):
     """The sign-in records of one person, without anything that could resume one."""
 

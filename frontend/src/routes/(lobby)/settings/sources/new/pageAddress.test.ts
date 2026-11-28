@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
 	addresses,
+	alert,
 	checkButton,
 	close,
 	createButton,
@@ -23,7 +24,6 @@ const URL_FIELD = 'source-url';
 const KIND = '/api/sources/new/kind';
 const CHECK = '/api/sources/new/check';
 const status = (): Element | null => document.querySelector('[role="status"]');
-const alert = (): Element | null => document.querySelector('[role="alert"]');
 
 describe('what the address shows', () => {
 	it('shows neither the token field nor the key on an empty form and sends nothing', () => {

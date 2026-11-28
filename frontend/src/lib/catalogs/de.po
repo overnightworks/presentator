@@ -497,6 +497,10 @@ msgctxt "source.refusedDeployKey"
 msgid "Dieser Deploy-Key gehört dir nicht mehr – hier ist ein neuer zum Eintragen."
 msgstr ""
 
+msgctxt "source.refusedOwner"
+msgid "Unter diesem Benutzernamen gibt es kein Mitglied."
+msgstr ""
+
 msgctxt "source.fetchNothingNew"
 msgid "Abgerufen, nichts Neues."
 msgstr ""
@@ -563,6 +567,14 @@ msgstr ""
 
 msgctxt "sourceNew.folderOptional"
 msgid "Ordner (optional)"
+msgstr ""
+
+msgctxt "sourceNew.owner"
+msgid "Besitzer (optional)"
+msgstr ""
+
+msgctxt "sourceNew.ownerHint"
+msgid "Benutzername eines Mitglieds. Leer: die Quelle gehört dir."
 msgstr ""
 
 msgctxt "sourceNew.secret"

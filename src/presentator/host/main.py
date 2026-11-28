@@ -474,6 +474,7 @@ def _decks(
     return Decks(
         sources=stores.sources,
         key_drafts=stores.key_drafts,
+        members=stores.identity_writes,
         folders=MirroredDeckFolders(mirrors=mirrors),
         store=stores.deck_store,
         builder=SlidevBuilds(

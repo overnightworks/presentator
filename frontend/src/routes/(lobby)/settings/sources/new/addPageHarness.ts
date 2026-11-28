@@ -1,5 +1,5 @@
 import { flushSync, mount, unmount } from 'svelte';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 
 import type { AccessKind } from '#lib/api/sources.ts';
 import { navigation } from '#lib/navigation.ts';
@@ -94,12 +94,24 @@ export const secretField = (): HTMLInputElement | null =>
 	document.querySelector<HTMLInputElement>('#source-secret');
 export const folderField = (): HTMLInputElement | null =>
 	document.querySelector<HTMLInputElement>('#source-folder');
+export const ownerField = (): HTMLInputElement | null =>
+	document.querySelector<HTMLInputElement>('#source-owner');
+export const alert = (): Element | null => document.querySelector('[role="alert"]');
 export const keyBlock = (): Element | null => document.getElementById('deploy-key-label');
 // Found by role and place: a busy button carries another word than its idle one.
 export const checkButton = (): HTMLButtonElement | null =>
 	document.querySelector<HTMLButtonElement>('.actions button[type="button"]');
 export const createButton = (): HTMLButtonElement | null =>
 	document.querySelector<HTMLButtonElement>('.actions button[type="submit"]');
+
+/** Types the address, runs Check and waits until Create is open. */
+export async function checked(which: keyof typeof addresses, fetched = open()) {
+	type('source-url', addresses[which].url);
+	await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
+	checkButton()?.click();
+	await vi.waitFor(() => expect(createButton()?.disabled).toBe(false));
+	return fetched;
+}
 
 /** A lookup whose answer the scenario gives when it chooses. */
 export function deferred() {

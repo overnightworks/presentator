@@ -500,6 +500,11 @@ export interface components {
             key_draft_id: string | null;
             /** Name */
             name: string;
+            /**
+             * Owner
+             * @default
+             */
+            owner: string;
             /** Secret */
             secret: string | null;
             /** Url */
@@ -1161,7 +1166,7 @@ export interface operations {
                         /** Detail */
                         detail?: string | null;
                         /** @enum {string} */
-                        reason: "malformed-name" | "malformed-folder" | "duplicate-name" | "duplicate-url" | "unknown-access" | "not-checked" | "credential-not-allowed" | "deploy-key-unavailable";
+                        reason: "malformed-name" | "malformed-folder" | "duplicate-name" | "duplicate-url" | "unknown-access" | "not-checked" | "credential-not-allowed" | "deploy-key-unavailable" | "unknown-owner";
                         /** Status */
                         status: number;
                         /** Title */
@@ -1231,7 +1236,7 @@ export interface operations {
                         /** Detail */
                         detail?: string | null;
                         /** @enum {string} */
-                        reason: "malformed-name" | "malformed-folder" | "duplicate-name" | "duplicate-url" | "unknown-access" | "not-checked" | "credential-not-allowed" | "deploy-key-unavailable";
+                        reason: "malformed-name" | "malformed-folder" | "duplicate-name" | "duplicate-url" | "unknown-access" | "not-checked" | "credential-not-allowed" | "deploy-key-unavailable" | "unknown-owner";
                         /** Status */
                         status: number;
                         /** Title */

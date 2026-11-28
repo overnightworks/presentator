@@ -128,6 +128,7 @@ export type Words = {
     readonly "source.checkReachable": (gaps: { readonly commit: string }) => string;
     readonly "source.refusedSecretNotAllowed": string;
     readonly "source.refusedDeployKey": string;
+    readonly "source.refusedOwner": string;
     readonly "source.fetchNothingNew": string;
     readonly "source.fetchChanged": string;
     readonly "source.fetchBuilt": (gaps: { readonly count: number }) => string;
@@ -145,6 +146,8 @@ export type Words = {
     readonly "sourceNew.name": string;
     readonly "sourceNew.url": string;
     readonly "sourceNew.folderOptional": string;
+    readonly "sourceNew.owner": string;
+    readonly "sourceNew.ownerHint": string;
     readonly "sourceNew.secret": string;
     readonly "sourceNew.secretInfo": string;
     readonly "sourceNew.busyCheck": string;
@@ -299,6 +302,7 @@ export const words: Words = {
     "source.checkReachable": (gaps: { readonly commit: string }) => "Repository gelesen, Head " + gaps.commit + ".",
     "source.refusedSecretNotAllowed": "Ein Schlüssel braucht kein Token – lass das Feld leer.",
     "source.refusedDeployKey": "Dieser Deploy-Key gehört dir nicht mehr – hier ist ein neuer zum Eintragen.",
+    "source.refusedOwner": "Unter diesem Benutzernamen gibt es kein Mitglied.",
     "source.fetchNothingNew": "Abgerufen, nichts Neues.",
     "source.fetchChanged": "Abgerufen.",
     "source.fetchBuilt": (gaps: { readonly count: number }) => "Decks gebaut: " + numberFormat.format(gaps.count),
@@ -316,6 +320,8 @@ export const words: Words = {
     "sourceNew.name": "Name",
     "sourceNew.url": "Git-URL",
     "sourceNew.folderOptional": "Ordner (optional)",
+    "sourceNew.owner": "Besitzer (optional)",
+    "sourceNew.ownerHint": "Benutzername eines Mitglieds. Leer: die Quelle gehört dir.",
     "sourceNew.secret": "Secret",
     "sourceNew.secretInfo": "Nur ein privates Repository braucht ein Token. Es wird verschlüsselt gespeichert, nach dem Anlegen nie wieder angezeigt und braucht nur Lesezugriff – der Server schreibt nie zurück nach Git.",
     "sourceNew.busyCheck": "Wird geprüft…",

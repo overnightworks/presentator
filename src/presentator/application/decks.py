@@ -72,6 +72,7 @@ from presentator.ports.decks import (
     ToolchainThemes,
     WebhookSecrets,
 )
+from presentator.ports.identity import PersonDirectory
 
 # A source name is one path element of the webhook address, never a path
 # itself: lowercase, digits, hyphens, starting with a letter or digit.
@@ -98,6 +99,7 @@ class SourceRefusal(StrEnum):
     NOT_CHECKED = "not-checked"
     CREDENTIAL_NOT_ALLOWED = "credential-not-allowed"
     DEPLOY_KEY_UNAVAILABLE = "deploy-key-unavailable"
+    UNKNOWN_OWNER = "unknown-owner"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -164,7 +166,7 @@ def _refusal_for(
 def _connection_fingerprint(
     key: bytes,
     *,
-    owner_id: str,
+    prover_id: str,
     deploy_key: DeployKeyDraft | None,
     url: str,
     secret: str,
@@ -176,7 +178,7 @@ def _connection_fingerprint(
     """
     message = b"\0".join(
         (
-            owner_id.encode(),
+            prover_id.encode(),
             b"" if deploy_key is None else deploy_key.id.encode(),
             b"" if deploy_key is None else deploy_key.public_key.encode(),
             url.encode(),
@@ -193,6 +195,7 @@ class Decks:
 
     sources: SourceStore
     key_drafts: DeployKeyDrafts
+    members: PersonDirectory
     folders: DeckFolders
     store: DeckStore
     builder: BuildRunner
@@ -419,7 +422,7 @@ class Decks:
             detail=None,
             fingerprint=_connection_fingerprint(
                 self.fingerprint_key,
-                owner_id=owner_id,
+                prover_id=owner_id,
                 deploy_key=deploy_key,
                 url=address,
                 secret=credential,
@@ -439,20 +442,23 @@ class Decks:
             at=now,
         )
 
+    def member_id_named(self, username: str) -> str | None:
+        """The id of the member who signs in under exactly this username, if any."""
+        return self.members.person_id_named(username)
+
     def add_source(
-        self,
-        draft: NewSourceDraft,
-        *,
-        owner_id: str,
+        self, draft: NewSourceDraft, *, owner_id: str, prover_id: str
     ) -> AddedSource | SourceRefusal:
         """Store a source with its secrets, fetch it once, return the webhook secret.
+
+        The prover is the admin who checked the connection; the owner holds the decks.
 
         The webhook secret is generated here and returned in the clear so the
         Add page's created view can show it once; only its hash is stored. The access
         secret is handed to the store and never returned. A source is stored
         only for the exact URL and secret a Check connection already proved
         reachable, never on the fingerprint of a different pair — SSH proves
-        itself instead by binding a draft only this admin owns, minting a
+        itself instead by binding a draft only the prover owns, minting a
         fresh one the moment a foreign or already-consumed id is offered. A
         file-kind address is resolved against the real mount before it is
         stored, so the row always carries the address git will actually open
@@ -475,19 +481,19 @@ class Decks:
             return preflight
         ssh = access_kind_of(address) is AccessKind.SSH
         deploy_key = (
-            self._deploy_key_for(owner_id=owner_id, draft_id=draft.key_draft_id)
+            self._deploy_key_for(owner_id=prover_id, draft_id=draft.key_draft_id)
             if ssh
             else None
         )
         if ssh and deploy_key is None:
-            self.key_drafts.mint(owner_id, at=self.clock.now())
+            self.key_drafts.mint(prover_id, at=self.clock.now())
             return SourceRefusal.DEPLOY_KEY_UNAVAILABLE
         credential = _credential_of(draft.secret, deploy_key)
         proven = compare_digest(
             draft.fingerprint,
             _connection_fingerprint(
                 self.fingerprint_key,
-                owner_id=owner_id,
+                prover_id=prover_id,
                 deploy_key=deploy_key,
                 url=address,
                 secret=credential,
@@ -506,15 +512,25 @@ class Decks:
             folder=folder,
             public_key=None if deploy_key is None else deploy_key.public_key,
         )
-        stored = (
-            self.sources.add_from_draft(write, draft_id=draft.key_draft_id)
-            if deploy_key is not None
-            else self.sources.add(write)
-        )
+        stored = self._stored(write, deploy_key, draft.key_draft_id, prover_id)
         if stored is None:
             return SourceRefusal.DUPLICATE_NAME
         self.refresh_named(stored.name)
         return AddedSource(source=stored, webhook_secret=webhook_secret)
+
+    def _stored(
+        self,
+        write: SourceWrite,
+        deploy_key: DeployKeyDraft | None,
+        key_draft_id: str,
+        prover_id: str,
+    ) -> Source | None:
+        """The stored source, or None for a taken name; SSH consumes its draft."""
+        if deploy_key is None:
+            return self.sources.add(write)
+        return self.sources.add_from_draft(
+            write, draft_id=key_draft_id, prover_id=prover_id
+        )
 
     def _deploy_key_for(
         self,

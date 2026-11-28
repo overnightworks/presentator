@@ -113,7 +113,10 @@ def _promote(stores: Stores) -> object:
         written = a_source_write(
             f"{owner}-by-{os.getpid()}", f"https://{owner}/{os.getpid()}", owner
         )
-        if stores.sources.add_from_draft(written, draft_id=draft.id) is not None:
+        if (
+            stores.sources.add_from_draft(written, draft_id=draft.id, prover_id=owner)
+            is not None
+        ):
             won.append(owner)
     return won
 

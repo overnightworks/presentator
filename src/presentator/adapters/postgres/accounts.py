@@ -15,6 +15,9 @@ from presentator.contracts.models import Role
 _SELECT_ACCOUNT: Final = text(
     "SELECT id, username, role, kind FROM users WHERE id = :user_id"
 )
+_SELECT_PERSON_ID: Final = text(
+    "SELECT id FROM users WHERE username = :username AND kind = :kind"
+)
 _INSERT_ACCOUNT: Final = text(
     "INSERT INTO users (id, username, role, kind)"
     " VALUES (:user_id, :username, :role, :kind)"
@@ -33,6 +36,14 @@ def read_account(connection: Connection, user_id: str) -> StoredAccount | None:
     """The account whose id is `user_id` character for character."""
     row = connection.execute(_SELECT_ACCOUNT, {"user_id": user_id}).fetchone()
     return None if row is None else stored_account(row)
+
+
+def read_person_id_named(connection: Connection, username: str) -> str | None:
+    """The id of the person account whose username is `username` exactly."""
+    row = connection.execute(
+        _SELECT_PERSON_ID, {"username": username, "kind": AccountKind.PERSON.value}
+    ).fetchone()
+    return None if row is None else row[0]
 
 
 @dataclass(frozen=True, slots=True)

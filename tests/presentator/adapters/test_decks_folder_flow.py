@@ -38,6 +38,7 @@ from tests.presentator.application.support.fakes import (
     FakeBuildRunner,
     FakeConnectionChecker,
     FakeDeployKeyDrafts,
+    FakePersonDirectory,
     FakeToolchainThemes,
     FakeWebhookSecrets,
     FrozenClock,
@@ -91,6 +92,7 @@ def wired(tmp_path: Path, engine: Engine) -> Wired:
     decks = Decks(
         sources=sources,
         key_drafts=FakeDeployKeyDrafts(),
+        members=FakePersonDirectory(),
         folders=folders_under(tmp_path),
         store=store,
         builder=builder,
@@ -135,6 +137,7 @@ def added_with_folder(
             folder=folder,
         ),
         owner_id=owner_id,
+        prover_id=owner_id,
     )
 
 

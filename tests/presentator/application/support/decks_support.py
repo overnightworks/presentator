@@ -22,6 +22,7 @@ from tests.presentator.application.support.fakes import (
     FakeDeckFolders,
     FakeDeckStore,
     FakeDeployKeyDrafts,
+    FakePersonDirectory,
     FakeSourceRunStore,
     FakeSourceStore,
     FakeToolchainThemes,
@@ -98,6 +99,7 @@ class DecksFakes:
     toolchain_themes: FakeToolchainThemes = field(default_factory=FakeToolchainThemes)
     clock: FrozenClock = field(default_factory=lambda: FrozenClock(instant=NOW))
     key_drafts: FakeDeployKeyDrafts = field(default_factory=FakeDeployKeyDrafts)
+    members: FakePersonDirectory = field(default_factory=FakePersonDirectory)
     webhook_secrets: FakeWebhookSecrets = field(default_factory=FakeWebhookSecrets)
     ownership: FakeRefreshOwnership = field(default_factory=FakeRefreshOwnership)
     # How often the schedule asks for a refresh; none by default, so every
@@ -117,6 +119,7 @@ def decks_over(
     return Decks(
         sources=source_store,
         key_drafts=resolved.key_drafts,
+        members=resolved.members,
         folders=carrying(*folders) if mirror is None else mirror,
         store=resolved.store,
         builder=resolved.builder,
