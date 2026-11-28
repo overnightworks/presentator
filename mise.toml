@@ -14,7 +14,7 @@ flag "--loop-span <seconds>" help="seconds the journey keeps starting rounds"
 '''
 run = '''
 uv run --no-sync pytest tests/e2e/live -m live -p no:randomly -p no:cacheprovider \
-  -s -q --tb=no -rf --no-header \
+  -s -q --disable-warnings --tb=no -rf --no-header \
   --junitxml=reports/live-journeys.xml --output=reports/live-journeys \
   --origin "${usage_origin?}" --storage-state "${usage_storage_state?}" \
   ${usage_loop_span:+--loop-span "$usage_loop_span"}

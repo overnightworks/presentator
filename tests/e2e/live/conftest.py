@@ -1,5 +1,6 @@
 """What the live journeys are given: an origin, a person's cookies and a span."""
 
+import json
 import os
 from pathlib import Path
 
@@ -39,6 +40,10 @@ def pytest_collection_finish(session: pytest.Session) -> None:
         and os.access(storage_state, os.R_OK)
     ):
         pytest.exit("--storage-state names no readable file", returncode=USAGE_ERROR)
+    try:
+        json.loads(Path(storage_state).read_text())
+    except ValueError:
+        pytest.exit("--storage-state holds no JSON", returncode=USAGE_ERROR)
     if not config.getoption("origin"):
         pytest.exit("--origin is missing", returncode=USAGE_ERROR)
 

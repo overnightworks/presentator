@@ -10,6 +10,7 @@
 - `pnpm lint` and `pnpm check` from `frontend/`: lint and types of the lobby pages.
 - `uv run --locked design-catalogs` from the root, and `uv run --locked --project .. design-catalogs` from `slidev/`: write the words of the lobby and of the overlay from their catalogs; `--check` holds them current.
 - `pnpm lint` and `pnpm typecheck` from `slidev/`: lint and types of the deck build.
+- `mise run live:journeys --origin <origin> --storage-state <file>` from the root: runs the lobby's live journey; platform's live-check runs it ([runbook](docs/runbooks/run-the-live-journeys.md)), CI never does.
 - `uv run --locked python -m tests.support.lobby_drive openapi frontend/src/lib/api/openapi.json` from the root, then `pnpm generate:types` from `frontend/`: regenerates the OpenAPI document and the wire types.
 
 ## Rules

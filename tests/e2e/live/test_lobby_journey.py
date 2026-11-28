@@ -18,6 +18,11 @@ _UNANSWERED = 0
 _FIRST_ERROR_STATUS = 400
 
 
+def _count_file(failures: Counter[str], response: Response) -> None:
+    if response.status >= _FIRST_ERROR_STATUS:
+        failures.update([f"{_STEP_FILE}={response.status}"])
+
+
 def _round(context: BrowserContext, origin: str) -> Counter[str]:
     """Run one round and count its failures as `<step>=<status>`.
 
@@ -26,8 +31,7 @@ def _round(context: BrowserContext, origin: str) -> Counter[str]:
     """
     failures: Counter[str] = Counter()
     page = context.new_page()
-    seen: list[Response] = []
-    page.on("response", seen.append)
+    page.on("response", lambda response: _count_file(failures, response))
     page.on("requestfailed", lambda _request: failures.update([f"{_STEP_FILE}=0"]))
     try:
         answer = page.goto(origin + "/", wait_until="networkidle")
@@ -41,9 +45,6 @@ def _round(context: BrowserContext, origin: str) -> Counter[str]:
         failures.update(
             [f"{_STEP_PAGE}={_UNANSWERED if answer is None else answer.status}"]
         )
-    failures.update(
-        f"{_STEP_FILE}={r.status}" for r in seen if r.status >= _FIRST_ERROR_STATUS
-    )
     for step, path in ((_STEP_SESSION, "/api/session"), (_STEP_DECKS, "/api/decks")):
         try:
             reply = context.request.get(origin + path)
@@ -68,10 +69,7 @@ def test_lobby_holds_round_after_round(
         failures.update(_round(context, origin))
         if failures or time.monotonic() >= deadline:
             break
-    print(f"rounds={rounds} failed={1 if failures else 0}")
+    steps = ", ".join(f"{key} x{count}" for key, count in sorted(failures.items()))
+    print(f"rounds={rounds} failed={1 if failures else 0} {steps}".rstrip())
     if failures:
-        pytest.fail(
-            "failed round, step=status counts: "
-            + ", ".join(f"{key} x{count}" for key, count in sorted(failures.items())),
-            pytrace=False,
-        )
+        pytest.fail("a round failed", pytrace=False)
