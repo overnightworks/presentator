@@ -92,14 +92,10 @@ class FakePersonDirectory:
     accounts: tuple[FakeAccount, ...] = ()
 
     def person_id_named(self, username: str) -> str | None:
-        return next(
-            (
-                account.id
-                for account in self.accounts
-                if account.username == username and account.kind is AccountKind.PERSON
-            ),
-            None,
-        )
+        for account in self.accounts:
+            if account.username == username and account.kind is AccountKind.PERSON:
+                return account.id
+        return None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
