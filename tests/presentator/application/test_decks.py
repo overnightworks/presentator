@@ -1054,7 +1054,7 @@ def test_an_ssh_create_without_its_own_check_proof_is_refused() -> None:
     assert decks.source_key_draft(owner_id=OWNER).id == draft.id
 
 
-def test_an_ssh_check_proof_cannot_create_for_another_account() -> None:
+def test_an_ssh_check_proof_cannot_be_used_by_another_admin() -> None:
     decks = decks_over(sources=having())
     owned = decks.source_key_draft(owner_id=OWNER)
     checked = probed(decks, url=_SSH_URL, secret="", key_draft_id=owned.id)
