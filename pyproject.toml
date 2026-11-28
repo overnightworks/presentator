@@ -37,6 +37,7 @@ dev = [
     "pypdf==7.1.0",
     "pytest==9.2.0",
     "pytest-cov==7.1.0",
+    "pytest-playwright==0.10.0",
     "pytest-randomly==5.1.0",
     "pytest-xdist==3.8.0",
     "pyright==1.1.414",
@@ -53,7 +54,12 @@ allow-direct-references = true
 packages = ["src/presentator_gitmirror", "src/presentator"]
 
 [tool.pytest.ini_options]
-addopts = "--strict-config --strict-markers --import-mode=importlib"
+# `-m "not live"` leaves the live journeys collected and linted but never run;
+# the live:journeys task passes its own `-m live`, which wins as the last one.
+addopts = "--strict-config --strict-markers --import-mode=importlib -m 'not live'"
+markers = [
+  "live: journeys of the lobby that platform's live-check runs against a live origin (mise run live:journeys), never in CI",
+]
 pythonpath = ["."]
 testpaths = ["tests"]
 tmp_path_retention_policy = "failed"
